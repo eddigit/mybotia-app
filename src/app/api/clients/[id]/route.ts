@@ -1,5 +1,6 @@
 import {
   getThirdParty,
+  getThirdPartiesByCategory,
   getThirdPartyContacts,
   getThirdPartyEvents,
   getThirdPartyInvoices,
@@ -12,6 +13,7 @@ import {
   mapProposal,
   mapDolibarrProject,
 } from "@/lib/mappers";
+import { getTenantScope } from "@/lib/tenant";
 
 export async function GET(
   _request: Request,
@@ -20,6 +22,21 @@ export async function GET(
   const { id } = await params;
 
   try {
+    // Tenant access check
+    const scope = await getTenantScope();
+    if (!scope.isSuperadmin) {
+      let allowed = false;
+      if (scope.thirdpartyIds) {
+        allowed = scope.thirdpartyIds.includes(id);
+      } else if (scope.categoryId) {
+        const tenantTPs = await getThirdPartiesByCategory(scope.categoryId);
+        allowed = tenantTPs.some((tp) => tp.id === id);
+      }
+      if (!allowed) {
+        return Response.json({ error: "Acces refuse" }, { status: 403 });
+      }
+    }
+
     const [tp, contacts, events, invoices, proposals, projects] =
       await Promise.all([
         getThirdParty(id),
@@ -37,7 +54,9 @@ export async function GET(
     const autoEvents = events.filter((e) => e.type_code === "AC_OTH_AUTO");
     const sortedEvents = [...manualEvents, ...autoEvents];
 
-    const activities = sortedEvents.slice(0, 15).map((e) => mapEventToActivity(e));
+    const activities = sortedEvents
+      .slice(0, 15)
+      .map((e) => mapEventToActivity(e));
 
     return Response.json({
       client,

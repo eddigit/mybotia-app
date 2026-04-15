@@ -223,6 +223,21 @@ export async function getContacts(limit = 200): Promise<DolibarrContact[]> {
   }
 }
 
+// --- Thirdparties filtered by category ---
+
+export async function getThirdPartiesByCategory(
+  categoryId: number
+): Promise<DolibarrThirdParty[]> {
+  try {
+    const items = await dolibarrFetch<DolibarrThirdParty[]>(
+      `categories/${categoryId}/objects?type=customer&limit=200`
+    );
+    return items;
+  } catch {
+    return [];
+  }
+}
+
 // --- Projects filtered by thirdparty ---
 
 export async function getThirdPartyProjects(socid: string): Promise<DolibarrProject[]> {

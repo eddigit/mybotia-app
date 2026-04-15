@@ -77,3 +77,19 @@ export interface DashboardData {
 export function useDashboard() {
   return useApi<DashboardData | null>("/api/dashboard", null);
 }
+
+export interface DocumentItem {
+  id: string;
+  type: "devis" | "facture";
+  ref: string;
+  dolibarrId: string;
+  clientName: string;
+  totalTTC: number;
+  status: string;
+  date: string;
+  modulepart: string;
+}
+
+export function useDocuments() {
+  return useApi<DocumentItem[]>("/api/documents", []);
+}
