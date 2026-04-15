@@ -25,11 +25,9 @@ export function CommandCenterHero() {
           <div className="px-6">
             <Zap className="w-6 h-6 text-accent-glow" />
           </div>
-          <input
-            type="text"
-            placeholder="Demander a l'IA d'analyser, orchestrer ou executer une tache..."
-            className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-lg font-body py-5 text-text-primary placeholder:text-text-muted"
-          />
+          <div className="w-full py-5 text-lg text-text-muted font-body">
+            Interface de pilotage MyBotIA — donnees en direct
+          </div>
           <div className="pr-6 flex items-center gap-1.5">
             <kbd className="px-2 py-1 text-[9px] font-bold bg-surface-3 rounded border border-white/[0.06] text-text-muted font-mono">CMD</kbd>
             <kbd className="px-2 py-1 text-[9px] font-bold bg-surface-3 rounded border border-white/[0.06] text-text-muted font-mono">J</kbd>

@@ -55,10 +55,15 @@ export default function CRMPage() {
         title="CRM / Activite"
         subtitle={`${clients.length} tiers · ${formatCurrency(pipelineValue)} pipeline`}
         actions={
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-accent-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-all">
+          <a
+            href="https://crm-mybotia.mybotia.com/societe/card.php?action=create"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-accent-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-all"
+          >
             <Plus className="w-3.5 h-3.5" />
             Nouveau contact
-          </button>
+          </a>
         }
       />
 

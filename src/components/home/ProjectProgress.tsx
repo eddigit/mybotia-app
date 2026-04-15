@@ -14,7 +14,7 @@ export function ProjectProgress({ projects }: { projects: Project[] }) {
       </div>
       <div className="space-y-4">
         {projects.slice(0, 5).map((project) => (
-          <div key={project.id} className="group cursor-pointer">
+          <Link key={project.id} href={project.clientId ? `/crm/${project.clientId}` : "/tasks"} className="block group cursor-pointer">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-semibold text-text-primary group-hover:text-accent-glow transition-colors truncate">
                 {project.name}
@@ -52,7 +52,7 @@ export function ProjectProgress({ projects }: { projects: Project[] }) {
                 {project.status === "completed" ? "Termine" : project.status === "paused" ? "En pause" : "En cours"}
               </span>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

@@ -129,13 +129,13 @@ export function AgentPresenceCard({ agent }: { agent: Agent }) {
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-3 border-t border-white/[0.04]">
-        <button className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent-primary/10 border border-accent-primary/20 text-accent-glow text-xs font-bold uppercase tracking-wider hover:bg-accent-primary/15 transition-all">
+        <a
+          href="/conversations"
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent-primary/10 border border-accent-primary/20 text-accent-glow text-xs font-bold uppercase tracking-wider hover:bg-accent-primary/15 transition-all"
+        >
           <MessageSquare className="w-3.5 h-3.5" />
           Contacter
-        </button>
-        <button className="flex items-center justify-center w-10 h-10 bg-surface-3 border border-white/[0.04] text-text-muted hover:text-accent-glow hover:border-accent-primary/20 transition-all">
-          <Mic className="w-4 h-4" />
-        </button>
+        </a>
       </div>
     </div>
   );

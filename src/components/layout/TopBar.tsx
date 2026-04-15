@@ -36,11 +36,10 @@ export function TopBar({
 
       {/* Right actions */}
       <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <button className="relative flex items-center justify-center w-9 h-9 text-text-muted hover:text-text-primary transition-all">
+        {/* Notifications — placeholder, shows badge */}
+        <div className="relative flex items-center justify-center w-9 h-9 text-text-muted">
           <Bell className="w-[18px] h-[18px]" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-accent-primary rounded-full ring-2 ring-surface-0" />
-        </button>
+        </div>
 
         {/* Divider */}
         <div className="h-6 w-px bg-white/[0.06]" />

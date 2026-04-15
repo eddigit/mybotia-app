@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { CheckSquare, Plus, Filter } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
@@ -8,10 +9,16 @@ import { useTasks, useProjects } from "@/hooks/use-api";
 export default function TasksPage() {
   const { data: tasks, loading: tasksLoading } = useTasks();
   const { data: projects, loading: projectsLoading } = useProjects();
+  const [projectFilter, setProjectFilter] = useState<string>("all");
 
   const loading = tasksLoading || projectsLoading;
-  const activeTasks = tasks.filter(t => t.status !== 'done').length;
   const activeProjects = projects.filter(p => p.status === 'active');
+
+  const filteredTasks = projectFilter === "all"
+    ? tasks
+    : tasks.filter(t => t.projectId === projectFilter);
+
+  const activeTasks = filteredTasks.filter(t => t.status !== 'done').length;
 
   if (loading) {
     return (
@@ -31,34 +38,33 @@ export default function TasksPage() {
           icon={CheckSquare}
           title="Taches & Projets"
           subtitle={`${activeTasks} taches actives · ${activeProjects.length} projets`}
-          actions={
-            <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-4 py-2.5 bg-surface-3 border border-white/[0.06] text-text-secondary text-xs font-bold uppercase tracking-wider hover:bg-surface-4 transition-all">
-                <Filter className="w-3.5 h-3.5" />
-                Filtrer
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2.5 bg-accent-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-all">
-                <Plus className="w-3.5 h-3.5" />
-                Nouvelle tache
-              </button>
-            </div>
-          }
         />
 
         {/* Project filter strip */}
         <div className="flex items-center gap-3 mt-5">
           <span className="micro-label text-text-muted">Projet</span>
           <div className="flex gap-1 bg-surface-1 p-1 rounded-sm overflow-x-auto">
-            {['Tous', ...activeProjects.slice(0, 4).map(p => p.name.length > 18 ? p.name.slice(0, 18) + '...' : p.name)].map((name) => (
+            <button
+              onClick={() => setProjectFilter("all")}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all whitespace-nowrap ${
+                projectFilter === "all"
+                  ? "bg-accent-primary/10 text-accent-glow"
+                  : "text-text-muted hover:bg-surface-3/50"
+              }`}
+            >
+              Tous
+            </button>
+            {activeProjects.slice(0, 6).map((p) => (
               <button
-                key={name}
+                key={p.id}
+                onClick={() => setProjectFilter(p.id)}
                 className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all whitespace-nowrap ${
-                  name === 'Tous'
+                  projectFilter === p.id
                     ? "bg-accent-primary/10 text-accent-glow"
                     : "text-text-muted hover:bg-surface-3/50"
                 }`}
               >
-                {name}
+                {p.name.length > 20 ? p.name.slice(0, 20) + '...' : p.name}
               </button>
             ))}
           </div>
@@ -67,7 +73,7 @@ export default function TasksPage() {
 
       {/* Kanban board */}
       <div className="flex-1 min-h-0">
-        <TaskPanel tasks={tasks} />
+        <TaskPanel tasks={filteredTasks} />
       </div>
     </div>
   );

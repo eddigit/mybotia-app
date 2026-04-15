@@ -10,6 +10,7 @@ import { ProjectProgress } from "@/components/home/ProjectProgress";
 import { useDashboard, useAgents, useTasks } from "@/hooks/use-api";
 import { insights } from "@/data/mock";
 import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export default function HomePage() {
   const { data: dashboard, loading } = useDashboard();
@@ -43,7 +44,7 @@ export default function HomePage() {
           <h2 className="section-header text-sm font-bold tracking-tight uppercase text-text-primary font-headline">
             Analyse proactive
           </h2>
-          <button className="micro-label text-accent-glow hover:underline">Rafraichir</button>
+          <button onClick={() => window.location.reload()} className="micro-label text-accent-glow hover:underline">Rafraichir</button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -75,10 +76,10 @@ export default function HomePage() {
                   <span className="text-text-muted">{dashboard?.projects?.filter(p => p.status === 'active').length ?? 0} projets actifs</span>
                   <span className="text-accent-glow">{dashboard?.projects?.filter(p => p.status === 'completed').length ?? 0} termines</span>
                 </div>
-                <button className="bg-accent-primary hover:bg-accent-primary/80 transition-colors text-white px-5 py-3 font-bold text-xs uppercase tracking-widest flex items-center gap-2 w-fit">
+                <Link href="/tasks" className="bg-accent-primary hover:bg-accent-primary/80 transition-colors text-white px-5 py-3 font-bold text-xs uppercase tracking-widest flex items-center gap-2 w-fit">
                   Voir les priorites
                   <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                </Link>
               </div>
             </div>
           </div>

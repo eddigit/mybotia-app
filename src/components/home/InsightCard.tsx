@@ -16,7 +16,7 @@ export function InsightCard({ insight }: { insight: Insight }) {
 
   return (
     <div className={cn(
-      "p-5 group cursor-pointer transition-all",
+      "p-5 group transition-all",
       isHigh
         ? "bg-surface-1 border-l-4 border-l-accent-primary border-t border-r border-b border-white/[0.04]"
         : "bg-surface-1 border-l-4 border-l-white/[0.08] border-t border-r border-b border-white/[0.04]"
@@ -39,10 +39,9 @@ export function InsightCard({ insight }: { insight: Insight }) {
           </span>
         )}
         {insight.actionLabel && (
-          <button className="micro-label text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
+          <span className="micro-label text-text-muted flex items-center gap-1">
             {insight.actionLabel}
-            <ChevronRight className="w-3 h-3" />
-          </button>
+          </span>
         )}
       </div>
     </div>

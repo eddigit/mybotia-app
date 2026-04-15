@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   MessageSquare,
   Phone,
@@ -21,6 +22,14 @@ const channelIcons: Record<string, typeof MessageSquare> = {
   voice: Mic,
 };
 
+type FilterKey = "all" | "active" | "pending";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "Toutes" },
+  { key: "active", label: "Actives" },
+  { key: "pending", label: "En attente" },
+];
+
 export function ConversationList({
   conversations,
   activeId,
@@ -30,23 +39,32 @@ export function ConversationList({
   activeId?: string;
   onSelect: (id: string) => void;
 }) {
+  const [filter, setFilter] = useState<FilterKey>("all");
+
+  const filtered = conversations.filter((c) => {
+    if (filter === "all") return true;
+    if (filter === "active") return c.status === "active";
+    return c.status === "pending";
+  });
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-5 py-4 border-b border-white/[0.04]">
         <h2 className="text-sm font-bold font-headline text-text-primary mb-3">Conversations</h2>
         <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
-          {['Toutes', 'Actives', 'En attente'].map((filter) => (
+          {FILTERS.map((f) => (
             <button
-              key={filter}
+              key={f.key}
+              onClick={() => setFilter(f.key)}
               className={cn(
                 "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-tight transition-all rounded-sm",
-                filter === 'Toutes'
+                filter === f.key
                   ? "bg-accent-primary/10 text-accent-glow"
                   : "text-text-muted hover:bg-surface-3/50"
               )}
             >
-              {filter}
+              {f.label}
             </button>
           ))}
         </div>
@@ -54,7 +72,7 @@ export function ConversationList({
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
-        {conversations.map((conv) => {
+        {filtered.map((conv) => {
           const ChannelIcon = channelIcons[conv.channel] || MessageSquare;
           const isActive = conv.id === activeId;
 

@@ -1,32 +1,32 @@
+import Link from "next/link";
 import {
-  MessageSquare,
-  UserPlus,
-  Plus,
-  FileUp,
-  Calendar,
+  MessagesSquare,
   BarChart3,
+  CheckSquare,
+  FileText,
+  Bot,
   ChevronRight,
 } from "lucide-react";
 
 const actions = [
-  { id: 'new-conv', label: 'Nouvelle conversation', icon: MessageSquare },
-  { id: 'new-contact', label: 'Ajouter un contact', icon: UserPlus },
-  { id: 'new-task', label: 'Creer une tache', icon: Plus },
-  { id: 'upload', label: 'Importer un document', icon: FileUp },
-  { id: 'meeting', label: 'Planifier un rendez-vous', icon: Calendar },
-  { id: 'report', label: 'Generer un rapport', icon: BarChart3 },
+  { id: 'conv', label: 'Conversations', icon: MessagesSquare, href: '/conversations' },
+  { id: 'crm', label: 'CRM / Clients', icon: BarChart3, href: '/crm' },
+  { id: 'tasks', label: 'Taches & Projets', icon: CheckSquare, href: '/tasks' },
+  { id: 'agents', label: 'Agents IA', icon: Bot, href: '/agents' },
+  { id: 'docs', label: 'Documents', icon: FileText, href: '/documents' },
 ];
 
 export function QuickActions() {
   return (
     <div className="card-sharp-high p-5">
-      <h3 className="section-title mb-4">Commandes rapides</h3>
+      <h3 className="section-title mb-4">Acces rapide</h3>
       <div className="space-y-1">
         {actions.map((action) => {
           const Icon = action.icon;
           return (
-            <button
+            <Link
               key={action.id}
+              href={action.href}
               className="w-full text-left px-4 py-3 bg-surface-1 hover:bg-surface-3/50 transition-all flex items-center justify-between group"
             >
               <div className="flex items-center gap-3">
@@ -36,7 +36,7 @@ export function QuickActions() {
                 </span>
               </div>
               <ChevronRight className="w-4 h-4 text-text-muted group-hover:text-accent-glow transition-colors" />
-            </button>
+            </Link>
           );
         })}
       </div>

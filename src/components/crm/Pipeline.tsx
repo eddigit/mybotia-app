@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import type { Deal } from "@/types";
@@ -42,13 +43,15 @@ export function Pipeline({ deals }: { deals: Deal[] }) {
               {/* Deal cards */}
               <div className="space-y-2">
                 {stageDeals.map((deal) => (
-                  <div
+                  <Link
                     key={deal.id}
-                    className="p-3 bg-surface-3/50 border-l-2 hover:bg-surface-3 transition-all cursor-pointer"
+                    href={`/crm/${deal.clientId}`}
+                    className="block p-3 bg-surface-3/50 border-l-2 hover:bg-surface-3 transition-all cursor-pointer"
                     style={{ borderLeftColor: `var(--tw-${config.color.replace('bg-', '')}, #6366f1)` }}
                   >
                     <p className="text-xs font-bold text-text-primary mb-1 truncate">{deal.title}</p>
-                    <p className="text-sm font-headline font-extrabold text-text-primary">{formatCurrency(deal.value)}</p>
+                    <p className="text-[10px] text-text-muted truncate">{deal.clientName}</p>
+                    <p className="text-sm font-headline font-extrabold text-text-primary mt-1">{formatCurrency(deal.value)}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-[10px] text-text-muted font-mono">{deal.assignee}</span>
                       <div className="flex items-center gap-1.5">
@@ -61,7 +64,7 @@ export function Pipeline({ deals }: { deals: Deal[] }) {
                         <span className="text-[9px] text-text-muted font-mono">{deal.probability}%</span>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 {stageDeals.length === 0 && (
                   <div className="p-4 border border-dashed border-white/[0.06] text-center">

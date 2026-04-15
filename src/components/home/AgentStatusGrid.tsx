@@ -16,8 +16,9 @@ export function AgentStatusGrid({ agents }: { agents: Agent[] }) {
       </div>
       <div className="space-y-1">
         {agents.slice(0, 5).map((agent) => (
-          <div
+          <Link
             key={agent.id}
+            href="/agents"
             className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-3/30 transition-all cursor-pointer group"
           >
             <div className="flex items-center gap-3">
@@ -56,7 +57,7 @@ export function AgentStatusGrid({ agents }: { agents: Agent[] }) {
                 ))}
               </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

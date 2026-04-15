@@ -46,7 +46,7 @@ export function TaskPanel({ tasks }: { tasks: Task[] }) {
 function TaskCard({ task }: { task: Task }) {
   return (
     <div className={cn(
-      "p-4 cursor-pointer group transition-all",
+      "p-4 group transition-all",
       task.priority === 'critical'
         ? "bg-surface-2 border-l-4 border-l-red-400 border-t border-r border-b border-white/[0.04]"
         : task.priority === 'high'
