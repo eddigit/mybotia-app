@@ -2,22 +2,24 @@
 
 /* ============================================
    MyBotIA Premium Interface — Design System
-   Inspired by Sovereign Intelligence aesthetic
+   Brand color: Sky Blue (aligned with logo)
+   Font: Inter (official MyBotIA typeface)
    ============================================ */
 
 @theme inline {
-  /* Surface hierarchy — deep navy tint */
+  /* Surface hierarchy — deep navy */
   --color-surface-0: #0b1326;
   --color-surface-1: #131b2e;
   --color-surface-2: #171f33;
   --color-surface-3: #222a3d;
   --color-surface-4: #2d3449;
 
-  /* Accent — indigo/violet */
-  --color-accent-primary: #6366f1;
-  --color-accent-secondary: #8b5cf6;
-  --color-accent-glow: #818cf8;
-  --color-accent-container: #6366f1;
+  /* Accent — Sky Blue (matches MyBotIA logo gradient) */
+  --color-accent-primary: #0EA5E9;
+  --color-accent-secondary: #0284C7;
+  --color-accent-glow: #38BDF8;
+  --color-accent-container: #0EA5E9;
+  --color-accent-light: #7DD3FC;
 
   /* Text */
   --color-text-primary: #dae2fd;
@@ -27,7 +29,7 @@
   /* Borders */
   --color-border-subtle: rgba(255, 255, 255, 0.04);
   --color-border-default: rgba(255, 255, 255, 0.08);
-  --color-border-accent: rgba(99, 102, 241, 0.25);
+  --color-border-accent: rgba(14, 165, 233, 0.25);
 
   /* Status */
   --color-status-success: #10b981;
@@ -39,10 +41,10 @@
   --color-background: var(--color-surface-0);
   --color-foreground: var(--color-text-primary);
 
-  /* Fonts */
+  /* Fonts — Inter only (MyBotIA official) */
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
-  --font-headline: var(--font-manrope);
+  --font-headline: var(--font-inter);
 }
 
 /* ---- Global ---- */
@@ -62,7 +64,7 @@ body {
 }
 
 h1, h2, h3, .font-headline {
-  font-family: 'Manrope', var(--font-headline), system-ui, sans-serif;
+  font-family: 'Inter', var(--font-headline), system-ui, sans-serif;
 }
 
 /* Scrollbar */
@@ -94,8 +96,8 @@ h1, h2, h3, .font-headline {
 }
 
 @keyframes glow-breathe {
-  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
-  50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.3); }
+  0%, 100% { box-shadow: 0 0 20px rgba(14, 165, 233, 0.15); }
+  50% { box-shadow: 0 0 40px rgba(14, 165, 233, 0.3); }
 }
 
 .animate-fade-in { animation: fade-in 0.35s ease-out; }
@@ -167,7 +169,7 @@ h1, h2, h3, .font-headline {
 /* ---- Typography utilities ---- */
 
 .text-gradient {
-  background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #7DD3FC 0%, #38BDF8 50%, #0EA5E9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -175,14 +177,14 @@ h1, h2, h3, .font-headline {
 
 .micro-label {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
 }
 
 .section-title {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--color-text-muted);
@@ -255,23 +257,23 @@ h1, h2, h3, .font-headline {
 /* ---- Glow ---- */
 
 .glow-accent {
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15),
-              0 0 30px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.15),
+              0 0 30px rgba(14, 165, 233, 0.08);
 }
 
 .glow-accent-strong {
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25),
-              0 0 40px rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.25),
+              0 0 40px rgba(14, 165, 233, 0.12);
 }
 
 /* ---- Background patterns ---- */
 
 .bg-gradient-hero {
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.04) 0%, transparent 50%);
+    radial-gradient(ellipse at 20% 0%, rgba(14, 165, 233, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(56, 189, 248, 0.04) 0%, transparent 50%);
 }
 
 .bg-gradient-omnibar {
-  background: linear-gradient(to right, rgba(99, 102, 241, 0.15), transparent);
+  background: linear-gradient(to right, rgba(14, 165, 233, 0.15), transparent);
 }

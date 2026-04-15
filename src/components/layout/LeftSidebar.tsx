@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   MessagesSquare,
-  Users,
   CheckSquare,
   BarChart3,
   Bot,
@@ -13,9 +13,10 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
 const navItems = [
   { id: "home", label: "Command Center", href: "/", icon: LayoutDashboard },
@@ -42,18 +43,25 @@ export function LeftSidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col h-full bg-surface-0 font-headline tracking-wide antialiased relative z-20 transition-all duration-300 ease-in-out",
+        "flex flex-col h-full bg-surface-0 tracking-wide antialiased relative z-20 transition-all duration-300 ease-in-out",
         collapsed ? "w-[68px]" : "w-[250px]"
       )}
     >
       {/* Logo */}
-      <div className="p-6 flex items-center gap-3">
-        <div className="w-9 h-9 flex items-center justify-center bg-accent-primary rounded-lg shrink-0">
-          <Shield className="w-5 h-5 text-white" />
+      <div className="p-5 flex items-center gap-3">
+        <div className="w-10 h-10 flex items-center justify-center shrink-0">
+          <Image
+            src={LOGO_URL}
+            alt="MyBotIA"
+            width={40}
+            height={40}
+            className="w-10 h-10 object-contain"
+            unoptimized
+          />
         </div>
         {!collapsed && (
           <div>
-            <div className="text-lg font-extrabold tracking-tighter text-accent-glow">MyBotIA</div>
+            <div className="text-[17px] font-extrabold tracking-tight text-accent-glow">MyBotIA</div>
             <div className="micro-label text-text-muted">Premium</div>
           </div>
         )}
