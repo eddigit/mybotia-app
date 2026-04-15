@@ -94,6 +94,7 @@ export interface Task {
 export interface Project {
   id: string;
   name: string;
+  ref?: string;
   description?: string;
   status: 'active' | 'paused' | 'completed';
   progress: number;
@@ -102,6 +103,9 @@ export interface Project {
   members: string[];
   dueDate?: string;
   color: string;
+  budget?: number;
+  clientId?: string;
+  clientName?: string;
 }
 
 export type ClientStatus = 'active' | 'prospect' | 'churned' | 'onboarding';
@@ -119,6 +123,11 @@ export interface Client {
   assignedAgent?: string;
   tags?: string[];
   sector?: string;
+  town?: string;
+  countryCode?: string;
+  notePublic?: string;
+  notePrivate?: string;
+  isSupplier?: boolean;
 }
 
 export interface Deal {
@@ -142,6 +151,8 @@ export interface Activity {
   icon?: string;
   actionUrl?: string;
   priority?: 'high' | 'medium' | 'low';
+  clientId?: string;
+  clientName?: string;
 }
 
 export interface Metric {

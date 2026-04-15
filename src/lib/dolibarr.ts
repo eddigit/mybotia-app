@@ -20,6 +20,7 @@ export interface DolibarrThirdParty {
   date_creation: number | null;
   date_modification: string | null;
   client: string;
+  prospect: string;
   fournisseur: string;
   code_client: string | null;
   url: string | null;
@@ -170,6 +171,64 @@ export async function getThirdPartyInvoices(socid: string): Promise<DolibarrInvo
   try {
     return await dolibarrFetch<DolibarrInvoice[]>(
       `invoices?sqlfilters=(t.fk_soc:=:${socid})&sortfield=t.rowid&sortorder=DESC&limit=20`
+    );
+  } catch {
+    return [];
+  }
+}
+
+// --- Proposals (devis) ---
+
+export interface DolibarrProposal {
+  id: string;
+  ref: string;
+  socid: string;
+  total_ht: string;
+  total_tva: string;
+  total_ttc: string;
+  statut: string;
+  date: number | string | null;
+  fin_validite: number | string | null;
+}
+
+export async function getProposals(limit = 50): Promise<DolibarrProposal[]> {
+  try {
+    return await dolibarrFetch<DolibarrProposal[]>(
+      `proposals?sortfield=t.rowid&sortorder=DESC&limit=${limit}`
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function getThirdPartyProposals(socid: string): Promise<DolibarrProposal[]> {
+  try {
+    return await dolibarrFetch<DolibarrProposal[]>(
+      `proposals?sqlfilters=(t.fk_soc:=:${socid})&sortfield=t.rowid&sortorder=DESC&limit=20`
+    );
+  } catch {
+    return [];
+  }
+}
+
+// --- Contacts (all) ---
+
+export async function getContacts(limit = 200): Promise<DolibarrContact[]> {
+  try {
+    return await dolibarrFetch<DolibarrContact[]>(
+      `contacts?sortfield=t.rowid&sortorder=ASC&limit=${limit}`
+    );
+  } catch {
+    return [];
+  }
+}
+
+// --- Projects filtered by thirdparty ---
+
+export async function getThirdPartyProjects(socid: string): Promise<DolibarrProject[]> {
+  try {
+    return await dolibarrFetch<DolibarrProject[]>(
+      `projects?sqlfilters=(t.fk_soc:=:${socid})&sortfield=t.rowid&sortorder=DESC&limit=20`
     );
   } catch {
     return [];

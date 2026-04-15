@@ -6,6 +6,7 @@ import type {
   DolibarrProject,
   DolibarrEvent,
   DolibarrInvoice,
+  DolibarrProposal,
 } from "./dolibarr";
 
 // --- Helpers ---
@@ -29,8 +30,19 @@ function formatDateShort(raw: number | string | null | undefined): string {
 // --- Thirdparty → Client ---
 
 function inferClientStatus(tp: DolibarrThirdParty): Client["status"] {
-  if (tp.status === "0") return "prospect";
-  return "active";
+  if (tp.status === "0") return "churned"; // inactive
+  if (tp.prospect === "1") return "prospect";
+  if (tp.client === "1") return "active";
+  return "prospect"; // default for entities that are neither client nor prospect
+}
+
+function inferClientTags(tp: DolibarrThirdParty): string[] {
+  const tags: string[] = [];
+  if (tp.client === "1") tags.push("Client");
+  if (tp.prospect === "1") tags.push("Prospect");
+  if (tp.fournisseur === "1") tags.push("Fournisseur");
+  if (tp.town) tags.push(tp.town);
+  return tags;
 }
 
 export function mapThirdPartyToClient(tp: DolibarrThirdParty): Client {
@@ -42,7 +54,12 @@ export function mapThirdPartyToClient(tp: DolibarrThirdParty): Client {
     phone: tp.phone || tp.phone_mobile || undefined,
     status: inferClientStatus(tp),
     lastContact: formatDateShort(tp.date_modification || tp.date_creation),
-    tags: [],
+    tags: inferClientTags(tp),
+    town: tp.town || undefined,
+    countryCode: tp.country_code || undefined,
+    notePublic: tp.note_public || undefined,
+    notePrivate: tp.note_private || undefined,
+    isSupplier: tp.fournisseur === "1",
   };
 }
 
@@ -76,12 +93,15 @@ const PROJECT_COLORS = [
 
 export function mapDolibarrProject(
   dp: DolibarrProject,
-  index: number
+  index: number,
+  clientName?: string
 ): Project {
   const status = projectStatus(dp.status);
+  const budget = parseFloat(dp.budget_amount || "0");
   return {
     id: dp.id,
     name: dp.title || dp.ref,
+    ref: dp.ref,
     description: dp.description || undefined,
     status,
     progress: status === "completed" ? 100 : status === "paused" ? 0 : 50,
@@ -90,6 +110,9 @@ export function mapDolibarrProject(
     members: [],
     dueDate: formatDateShort(dp.date_end) || undefined,
     color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+    budget: budget > 0 ? budget : undefined,
+    clientId: dp.socid || undefined,
+    clientName: clientName || dp.thirdparty_name || undefined,
   };
 }
 
@@ -135,13 +158,49 @@ const EVENT_TYPE_MAP: Record<string, Activity["type"]> = {
   AC_COM: "message",
 };
 
-export function mapEventToActivity(ev: DolibarrEvent): Activity {
+export function mapEventToActivity(
+  ev: DolibarrEvent,
+  clientNameById?: Record<string, string>
+): Activity {
+  const clientId = ev.socid || undefined;
   return {
     id: `ev-${ev.id}`,
     type: EVENT_TYPE_MAP[ev.type_code] || "system",
     title: ev.label || "Evenement",
     description: ev.note_private || undefined,
     timestamp: parseDate(ev.datep) || new Date().toISOString(),
+    clientId,
+    clientName: clientId && clientNameById ? clientNameById[clientId] : undefined,
+  };
+}
+
+// --- Proposal → mapped for display ---
+
+export interface MappedProposal {
+  id: string;
+  ref: string;
+  total: number;
+  status: "draft" | "validated" | "signed" | "refused" | "billed";
+  date: string;
+  expiryDate: string;
+}
+
+const PROPOSAL_STATUS: Record<string, MappedProposal["status"]> = {
+  "0": "draft",
+  "1": "validated",
+  "2": "signed",
+  "3": "refused",
+  "4": "billed",
+};
+
+export function mapProposal(p: DolibarrProposal): MappedProposal {
+  return {
+    id: p.id,
+    ref: p.ref,
+    total: parseFloat(p.total_ttc || "0"),
+    status: PROPOSAL_STATUS[p.statut] || "draft",
+    date: formatDateShort(p.date),
+    expiryDate: formatDateShort(p.fin_validite),
   };
 }
 

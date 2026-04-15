@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   MessageSquare,
   CheckSquare,
@@ -53,6 +54,14 @@ export function ActivityFeed({ activities }: { activities: Activity[] }) {
                     {new Date(activity.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
+                {activity.clientName && (
+                  <Link
+                    href={`/crm/${activity.clientId}`}
+                    className="text-xs text-accent-glow hover:underline"
+                  >
+                    {activity.clientName}
+                  </Link>
+                )}
                 {activity.description && (
                   <p className="text-sm text-text-secondary leading-relaxed">{activity.description}</p>
                 )}

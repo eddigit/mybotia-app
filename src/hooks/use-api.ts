@@ -48,7 +48,9 @@ export function useClient(id: string) {
     client: Client;
     contacts: { id: string; name: string; email: string | null; phone: string | null; role: string | null }[];
     activities: Activity[];
-    invoices: { id: string; ref: string; total: number; status: string }[];
+    invoices: { id: string; ref: string; total: number; status: string; date?: string }[];
+    proposals: { id: string; ref: string; total: number; status: string; date: string; expiryDate: string }[];
+    projects: Project[];
   } | null>(`/api/clients/${id}`, null);
 }
 

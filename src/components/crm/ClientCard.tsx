@@ -1,4 +1,5 @@
-import { Building2, Mail, Phone, Calendar, User } from "lucide-react";
+import Link from "next/link";
+import { Building2, Mail, Phone, Calendar, User, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -6,7 +7,7 @@ import type { Client } from "@/types";
 
 export function ClientCard({ client }: { client: Client }) {
   return (
-    <div className="card-sharp p-5 cursor-pointer group hover:border-l-2 hover:border-l-accent-primary transition-all">
+    <Link href={`/crm/${client.id}`} className="block card-sharp p-5 cursor-pointer group hover:border-l-2 hover:border-l-accent-primary transition-all">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-10 h-10 bg-accent-primary/10 border border-accent-primary/15">
@@ -47,6 +48,12 @@ export function ClientCard({ client }: { client: Client }) {
             <span>{client.phone}</span>
           </div>
         )}
+        {client.town && (
+          <div className="flex items-center gap-2 text-xs text-text-secondary">
+            <MapPin className="w-3.5 h-3.5 text-text-muted shrink-0" />
+            <span>{client.town}</span>
+          </div>
+        )}
         {client.lastContact && (
           <div className="flex items-center gap-2 text-xs text-text-secondary">
             <Calendar className="w-3.5 h-3.5 text-text-muted shrink-0" />
@@ -71,6 +78,6 @@ export function ClientCard({ client }: { client: Client }) {
           <span className="text-[11px] text-accent-glow font-bold">{client.assignedAgent}</span>
         </div>
       )}
-    </div>
+    </Link>
   );
 }

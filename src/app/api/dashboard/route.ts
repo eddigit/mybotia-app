@@ -13,26 +13,33 @@ export async function GET() {
       getThirdParties(),
       getProjects(),
       getInvoices(),
-      getEvents(20),
+      getEvents(200),
     ]);
 
     const clients = thirdparties.map(mapThirdPartyToClient);
-    const projects = doliProjects.map((dp, i) => mapDolibarrProject(dp, i));
 
-    // Build client name lookup for deals
+    // Build client name lookup
     const clientNameById: Record<string, string> = {};
     for (const tp of thirdparties) {
-      clientNameById[tp.id] = tp.name;
+      clientNameById[tp.id] = tp.name_alias || tp.name;
     }
+
+    const projects = doliProjects.map((dp, i) =>
+      mapDolibarrProject(dp, i, clientNameById[dp.socid])
+    );
 
     const deals = doliProjects
       .map((dp) => mapProjectToDeal(dp, clientNameById[dp.socid] || ""))
       .filter((d): d is NonNullable<typeof d> => d !== null);
 
-    // Include all events (AC_OTH_AUTO are the majority in Dolibarr)
-    const activities = events
-      .slice(0, 10)
-      .map(mapEventToActivity);
+    // Prioritize manual events (AC_OTH, AC_EMAIL, AC_TEL, AC_RDV) over auto
+    const manualEvents = events.filter((e) => e.type_code !== "AC_OTH_AUTO");
+    const autoEvents = events.filter((e) => e.type_code === "AC_OTH_AUTO");
+    const sortedEvents = [...manualEvents, ...autoEvents];
+
+    const activities = sortedEvents
+      .slice(0, 15)
+      .map((e) => mapEventToActivity(e, clientNameById));
 
     const metrics = computeMetrics(clients, projects, deals, invoices);
 
