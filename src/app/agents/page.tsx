@@ -1,11 +1,26 @@
+"use client";
+
 import { Bot } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { AgentPresenceCard } from "@/components/agents/AgentPresenceCard";
-import { agents } from "@/data/mock";
+import { useAgents } from "@/hooks/use-api";
 
 export default function AgentsPage() {
+  const { data: agents, loading } = useAgents();
+
   const onlineCount = agents.filter(a => a.status === 'online' || a.status === 'listening' || a.status === 'busy').length;
   const totalTasks = agents.reduce((sum, a) => sum + (a.tasksCompleted || 0), 0);
+
+  if (loading) {
+    return (
+      <div className="p-8 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-text-muted micro-label">Chargement des agents...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-8">

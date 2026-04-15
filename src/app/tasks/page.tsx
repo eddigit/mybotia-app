@@ -1,10 +1,28 @@
+"use client";
+
 import { CheckSquare, Plus, Filter } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
-import { tasks, projects } from "@/data/mock";
+import { useTasks, useProjects } from "@/hooks/use-api";
 
 export default function TasksPage() {
+  const { data: tasks, loading: tasksLoading } = useTasks();
+  const { data: projects, loading: projectsLoading } = useProjects();
+
+  const loading = tasksLoading || projectsLoading;
   const activeTasks = tasks.filter(t => t.status !== 'done').length;
+  const activeProjects = projects.filter(p => p.status === 'active');
+
+  if (loading) {
+    return (
+      <div className="p-8 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-text-muted micro-label">Chargement des taches...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 flex flex-col h-full">
@@ -12,7 +30,7 @@ export default function TasksPage() {
         <ModuleHeader
           icon={CheckSquare}
           title="Taches & Projets"
-          subtitle={`${activeTasks} taches actives · ${projects.filter(p => p.status === 'active').length} projets`}
+          subtitle={`${activeTasks} taches actives · ${activeProjects.length} projets`}
           actions={
             <div className="flex items-center gap-2">
               <button className="flex items-center gap-2 px-4 py-2.5 bg-surface-3 border border-white/[0.06] text-text-secondary text-xs font-bold uppercase tracking-wider hover:bg-surface-4 transition-all">
@@ -30,11 +48,11 @@ export default function TasksPage() {
         {/* Project filter strip */}
         <div className="flex items-center gap-3 mt-5">
           <span className="micro-label text-text-muted">Projet</span>
-          <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
-            {['Tous', ...projects.filter(p => p.status === 'active').slice(0, 4).map(p => p.name.length > 18 ? p.name.slice(0, 18) + '...' : p.name)].map((name) => (
+          <div className="flex gap-1 bg-surface-1 p-1 rounded-sm overflow-x-auto">
+            {['Tous', ...activeProjects.slice(0, 4).map(p => p.name.length > 18 ? p.name.slice(0, 18) + '...' : p.name)].map((name) => (
               <button
                 key={name}
-                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all ${
+                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all whitespace-nowrap ${
                   name === 'Tous'
                     ? "bg-accent-primary/10 text-accent-glow"
                     : "text-text-muted hover:bg-surface-3/50"

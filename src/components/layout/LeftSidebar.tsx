@@ -13,8 +13,10 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
@@ -39,6 +41,11 @@ export function LeftSidebar({
   onToggle: () => void;
 }) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : "??";
 
   return (
     <aside
@@ -133,12 +140,19 @@ export function LeftSidebar({
         <div className="p-4 border-t border-white/[0.04]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-surface-3 ring-1 ring-accent-primary/20 flex items-center justify-center overflow-hidden">
-              <span className="text-sm font-bold text-accent-glow">GK</span>
+              <span className="text-sm font-bold text-accent-glow">{initials}</span>
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold text-text-primary truncate">Gilles Korzec</span>
-              <span className="micro-label text-text-muted">Dirigeant</span>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-sm font-semibold text-text-primary truncate">{user?.email}</span>
+              <span className="micro-label text-text-muted">{user?.tenant_slug} &middot; {user?.role}</span>
             </div>
+            <button
+              onClick={logout}
+              className="text-text-muted hover:text-red-400 transition-colors p-1"
+              title="Deconnexion"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

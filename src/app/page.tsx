@@ -1,3 +1,5 @@
+"use client";
+
 import { CommandCenterHero } from "@/components/home/CommandCenterHero";
 import { MetricCard } from "@/components/shared/MetricCard";
 import { ActivityFeed } from "@/components/home/ActivityFeed";
@@ -5,11 +7,30 @@ import { QuickActions } from "@/components/home/QuickActions";
 import { InsightCard } from "@/components/home/InsightCard";
 import { AgentStatusGrid } from "@/components/home/AgentStatusGrid";
 import { ProjectProgress } from "@/components/home/ProjectProgress";
-import { metrics, activities, insights, agents, projects, tasks } from "@/data/mock";
+import { useDashboard, useAgents, useTasks } from "@/hooks/use-api";
+import { insights } from "@/data/mock";
 import { ArrowRight } from "lucide-react";
 
 export default function HomePage() {
+  const { data: dashboard, loading } = useDashboard();
+  const { data: agents } = useAgents();
+  const { data: tasks } = useTasks();
+
   const criticalTasks = tasks.filter(t => t.priority === 'critical' && t.status !== 'done');
+  const displayMetrics = dashboard?.metrics ?? [];
+  const displayActivities = dashboard?.activities ?? [];
+  const displayProjects = dashboard?.projects?.filter(p => p.status === 'active').slice(0, 5) ?? [];
+
+  if (loading) {
+    return (
+      <div className="p-8 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-text-muted micro-label">Chargement des donnees...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 min-h-screen">
@@ -37,21 +58,22 @@ export default function HomePage() {
 
             <div className="relative z-10 flex flex-col h-full">
               <div className="inline-flex px-3 py-1 bg-accent-primary text-[10px] font-extrabold text-white uppercase tracking-tight w-fit mb-5">
-                Insight critique
+                Donnees en direct
               </div>
               <h3 className="text-2xl lg:text-3xl font-headline font-extrabold mb-4 leading-tight text-text-primary">
-                {criticalTasks.length} tache{criticalTasks.length > 1 ? 's' : ''} critique{criticalTasks.length > 1 ? 's' : ''} en cours
+                {dashboard?.clients?.length ?? 0} clients dans Dolibarr
               </h3>
               <p className="text-text-secondary mb-6 max-w-md leading-relaxed">
-                {criticalTasks[0]?.title}. L&apos;equipe IA est mobilisee. Demo Systemic prevue demain — preparation en cours.
+                {dashboard?.deals?.length ?? 0} opportunites en pipeline pour un total de {displayMetrics.find(m => m.id === 'metric-pipeline')?.value ?? '0 EUR'}.
+                {criticalTasks.length > 0 && ` ${criticalTasks.length} tache(s) critique(s) en cours.`}
               </p>
               <div className="mt-auto space-y-4">
                 <div className="w-full h-1 bg-surface-3">
-                  <div className="bg-accent-primary h-full" style={{ width: '35%' }} />
+                  <div className="bg-accent-primary h-full" style={{ width: `${Math.min(100, Math.round((dashboard?.projects?.filter(p => p.status === 'completed').length ?? 0) / Math.max(1, dashboard?.projects?.length ?? 1) * 100))}%` }} />
                 </div>
                 <div className="flex justify-between micro-label">
-                  <span className="text-text-muted">Avancement global</span>
-                  <span className="text-accent-glow">35% complete</span>
+                  <span className="text-text-muted">{dashboard?.projects?.filter(p => p.status === 'active').length ?? 0} projets actifs</span>
+                  <span className="text-accent-glow">{dashboard?.projects?.filter(p => p.status === 'completed').length ?? 0} termines</span>
                 </div>
                 <button className="bg-accent-primary hover:bg-accent-primary/80 transition-colors text-white px-5 py-3 font-bold text-xs uppercase tracking-widest flex items-center gap-2 w-fit">
                   Voir les priorites
@@ -62,7 +84,7 @@ export default function HomePage() {
           </div>
 
           {/* Metric cards */}
-          {metrics.slice(0, 2).map((m) => (
+          {displayMetrics.slice(0, 2).map((m) => (
             <MetricCard key={m.id} metric={m} />
           ))}
 
@@ -77,13 +99,13 @@ export default function HomePage() {
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Intelligence Feed */}
         <div className="lg:col-span-2">
-          <ActivityFeed activities={activities} />
+          <ActivityFeed activities={displayActivities} />
         </div>
 
         {/* Right: Agents + Projects + Quick actions */}
         <div className="space-y-5">
           <AgentStatusGrid agents={agents} />
-          <ProjectProgress projects={projects} />
+          <ProjectProgress projects={displayProjects} />
           <QuickActions />
         </div>
       </section>

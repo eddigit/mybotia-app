@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
+import { AuthProvider } from "@/contexts/auth-context";
 import { AppShell } from "@/components/layout/AppShell";
 import "./globals.css";
 
@@ -31,7 +32,9 @@ export default function RootLayout({
       className={`${inter.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="h-full overflow-hidden bg-surface-0 text-text-primary">
-        <AppShell>{children}</AppShell>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );
