@@ -2,44 +2,48 @@ import { Lightbulb, AlertTriangle, TrendingUp, Info, ChevronRight } from "lucide
 import { cn } from "@/lib/utils";
 import type { Insight } from "@/types";
 
-const typeConfig: Record<string, { icon: typeof Lightbulb; color: string }> = {
-  recommendation: { icon: Lightbulb, color: "text-amber-400 bg-amber-400/10 border-amber-400/20" },
-  alert: { icon: AlertTriangle, color: "text-red-400 bg-red-400/10 border-red-400/20" },
-  opportunity: { icon: TrendingUp, color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" },
-  info: { icon: Info, color: "text-blue-400 bg-blue-400/10 border-blue-400/20" },
+const typeConfig: Record<string, { icon: typeof Lightbulb; label: string }> = {
+  recommendation: { icon: Lightbulb, label: 'Suggestion' },
+  alert: { icon: AlertTriangle, label: 'Alerte' },
+  opportunity: { icon: TrendingUp, label: 'Opportunite' },
+  info: { icon: Info, label: 'Info' },
 };
 
 export function InsightCard({ insight }: { insight: Insight }) {
   const config = typeConfig[insight.type] || typeConfig.info;
   const Icon = config.icon;
+  const isHigh = insight.priority === 'high';
 
   return (
-    <div className="glass-card p-4 group cursor-pointer">
-      <div className="flex items-start gap-3">
-        <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg border shrink-0", config.color)}>
-          <Icon className="w-4 h-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h4 className="text-xs font-semibold text-text-primary">{insight.title}</h4>
-          </div>
-          <p className="text-[11px] text-text-secondary leading-relaxed mb-2">
-            {insight.description}
-          </p>
-          <div className="flex items-center justify-between">
-            {insight.agentName && (
-              <span className="text-[10px] text-text-muted">
-                via <span className="text-accent-glow">{insight.agentName}</span>
-              </span>
-            )}
-            {insight.actionLabel && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-accent-glow font-medium group-hover:underline">
-                {insight.actionLabel}
-                <ChevronRight className="w-3 h-3" />
-              </span>
-            )}
-          </div>
-        </div>
+    <div className={cn(
+      "p-5 group cursor-pointer transition-all",
+      isHigh
+        ? "bg-surface-1 border-l-4 border-l-accent-primary border-t border-r border-b border-white/[0.04]"
+        : "bg-surface-1 border-l-4 border-l-white/[0.08] border-t border-r border-b border-white/[0.04]"
+    )}>
+      <div className="flex items-center gap-2 mb-3">
+        <Icon className={cn("w-3.5 h-3.5", isHigh ? "text-accent-glow" : "text-text-muted")} />
+        <span className={cn("micro-label", isHigh ? "text-accent-glow" : "text-text-muted")}>
+          {config.label}
+        </span>
+      </div>
+
+      <p className="text-sm font-medium leading-relaxed text-text-primary mb-3">
+        {insight.description}
+      </p>
+
+      <div className="flex items-center justify-between">
+        {insight.agentName && (
+          <span className="text-[10px] text-text-muted">
+            via <span className="text-accent-glow font-semibold">{insight.agentName}</span>
+          </span>
+        )}
+        {insight.actionLabel && (
+          <button className="micro-label text-text-muted hover:text-text-primary transition-colors flex items-center gap-1">
+            {insight.actionLabel}
+            <ChevronRight className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </div>
   );

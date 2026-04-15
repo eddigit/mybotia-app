@@ -8,7 +8,6 @@ import {
   Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatRelativeTime } from "@/lib/utils";
 import type { Activity } from "@/types";
 
 const typeIcons: Record<string, typeof MessageSquare> = {
@@ -21,48 +20,49 @@ const typeIcons: Record<string, typeof MessageSquare> = {
   system: Settings2,
 };
 
-const typeColors: Record<string, string> = {
-  message: "text-blue-400 bg-blue-400/10",
-  task: "text-emerald-400 bg-emerald-400/10",
-  deal: "text-amber-400 bg-amber-400/10",
-  meeting: "text-violet-400 bg-violet-400/10",
-  alert: "text-red-400 bg-red-400/10",
-  agent: "text-cyan-400 bg-cyan-400/10",
-  system: "text-zinc-400 bg-zinc-400/10",
-};
-
 export function ActivityFeed({ activities }: { activities: Activity[] }) {
   return (
-    <div className="glass-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-text-primary">Activite recente</h3>
-        <button className="text-[10px] text-accent-glow hover:underline">Tout voir</button>
+    <div className="card-sharp p-8">
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="section-header text-sm font-bold tracking-tight uppercase text-text-primary font-headline">
+          Flux d&apos;intelligence
+        </h2>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-accent-primary animate-ping" />
+          <span className="micro-label text-text-muted">En direct</span>
+        </div>
       </div>
-      <div className="space-y-1">
+
+      {/* Timeline */}
+      <div className="timeline space-y-6">
         {activities.map((activity, i) => {
           const Icon = typeIcons[activity.type] || Settings2;
-          const color = typeColors[activity.type] || typeColors.system;
+          const isFirst = i === 0;
 
           return (
-            <div
-              key={activity.id}
-              className={cn(
-                "flex items-start gap-3 py-2.5 px-2 rounded-lg hover:bg-white/[0.02] transition-colors cursor-pointer",
-                i === 0 && "animate-fade-in"
-              )}
-            >
-              <div className={cn("flex items-center justify-center w-7 h-7 rounded-lg shrink-0 mt-0.5", color)}>
-                <Icon className="w-3.5 h-3.5" />
+            <div key={activity.id} className="relative pl-8 flex gap-4 group animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
+              {/* Timeline dot */}
+              <div className={cn("timeline-dot", !isFirst && "timeline-dot-muted")}>
+                <div className="timeline-dot-inner" />
               </div>
+
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-text-primary leading-snug">{activity.title}</p>
+                <div className="flex items-baseline justify-between mb-1 gap-3">
+                  <span className="text-sm font-bold text-text-primary">{activity.title}</span>
+                  <span className="text-[10px] text-text-muted font-mono shrink-0">
+                    {new Date(activity.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
                 {activity.description && (
-                  <p className="text-[11px] text-text-muted mt-0.5 truncate">{activity.description}</p>
+                  <p className="text-sm text-text-secondary leading-relaxed">{activity.description}</p>
+                )}
+                {activity.priority === 'high' && (
+                  <div className="mt-2 flex gap-2">
+                    <span className="px-2 py-0.5 bg-surface-4 text-[10px] text-text-muted font-mono">#{activity.type}</span>
+                    <span className="px-2 py-0.5 bg-surface-4 text-[10px] text-text-muted font-mono">#priorite</span>
+                  </div>
                 )}
               </div>
-              <span className="text-[10px] text-text-muted shrink-0 mt-0.5">
-                {formatRelativeTime(activity.timestamp)}
-              </span>
             </div>
           );
         })}

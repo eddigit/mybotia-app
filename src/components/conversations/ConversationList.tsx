@@ -21,14 +21,6 @@ const channelIcons: Record<string, typeof MessageSquare> = {
   voice: Mic,
 };
 
-const channelColors: Record<string, string> = {
-  whatsapp: "text-emerald-400",
-  telegram: "text-blue-400",
-  email: "text-amber-400",
-  webchat: "text-violet-400",
-  voice: "text-cyan-400",
-};
-
 export function ConversationList({
   conversations,
   activeId,
@@ -41,17 +33,17 @@ export function ConversationList({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border-subtle">
-        <h2 className="text-sm font-semibold text-text-primary mb-2">Conversations</h2>
-        <div className="flex gap-1">
-          {['Toutes', 'Actives', 'En attente', 'Resolues'].map((filter) => (
+      <div className="px-5 py-4 border-b border-white/[0.04]">
+        <h2 className="text-sm font-bold font-headline text-text-primary mb-3">Conversations</h2>
+        <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
+          {['Toutes', 'Actives', 'En attente'].map((filter) => (
             <button
               key={filter}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-tight transition-all rounded-sm",
                 filter === 'Toutes'
                   ? "bg-accent-primary/10 text-accent-glow"
-                  : "text-text-muted hover:text-text-secondary hover:bg-white/[0.03]"
+                  : "text-text-muted hover:bg-surface-3/50"
               )}
             >
               {filter}
@@ -71,37 +63,33 @@ export function ConversationList({
               key={conv.id}
               onClick={() => onSelect(conv.id)}
               className={cn(
-                "w-full text-left px-4 py-3 border-b border-border-subtle transition-all",
+                "w-full text-left px-5 py-3.5 border-b border-white/[0.04] transition-all",
                 isActive
                   ? "bg-accent-primary/5 border-l-2 border-l-accent-primary"
-                  : "hover:bg-white/[0.02] border-l-2 border-l-transparent"
+                  : "hover:bg-surface-3/30 border-l-2 border-l-transparent"
               )}
             >
               <div className="flex items-start gap-3">
-                <div className={cn(
-                  "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 mt-0.5",
-                  channelColors[conv.channel],
-                  "bg-current/10"
-                )} style={{ backgroundColor: `color-mix(in srgb, currentColor 10%, transparent)` }}>
-                  <ChannelIcon className="w-4 h-4" />
+                <div className="flex items-center justify-center w-8 h-8 bg-surface-3 shrink-0 mt-0.5">
+                  <ChannelIcon className="w-3.5 h-3.5 text-text-muted" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <span className="text-xs font-semibold text-text-primary truncate">{conv.title}</span>
-                    <span className="text-[10px] text-text-muted shrink-0">
+                    <span className="text-xs font-bold text-text-primary truncate">{conv.title}</span>
+                    <span className="text-[10px] text-text-muted font-mono shrink-0">
                       {formatRelativeTime(conv.lastMessageAt)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 mb-1">
                     <StatusBadge status={conv.status} size="xs" />
                     {conv.agentName && (
-                      <span className="text-[10px] text-accent-glow">{conv.agentName}</span>
+                      <span className="text-[10px] text-accent-glow font-semibold">{conv.agentName}</span>
                     )}
                   </div>
                   <p className="text-[11px] text-text-muted truncate">{truncate(conv.lastMessage, 80)}</p>
                 </div>
                 {conv.unread > 0 && (
-                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-accent-primary text-white shrink-0">
+                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-accent-primary text-white shrink-0">
                     {conv.unread}
                   </span>
                 )}

@@ -7,17 +7,16 @@ import { formatCurrency } from "@/lib/utils";
 
 export default function CRMPage() {
   const totalRevenue = clients.reduce((sum, c) => sum + (c.revenue || 0), 0);
-  const activeClients = clients.filter((c) => c.status === 'active').length;
   const pipelineValue = deals.reduce((sum, d) => sum + d.value, 0);
 
   return (
-    <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+    <div className="p-8 space-y-8">
       <ModuleHeader
         icon={BarChart3}
         title="CRM / Activite"
         subtitle={`${clients.length} contacts · ${formatCurrency(totalRevenue)} revenu annuel`}
         actions={
-          <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 transition-all">
+          <button className="flex items-center gap-2 px-4 py-2.5 bg-accent-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-all">
             <Plus className="w-3.5 h-3.5" />
             Nouveau contact
           </button>
@@ -27,14 +26,15 @@ export default function CRMPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Clients actifs', value: activeClients.toString(), color: 'text-emerald-400' },
-          { label: 'Pipeline', value: formatCurrency(pipelineValue), color: 'text-amber-400' },
-          { label: 'Taux conversion', value: '23%', color: 'text-blue-400' },
-          { label: 'Deals en cours', value: deals.length.toString(), color: 'text-violet-400' },
+          { label: 'Clients actifs', value: clients.filter(c => c.status === 'active').length.toString(), sub: 'en portefeuille' },
+          { label: 'Pipeline', value: formatCurrency(pipelineValue), sub: `${deals.length} opportunites` },
+          { label: 'Taux conversion', value: '23%', sub: 'sur 90 jours' },
+          { label: 'Revenu moyen', value: formatCurrency(Math.round(totalRevenue / clients.length)), sub: 'par client' },
         ].map((kpi) => (
-          <div key={kpi.label} className="glass-card p-4">
-            <span className="text-xs text-text-muted">{kpi.label}</span>
-            <p className={`text-xl font-semibold mt-1 ${kpi.color}`}>{kpi.value}</p>
+          <div key={kpi.label} className="card-sharp-high p-5">
+            <span className="micro-label text-text-muted">{kpi.label}</span>
+            <p className="text-2xl font-headline font-extrabold text-text-primary mt-2">{kpi.value}</p>
+            <p className="text-[10px] text-text-muted mt-1">{kpi.sub}</p>
           </div>
         ))}
       </div>
@@ -44,16 +44,18 @@ export default function CRMPage() {
 
       {/* Clients grid */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-text-primary">Contacts</h3>
-          <div className="flex gap-1">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="section-header text-sm font-bold tracking-tight uppercase text-text-primary font-headline">
+            Contacts
+          </h3>
+          <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
             {['Tous', 'Actifs', 'Prospects', 'Onboarding'].map((filter) => (
               <button
                 key={filter}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all ${
                   filter === 'Tous'
                     ? "bg-accent-primary/10 text-accent-glow"
-                    : "text-text-muted hover:text-text-secondary hover:bg-white/[0.03]"
+                    : "text-text-muted hover:bg-surface-3/50"
                 }`}
               >
                 {filter}

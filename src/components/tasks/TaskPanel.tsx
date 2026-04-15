@@ -1,8 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Calendar, User, Bot, Tag } from "lucide-react";
+import { Calendar, User, Bot, Tag, ChevronRight } from "lucide-react";
 import type { Task } from "@/types";
 
 export function TaskPanel({ tasks }: { tasks: Task[] }) {
@@ -18,10 +17,10 @@ export function TaskPanel({ tasks }: { tasks: Task[] }) {
       {columns.map((col) => (
         <div key={col.id} className="flex flex-col min-h-0">
           {/* Column header */}
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-border-subtle shrink-0">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.06] shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-text-primary">{col.label}</span>
-              <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] bg-surface-3 text-text-muted">
+              <span className="text-xs font-bold text-text-primary font-headline uppercase">{col.label}</span>
+              <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-surface-4 text-[10px] font-bold text-text-muted">
                 {col.tasks.length}
               </span>
             </div>
@@ -33,8 +32,8 @@ export function TaskPanel({ tasks }: { tasks: Task[] }) {
               <TaskCard key={task.id} task={task} />
             ))}
             {col.tasks.length === 0 && (
-              <div className="flex items-center justify-center h-24 rounded-lg border border-dashed border-border-subtle">
-                <span className="text-[11px] text-text-muted">Aucune tache</span>
+              <div className="flex items-center justify-center h-24 border border-dashed border-white/[0.06]">
+                <span className="micro-label text-text-muted">Vide</span>
               </div>
             )}
           </div>
@@ -46,39 +45,47 @@ export function TaskPanel({ tasks }: { tasks: Task[] }) {
 
 function TaskCard({ task }: { task: Task }) {
   return (
-    <div className="glass-card p-3 cursor-pointer group">
-      {/* Priority + Project */}
+    <div className={cn(
+      "p-4 cursor-pointer group transition-all",
+      task.priority === 'critical'
+        ? "bg-surface-2 border-l-4 border-l-red-400 border-t border-r border-b border-white/[0.04]"
+        : task.priority === 'high'
+        ? "bg-surface-2 border-l-4 border-l-accent-primary border-t border-r border-b border-white/[0.04]"
+        : "bg-surface-2 border border-white/[0.04]"
+    )}>
+      {/* Priority label */}
       <div className="flex items-center justify-between mb-2">
-        <StatusBadge status={task.priority} size="xs" />
+        <span className={cn(
+          "micro-label",
+          task.priority === 'critical' ? "text-red-400" :
+          task.priority === 'high' ? "text-accent-glow" :
+          "text-text-muted"
+        )}>
+          {task.priority === 'critical' ? 'Critique' : task.priority === 'high' ? 'Haute' : task.priority === 'medium' ? 'Moyenne' : 'Basse'}
+        </span>
         {task.projectName && (
-          <span className="text-[10px] text-text-muted truncate max-w-[120px]">{task.projectName}</span>
+          <span className="text-[10px] text-text-muted font-mono truncate max-w-[100px]">{task.projectName}</span>
         )}
       </div>
 
       {/* Title */}
-      <h4 className="text-xs font-semibold text-text-primary mb-2 leading-snug group-hover:text-accent-glow transition-colors">
+      <h4 className="text-xs font-bold text-text-primary mb-2 leading-snug group-hover:text-accent-glow transition-colors">
         {task.title}
       </h4>
 
-      {/* Description */}
-      {task.description && (
-        <p className="text-[11px] text-text-muted mb-2 line-clamp-2">{task.description}</p>
-      )}
-
       {/* Tags */}
       {task.tags && task.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
+        <div className="flex flex-wrap gap-1 mb-3">
           {task.tags.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-surface-3/50 text-text-muted">
-              <Tag className="w-2 h-2" />
-              {tag}
+            <span key={tag} className="px-1.5 py-0.5 bg-surface-4 text-[9px] text-text-muted font-mono">
+              #{tag}
             </span>
           ))}
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
+      <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
         {task.assignee && (
           <div className="flex items-center gap-1.5">
             {task.assigneeType === 'agent' ? (
@@ -87,7 +94,7 @@ function TaskCard({ task }: { task: Task }) {
               <User className="w-3 h-3 text-text-muted" />
             )}
             <span className={cn(
-              "text-[10px] font-medium",
+              "text-[10px] font-bold",
               task.assigneeType === 'agent' ? "text-accent-glow" : "text-text-secondary"
             )}>
               {task.assignee}
@@ -95,7 +102,7 @@ function TaskCard({ task }: { task: Task }) {
           </div>
         )}
         {task.dueDate && (
-          <div className="flex items-center gap-1 text-[10px] text-text-muted">
+          <div className="flex items-center gap-1 text-[10px] text-text-muted font-mono">
             <Calendar className="w-2.5 h-2.5" />
             {new Date(task.dueDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
           </div>

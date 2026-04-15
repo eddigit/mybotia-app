@@ -7,7 +7,7 @@ export default function TasksPage() {
   const activeTasks = tasks.filter(t => t.status !== 'done').length;
 
   return (
-    <div className="p-6 flex flex-col h-full max-w-[1400px] mx-auto">
+    <div className="p-8 flex flex-col h-full">
       <div className="shrink-0 mb-6">
         <ModuleHeader
           icon={CheckSquare}
@@ -15,11 +15,11 @@ export default function TasksPage() {
           subtitle={`${activeTasks} taches actives · ${projects.filter(p => p.status === 'active').length} projets`}
           actions={
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-3 border border-border-subtle text-text-secondary text-xs font-medium hover:bg-surface-3/80 transition-all">
+              <button className="flex items-center gap-2 px-4 py-2.5 bg-surface-3 border border-white/[0.06] text-text-secondary text-xs font-bold uppercase tracking-wider hover:bg-surface-4 transition-all">
                 <Filter className="w-3.5 h-3.5" />
                 Filtrer
               </button>
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent-primary text-white text-xs font-medium hover:bg-accent-primary/90 transition-all">
+              <button className="flex items-center gap-2 px-4 py-2.5 bg-accent-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-all">
                 <Plus className="w-3.5 h-3.5" />
                 Nouvelle tache
               </button>
@@ -28,19 +28,19 @@ export default function TasksPage() {
         />
 
         {/* Project filter strip */}
-        <div className="flex items-center gap-2 mt-4">
-          <span className="text-[11px] text-text-muted">Projet :</span>
-          <div className="flex gap-1">
-            {['Tous', ...projects.filter(p => p.status === 'active').map(p => p.name)].map((name) => (
+        <div className="flex items-center gap-3 mt-5">
+          <span className="micro-label text-text-muted">Projet</span>
+          <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
+            {['Tous', ...projects.filter(p => p.status === 'active').slice(0, 4).map(p => p.name.length > 18 ? p.name.slice(0, 18) + '...' : p.name)].map((name) => (
               <button
                 key={name}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all ${
                   name === 'Tous'
                     ? "bg-accent-primary/10 text-accent-glow"
-                    : "text-text-muted hover:text-text-secondary hover:bg-white/[0.03]"
+                    : "text-text-muted hover:bg-surface-3/50"
                 }`}
               >
-                {name.length > 20 ? name.slice(0, 20) + '...' : name}
+                {name}
               </button>
             ))}
           </div>

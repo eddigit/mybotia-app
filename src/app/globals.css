@@ -2,30 +2,32 @@
 
 /* ============================================
    MyBotIA Premium Interface — Design System
+   Inspired by Sovereign Intelligence aesthetic
    ============================================ */
 
 @theme inline {
-  /* Core palette */
-  --color-surface-0: #06060a;
-  --color-surface-1: #0c0c14;
-  --color-surface-2: #12121e;
-  --color-surface-3: #1a1a2e;
-  --color-surface-4: #222240;
+  /* Surface hierarchy — deep navy tint */
+  --color-surface-0: #0b1326;
+  --color-surface-1: #131b2e;
+  --color-surface-2: #171f33;
+  --color-surface-3: #222a3d;
+  --color-surface-4: #2d3449;
 
-  /* Accent */
+  /* Accent — indigo/violet */
   --color-accent-primary: #6366f1;
   --color-accent-secondary: #8b5cf6;
   --color-accent-glow: #818cf8;
+  --color-accent-container: #6366f1;
 
   /* Text */
-  --color-text-primary: #f0f0f5;
-  --color-text-secondary: #9ca3af;
-  --color-text-muted: #6b7280;
+  --color-text-primary: #dae2fd;
+  --color-text-secondary: #9ca3bf;
+  --color-text-muted: #5c6478;
 
   /* Borders */
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-default: rgba(255, 255, 255, 0.1);
-  --color-border-accent: rgba(99, 102, 241, 0.3);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-accent: rgba(99, 102, 241, 0.25);
 
   /* Status */
   --color-status-success: #10b981;
@@ -38,8 +40,9 @@
   --color-foreground: var(--color-text-primary);
 
   /* Fonts */
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  --font-headline: var(--font-manrope);
 }
 
 /* ---- Global ---- */
@@ -48,102 +51,83 @@ html {
   background-color: var(--color-surface-0);
   color: var(--color-text-primary);
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
 }
 
 body {
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', var(--font-sans), system-ui, sans-serif;
   background: var(--color-surface-0);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+h1, h2, h3, .font-headline {
+  font-family: 'Manrope', var(--font-headline), system-ui, sans-serif;
+}
+
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.12); }
 
 /* ---- Animations ---- */
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.6; }
+  0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
 
 @keyframes slide-in-right {
-  from { opacity: 0; transform: translateX(12px); }
+  from { opacity: 0; transform: translateX(16px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
+@keyframes glow-breathe {
+  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+  50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.3); }
 }
 
-.animate-slide-in-right {
-  animation: slide-in-right 0.3s ease-out;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
+.animate-fade-in { animation: fade-in 0.35s ease-out; }
+.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+.animate-glow-breathe { animation: glow-breathe 3s ease-in-out infinite; }
 
 /* ---- Premium surfaces ---- */
 
 .glass-surface {
-  background: linear-gradient(
-    135deg,
-    rgba(18, 18, 30, 0.8) 0%,
-    rgba(12, 12, 20, 0.9) 100%
-  );
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(19, 27, 46, 0.85);
+  backdrop-filter: blur(24px);
 }
 
 .glass-card {
-  background: linear-gradient(
-    145deg,
-    rgba(26, 26, 46, 0.6) 0%,
-    rgba(18, 18, 30, 0.8) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
+  background: var(--color-surface-2);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
 }
 
-.glow-border {
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15),
-              0 0 20px rgba(99, 102, 241, 0.05);
+.card-sharp {
+  background: var(--color-surface-1);
 }
 
-.glow-border-active {
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3),
-              0 0 30px rgba(99, 102, 241, 0.1);
+.card-sharp-high {
+  background: var(--color-surface-3);
 }
 
 /* ---- Status indicators ---- */
@@ -152,15 +136,6 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  position: relative;
-}
-
-.status-dot::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  opacity: 0.4;
 }
 
 .status-dot-online {
@@ -174,7 +149,7 @@ body {
 }
 
 .status-dot-offline {
-  background: #6b7280;
+  background: #5c6478;
 }
 
 .status-dot-listening {
@@ -189,7 +164,7 @@ body {
   animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
-/* ---- Utility ---- */
+/* ---- Typography utilities ---- */
 
 .text-gradient {
   background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #8b5cf6 100%);
@@ -198,11 +173,105 @@ body {
   background-clip: text;
 }
 
-.bg-gradient-premium {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+.micro-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
 }
 
+.section-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-text-muted);
+}
+
+/* ---- Section header ---- */
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-header::before {
+  content: '';
+  display: block;
+  width: 1rem;
+  height: 2px;
+  background: var(--color-accent-primary);
+  flex-shrink: 0;
+}
+
+/* ---- Timeline ---- */
+
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0.5rem;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-surface-3);
+  border: 2px solid var(--color-accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.timeline-dot-inner {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+}
+
+.timeline-dot-muted {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.timeline-dot-muted .timeline-dot-inner {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- Glow ---- */
+
+.glow-accent {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15),
+              0 0 30px rgba(99, 102, 241, 0.08);
+}
+
+.glow-accent-strong {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25),
+              0 0 40px rgba(99, 102, 241, 0.12);
+}
+
+/* ---- Background patterns ---- */
+
 .bg-gradient-hero {
-  background: radial-gradient(ellipse at 30% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
-              radial-gradient(ellipse at 70% 100%, rgba(139, 92, 246, 0.05) 0%, transparent 60%);
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.04) 0%, transparent 50%);
+}
+
+.bg-gradient-omnibar {
+  background: linear-gradient(to right, rgba(99, 102, 241, 0.15), transparent);
 }
