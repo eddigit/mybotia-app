@@ -132,16 +132,17 @@ async function fetchLiveStatus(): Promise<
     if (!res.ok) return null;
     const data = await res.json();
 
-    // Normalize response — API might return array or object
-    if (Array.isArray(data)) {
+    // Normalize response — API returns { agents: { lea: { status, ... }, ... } }
+    const agents = data.agents || data;
+    if (Array.isArray(agents)) {
       const map: Record<string, { status: string; lastActive?: string }> = {};
-      for (const agent of data) {
+      for (const agent of agents) {
         const id = (agent.id || agent.name || "").toLowerCase();
         if (id) map[id] = { status: agent.status, lastActive: agent.lastActive };
       }
       return map;
     }
-    return data;
+    return agents;
   } catch {
     return null;
   }
