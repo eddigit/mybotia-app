@@ -7,7 +7,7 @@
    Supports: dark / light / system themes
    ============================================ */
 
-@theme inline {
+@theme {
   /* Accent — Sky Blue (same in both themes) */
   --color-accent-primary: #0EA5E9;
   --color-accent-secondary: #0284C7;
