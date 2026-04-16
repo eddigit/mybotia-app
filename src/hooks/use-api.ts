@@ -1,16 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import type { Client, Project, Task, Agent, Deal, Activity, Metric } from "@/types";
+import { useState, useEffect, useCallback } from "react";
+import type { Client, Project, Agent, Deal, Activity, Metric } from "@/types";
 
-// Generic fetcher with fallback
-function useApi<T>(url: string, fallback: T): { data: T; loading: boolean; error: string | null } {
+// Generic fetcher with fallback and refetch
+function useApi<T>(url: string, fallback: T): {
+  data: T;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+} {
   const [data, setData] = useState<T>(fallback);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!url) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     fetch(url)
@@ -31,10 +45,12 @@ function useApi<T>(url: string, fallback: T): { data: T; loading: boolean; error
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
-  }, [url]);
+    return () => {
+      cancelled = true;
+    };
+  }, [url, tick]);
 
-  return { data, loading, error };
+  return { data, loading, error, refetch };
 }
 
 // --- Typed hooks ---
@@ -46,10 +62,29 @@ export function useClients() {
 export function useClient(id: string) {
   return useApi<{
     client: Client;
-    contacts: { id: string; name: string; email: string | null; phone: string | null; role: string | null }[];
+    contacts: {
+      id: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      role: string | null;
+    }[];
     activities: Activity[];
-    invoices: { id: string; ref: string; total: number; status: string; date?: string }[];
-    proposals: { id: string; ref: string; total: number; status: string; date: string; expiryDate: string }[];
+    invoices: {
+      id: string;
+      ref: string;
+      total: number;
+      status: string;
+      date?: string;
+    }[];
+    proposals: {
+      id: string;
+      ref: string;
+      total: number;
+      status: string;
+      date: string;
+      expiryDate: string;
+    }[];
     projects: Project[];
   } | null>(`/api/clients/${id}`, null);
 }
@@ -58,8 +93,22 @@ export function useProjects() {
   return useApi<Project[]>("/api/projects", []);
 }
 
+export interface TaskItem {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  progress: number;
+  projectId: string;
+  projectName: string;
+  projectRef: string;
+  dueDate?: string;
+  createdAt: string;
+}
+
 export function useTasks() {
-  return useApi<Task[]>("/api/tasks", []);
+  return useApi<TaskItem[]>("/api/tasks", []);
 }
 
 export function useAgents() {
@@ -92,4 +141,41 @@ export interface DocumentItem {
 
 export function useDocuments() {
   return useApi<DocumentItem[]>("/api/documents", []);
+}
+
+// --- Conversations ---
+
+export interface ConversationItem {
+  id: string;
+  sessionId: string;
+  agentId: string;
+  agentName: string;
+  key: string;
+  channel: string;
+  target: string;
+  updatedAt: string;
+  model: string;
+  title: string;
+  projectId?: string;
+  projectRef?: string;
+  projectName?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  sender?: string;
+}
+
+export function useConversations() {
+  return useApi<ConversationItem[]>("/api/conversations", []);
+}
+
+export function useMessages(sessionId: string | null) {
+  return useApi<ChatMessage[]>(
+    sessionId ? `/api/conversations/${sessionId}/messages` : "",
+    []
+  );
 }

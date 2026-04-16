@@ -27,7 +27,7 @@ export function Pipeline({ deals }: { deals: Deal[] }) {
           return (
             <div key={stage}>
               {/* Stage header */}
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-border-subtle">
                 <div className="flex items-center gap-2">
                   <div className={cn("w-2 h-2 rounded-sm", config.color)} />
                   <span className="text-xs font-bold text-text-primary">{config.label}</span>
@@ -55,7 +55,7 @@ export function Pipeline({ deals }: { deals: Deal[] }) {
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-[10px] text-text-muted font-mono">{deal.assignee}</span>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-10 h-1 bg-white/[0.04]">
+                        <div className="w-10 h-1 bg-surface-3/30">
                           <div
                             className={cn("h-full", config.color)}
                             style={{ width: `${deal.probability}%`, opacity: 0.7 }}
@@ -67,7 +67,7 @@ export function Pipeline({ deals }: { deals: Deal[] }) {
                   </Link>
                 ))}
                 {stageDeals.length === 0 && (
-                  <div className="p-4 border border-dashed border-white/[0.06] text-center">
+                  <div className="p-4 border border-dashed border-border-subtle text-center">
                     <span className="micro-label text-text-muted">Vide</span>
                   </div>
                 )}

@@ -18,8 +18,8 @@ export function InsightCard({ insight }: { insight: Insight }) {
     <div className={cn(
       "p-5 group transition-all",
       isHigh
-        ? "bg-surface-1 border-l-4 border-l-accent-primary border-t border-r border-b border-white/[0.04]"
-        : "bg-surface-1 border-l-4 border-l-white/[0.08] border-t border-r border-b border-white/[0.04]"
+        ? "bg-surface-1 border-l-4 border-l-accent-primary border-t border-r border-b border-border-subtle"
+        : "bg-surface-1 border-l-4 border-l-border-default border-t border-r border-b border-border-subtle"
     )}>
       <div className="flex items-center gap-2 mb-3">
         <Icon className={cn("w-3.5 h-3.5", isHigh ? "text-accent-glow" : "text-text-muted")} />

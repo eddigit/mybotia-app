@@ -6,6 +6,7 @@ import {
   getThirdPartyInvoices,
   getThirdPartyProposals,
   getThirdPartyProjects,
+  updateThirdParty,
 } from "@/lib/dolibarr";
 import {
   mapThirdPartyToClient,
@@ -15,6 +16,17 @@ import {
 } from "@/lib/mappers";
 import { getTenantScope } from "@/lib/tenant";
 
+async function checkAccess(id: string) {
+  const scope = await getTenantScope();
+  if (scope.isSuperadmin) return true;
+  if (scope.thirdpartyIds) return scope.thirdpartyIds.includes(id);
+  if (scope.categoryId) {
+    const tenantTPs = await getThirdPartiesByCategory(scope.categoryId);
+    return tenantTPs.some((tp) => tp.id === id);
+  }
+  return false;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -22,19 +34,8 @@ export async function GET(
   const { id } = await params;
 
   try {
-    // Tenant access check
-    const scope = await getTenantScope();
-    if (!scope.isSuperadmin) {
-      let allowed = false;
-      if (scope.thirdpartyIds) {
-        allowed = scope.thirdpartyIds.includes(id);
-      } else if (scope.categoryId) {
-        const tenantTPs = await getThirdPartiesByCategory(scope.categoryId);
-        allowed = tenantTPs.some((tp) => tp.id === id);
-      }
-      if (!allowed) {
-        return Response.json({ error: "Acces refuse" }, { status: 403 });
-      }
+    if (!(await checkAccess(id))) {
+      return Response.json({ error: "Acces refuse" }, { status: 403 });
     }
 
     const [tp, contacts, events, invoices, proposals, projects] =
@@ -49,7 +50,6 @@ export async function GET(
 
     const client = mapThirdPartyToClient(tp);
 
-    // Prioritize manual events
     const manualEvents = events.filter((e) => e.type_code !== "AC_OTH_AUTO");
     const autoEvents = events.filter((e) => e.type_code === "AC_OTH_AUTO");
     const sortedEvents = [...manualEvents, ...autoEvents];
@@ -88,6 +88,28 @@ export async function GET(
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
+      { status: 502 }
+    );
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    if (!(await checkAccess(id))) {
+      return Response.json({ error: "Acces refuse" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    await updateThirdParty(id, body);
+    return Response.json({ success: true });
+  } catch (e) {
+    return Response.json(
+      { error: e instanceof Error ? e.message : "Erreur mise a jour" },
       { status: 502 }
     );
   }

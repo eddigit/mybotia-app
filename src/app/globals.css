@@ -4,47 +4,64 @@
    MyBotIA Premium Interface — Design System
    Brand color: Sky Blue (aligned with logo)
    Font: Inter (official MyBotIA typeface)
+   Supports: dark / light / system themes
    ============================================ */
 
 @theme inline {
-  /* Surface hierarchy — deep navy */
-  --color-surface-0: #0b1326;
-  --color-surface-1: #131b2e;
-  --color-surface-2: #171f33;
-  --color-surface-3: #222a3d;
-  --color-surface-4: #2d3449;
-
-  /* Accent — Sky Blue (matches MyBotIA logo gradient) */
+  /* Accent — Sky Blue (same in both themes) */
   --color-accent-primary: #0EA5E9;
   --color-accent-secondary: #0284C7;
   --color-accent-glow: #38BDF8;
   --color-accent-container: #0EA5E9;
   --color-accent-light: #7DD3FC;
 
-  /* Text */
-  --color-text-primary: #dae2fd;
-  --color-text-secondary: #9ca3bf;
-  --color-text-muted: #5c6478;
-
-  /* Borders */
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-border-default: rgba(255, 255, 255, 0.08);
-  --color-border-accent: rgba(14, 165, 233, 0.25);
-
-  /* Status */
+  /* Status (same in both themes) */
   --color-status-success: #10b981;
   --color-status-warning: #f59e0b;
   --color-status-danger: #ef4444;
   --color-status-info: #3b82f6;
 
-  /* Legacy compat */
-  --color-background: var(--color-surface-0);
-  --color-foreground: var(--color-text-primary);
-
   /* Fonts — Inter only (MyBotIA official) */
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --font-headline: var(--font-inter);
+
+  /* ---- LIGHT theme (default for @theme inline) ---- */
+  --color-surface-0: #f8fafc;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-surface-3: #e2e8f0;
+  --color-surface-4: #cbd5e1;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  --color-border-subtle: rgba(0, 0, 0, 0.06);
+  --color-border-default: rgba(0, 0, 0, 0.10);
+  --color-border-accent: rgba(14, 165, 233, 0.25);
+
+  --color-background: var(--color-surface-0);
+  --color-foreground: var(--color-text-primary);
+}
+
+/* ---- DARK theme overrides ---- */
+.dark {
+  --color-surface-0: #0b1326;
+  --color-surface-1: #131b2e;
+  --color-surface-2: #171f33;
+  --color-surface-3: #222a3d;
+  --color-surface-4: #2d3449;
+
+  --color-text-primary: #dae2fd;
+  --color-text-secondary: #9ca3bf;
+  --color-text-muted: #5c6478;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-accent: rgba(14, 165, 233, 0.25);
+
+  --color-accent-glow: #38BDF8;
 }
 
 /* ---- Global ---- */
@@ -53,7 +70,7 @@ html {
   background-color: var(--color-surface-0);
   color: var(--color-text-primary);
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
+  scrollbar-color: var(--color-surface-4) transparent;
 }
 
 body {
@@ -70,8 +87,8 @@ h1, h2, h3, .font-headline {
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.12); }
+::-webkit-scrollbar-thumb { background: var(--color-surface-4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-surface-3); }
 
 /* ---- Animations ---- */
 
@@ -109,18 +126,22 @@ h1, h2, h3, .font-headline {
 /* ---- Premium surfaces ---- */
 
 .glass-surface {
-  background: rgba(19, 27, 46, 0.85);
+  background: color-mix(in srgb, var(--color-surface-1) 85%, transparent);
   backdrop-filter: blur(24px);
 }
 
 .glass-card {
   background: var(--color-surface-2);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border-subtle);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-border-default);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+}
+
+.dark .glass-card:hover {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
 }
 
@@ -151,6 +172,10 @@ h1, h2, h3, .font-headline {
 }
 
 .status-dot-offline {
+  background: #94a3b8;
+}
+
+.dark .status-dot-offline {
   background: #5c6478;
 }
 
@@ -221,7 +246,7 @@ h1, h2, h3, .font-headline {
   top: 0.5rem;
   bottom: 0;
   width: 1px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-border-default);
 }
 
 .timeline-dot {
@@ -247,11 +272,11 @@ h1, h2, h3, .font-headline {
 }
 
 .timeline-dot-muted {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border-default);
 }
 
 .timeline-dot-muted .timeline-dot-inner {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-text-muted);
 }
 
 /* ---- Glow ---- */

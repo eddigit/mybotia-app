@@ -23,7 +23,7 @@ export function MetricCard({ metric }: { metric: Metric }) {
       </div>
 
       {metric.changeLabel && (
-        <div className="mt-3 pt-3 border-t border-white/[0.04]">
+        <div className="mt-3 pt-3 border-t border-border-subtle">
           <span className="text-[10px] text-text-secondary">{metric.changeLabel}</span>
         </div>
       )}
@@ -35,7 +35,7 @@ export function MetricCard({ metric }: { metric: Metric }) {
             key={i}
             className={cn(
               "flex-1 rounded-sm transition-all",
-              i >= 4 ? "bg-accent-primary/60" : "bg-white/[0.04]"
+              i >= 4 ? "bg-accent-primary/60" : "bg-surface-3/30"
             )}
             style={{ height: `${h * 3}px` }}
           />

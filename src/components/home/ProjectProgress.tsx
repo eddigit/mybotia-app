@@ -30,7 +30,7 @@ export function ProjectProgress({ projects }: { projects: Project[] }) {
                 {project.clientName}
               </span>
             )}
-            <div className="w-full h-1 bg-white/[0.04] mt-1.5">
+            <div className="w-full h-1 bg-surface-3/30 mt-1.5">
               <div
                 className="h-full transition-all duration-700"
                 style={{

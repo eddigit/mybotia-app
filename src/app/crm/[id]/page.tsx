@@ -118,7 +118,7 @@ export default function ClientDetailPage({
         </div>
 
         {/* Contact info row */}
-        <div className="flex flex-wrap gap-6 mt-5 pt-5 border-t border-white/[0.04]">
+        <div className="flex flex-wrap gap-6 mt-5 pt-5 border-t border-border-subtle">
           {client.email && (
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <Mail className="w-4 h-4 text-text-muted" />
@@ -142,7 +142,7 @@ export default function ClientDetailPage({
 
         {/* Notes */}
         {(client.notePublic || client.notePrivate) && (
-          <div className="mt-4 pt-4 border-t border-white/[0.04] space-y-2">
+          <div className="mt-4 pt-4 border-t border-border-subtle space-y-2">
             {client.notePublic && (
               <p className="text-sm text-text-secondary leading-relaxed">
                 {client.notePublic}
@@ -174,7 +174,7 @@ export default function ClientDetailPage({
               {contacts.map((c) => (
                 <div
                   key={c.id}
-                  className="p-3 bg-surface-1/50 border border-white/[0.04]"
+                  className="p-3 bg-surface-1/50 border border-border-subtle"
                 >
                   <p className="text-sm font-bold text-text-primary">
                     {c.name}
@@ -217,7 +217,7 @@ export default function ClientDetailPage({
               {projects.map((p) => (
                 <div
                   key={p.id}
-                  className="p-3 bg-surface-1/50 border border-white/[0.04]"
+                  className="p-3 bg-surface-1/50 border border-border-subtle"
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -262,7 +262,7 @@ export default function ClientDetailPage({
                 {proposals.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between p-2 bg-surface-1/50 border border-white/[0.04]"
+                    className="flex items-center justify-between p-2 bg-surface-1/50 border border-border-subtle"
                   >
                     <div>
                       <span className="text-xs font-bold text-text-primary">
@@ -293,7 +293,7 @@ export default function ClientDetailPage({
                 {invoices.map((inv) => (
                   <div
                     key={inv.id}
-                    className="flex items-center justify-between p-2 bg-surface-1/50 border border-white/[0.04]"
+                    className="flex items-center justify-between p-2 bg-surface-1/50 border border-border-subtle"
                   >
                     <div>
                       <span className="text-xs font-bold text-text-primary">
@@ -341,10 +341,10 @@ export default function ClientDetailPage({
                   className={cn(
                     "relative pl-8 flex gap-3",
                     i < activities.length - 1 &&
-                      "pb-4 border-l border-white/[0.06] ml-[7px]"
+                      "pb-4 border-l border-border-subtle ml-[7px]"
                   )}
                 >
-                  <div className="absolute left-0 top-0 w-4 h-4 rounded-full bg-surface-3 border border-white/[0.08] flex items-center justify-center">
+                  <div className="absolute left-0 top-0 w-4 h-4 rounded-full bg-surface-3 border border-border-default flex items-center justify-center">
                     <Icon className="w-2.5 h-2.5 text-text-muted" />
                   </div>
                   <div className="flex-1 min-w-0">

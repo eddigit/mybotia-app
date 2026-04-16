@@ -99,6 +99,29 @@ async function dolibarrFetch<T>(endpoint: string): Promise<T> {
   return res.json();
 }
 
+async function dolibarrWrite<T>(
+  endpoint: string,
+  method: "POST" | "PUT" | "DELETE",
+  body?: Record<string, unknown>
+): Promise<T> {
+  const url = `${DOLIBARR_URL}/${endpoint}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      DOLAPIKEY: DOLIBARR_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Dolibarr ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  return res.json();
+}
+
 // --- Thirdparties (clients) ---
 
 export async function getThirdParties(limit = 100): Promise<DolibarrThirdParty[]> {
@@ -248,4 +271,167 @@ export async function getThirdPartyProjects(socid: string): Promise<DolibarrProj
   } catch {
     return [];
   }
+}
+
+// ============================================
+// WRITE OPERATIONS (POST / PUT / DELETE)
+// ============================================
+
+// --- Thirdparties CRUD ---
+
+export async function createThirdParty(data: {
+  name: string;
+  name_alias?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  zip?: string;
+  town?: string;
+  country_code?: string;
+  client?: string; // "1" = client, "0" = not
+  prospect?: string; // "1" = prospect
+  fournisseur?: string; // "1" = supplier
+  note_public?: string;
+  note_private?: string;
+}): Promise<string> {
+  return dolibarrWrite<string>("thirdparties", "POST", data);
+}
+
+export async function updateThirdParty(
+  id: string,
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return dolibarrWrite("thirdparties/" + id, "PUT", data);
+}
+
+export async function assignThirdPartyCategory(
+  thirdpartyId: string,
+  categoryId: number
+): Promise<unknown> {
+  return dolibarrWrite(
+    `categories/${categoryId}/objects/customer/${thirdpartyId}`,
+    "POST"
+  );
+}
+
+// --- Contacts CRUD ---
+
+export async function createContact(data: {
+  firstname: string;
+  lastname: string;
+  socid: string;
+  email?: string;
+  phone_pro?: string;
+  phone_mobile?: string;
+  poste?: string;
+}): Promise<string> {
+  return dolibarrWrite<string>("contacts", "POST", data);
+}
+
+export async function updateContact(
+  id: string,
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return dolibarrWrite("contacts/" + id, "PUT", data);
+}
+
+// --- Projects CRUD ---
+
+export async function createProject(data: {
+  ref: string;
+  title: string;
+  socid?: string;
+  description?: string;
+  date_start?: string;
+  date_end?: string;
+  budget_amount?: string;
+  usage_task?: number;
+  usage_opportunity?: number;
+  opp_amount?: string;
+  opp_percent?: string;
+}): Promise<string> {
+  return dolibarrWrite<string>("projects", "POST", data);
+}
+
+export async function updateProject(
+  id: string,
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return dolibarrWrite("projects/" + id, "PUT", data);
+}
+
+export async function validateProject(id: string): Promise<unknown> {
+  return dolibarrWrite(`projects/${id}/validate`, "POST", {});
+}
+
+// --- Tasks CRUD (Dolibarr project tasks) ---
+
+export interface DolibarrTask {
+  id: string;
+  ref: string;
+  label: string;
+  description: string | null;
+  fk_project: string;
+  fk_task_parent: string;
+  progress: string | null;
+  date_start: number | string | null;
+  date_end: number | string | null;
+  planned_workload: number;
+  duration_effective: number;
+  datec: string | null;
+  priority: string;
+}
+
+export async function getTasks(limit = 100): Promise<DolibarrTask[]> {
+  try {
+    return await dolibarrFetch<DolibarrTask[]>(
+      `tasks?sortfield=t.rowid&sortorder=DESC&limit=${limit}`
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function getProjectTasks(
+  projectId: string
+): Promise<DolibarrTask[]> {
+  try {
+    return await dolibarrFetch<DolibarrTask[]>(
+      `tasks?sqlfilters=(t.fk_projet:=:${projectId})&limit=50`
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function createTask(data: {
+  label: string;
+  fk_project: string;
+  description?: string;
+  date_start?: string;
+  date_end?: string;
+  planned_workload?: number;
+  priority?: string;
+}): Promise<string> {
+  return dolibarrWrite<string>("tasks", "POST", data);
+}
+
+export async function updateTask(
+  id: string,
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return dolibarrWrite("tasks/" + id, "PUT", data);
+}
+
+// --- Events CRUD ---
+
+export async function createEvent(data: {
+  label: string;
+  type_code: string;
+  datep: number;
+  socid?: string;
+  fk_project?: string;
+  note_private?: string;
+}): Promise<string> {
+  return dolibarrWrite<string>("agendaevents", "POST", data);
 }

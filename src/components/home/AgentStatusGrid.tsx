@@ -51,7 +51,7 @@ export function AgentStatusGrid({ agents }: { agents: Agent[] }) {
                       "w-1 h-3",
                       i <= (agent.status === 'online' ? 4 : agent.status === 'busy' ? 3 : agent.status === 'listening' ? 2 : 1)
                         ? "bg-accent-primary"
-                        : "bg-white/[0.04]"
+                        : "bg-surface-3/30"
                     )}
                   />
                 ))}

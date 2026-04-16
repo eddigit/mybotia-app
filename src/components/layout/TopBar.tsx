@@ -5,9 +5,9 @@ import {
   Bell,
   PanelRight,
   PanelRightClose,
-  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 
 export function TopBar({
   railOpen,
@@ -17,7 +17,7 @@ export function TopBar({
   onToggleRail: () => void;
 }) {
   return (
-    <header className="flex items-center justify-between h-16 px-8 bg-surface-0/80 backdrop-blur-md border-b border-white/[0.04] sticky top-0 z-40 shadow-2xl shadow-black/20">
+    <header className="flex items-center justify-between h-16 px-8 bg-surface-0/80 backdrop-blur-md border-b border-border-subtle sticky top-0 z-40 shadow-2xl shadow-black/10 dark:shadow-black/20">
       {/* Search */}
       <div className="flex items-center flex-1 max-w-md">
         <div className="relative w-full group">
@@ -28,8 +28,8 @@ export function TopBar({
             className="w-full bg-surface-1 border-none text-sm py-2.5 pl-10 pr-20 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-primary/40 transition-all"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-white/[0.06] text-text-muted font-mono">CMD</kbd>
-            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-white/[0.06] text-text-muted font-mono">K</kbd>
+            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">CMD</kbd>
+            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">K</kbd>
           </div>
         </div>
       </div>
@@ -41,8 +41,11 @@ export function TopBar({
           <Bell className="w-[18px] h-[18px]" />
         </div>
 
+        {/* Theme switcher */}
+        <ThemeSwitcher />
+
         {/* Divider */}
-        <div className="h-6 w-px bg-white/[0.06]" />
+        <div className="h-6 w-px bg-border-subtle" />
 
         {/* System Active pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-primary/10 rounded-full border border-accent-primary/20">

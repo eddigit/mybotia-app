@@ -29,8 +29,8 @@ export function CommandCenterHero() {
             Interface de pilotage MyBotIA — donnees en direct
           </div>
           <div className="pr-6 flex items-center gap-1.5">
-            <kbd className="px-2 py-1 text-[9px] font-bold bg-surface-3 rounded border border-white/[0.06] text-text-muted font-mono">CMD</kbd>
-            <kbd className="px-2 py-1 text-[9px] font-bold bg-surface-3 rounded border border-white/[0.06] text-text-muted font-mono">J</kbd>
+            <kbd className="px-2 py-1 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">CMD</kbd>
+            <kbd className="px-2 py-1 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">J</kbd>
           </div>
         </div>
       </div>

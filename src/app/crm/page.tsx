@@ -1,8 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, Plus } from "lucide-react";
+import { BarChart3, Plus, Loader2 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
+import {
+  FormModal,
+  FormField,
+  inputClass,
+  selectClass,
+  btnPrimary,
+  btnSecondary,
+} from "@/components/shared/FormModal";
 import { ClientCard } from "@/components/crm/ClientCard";
 import { Pipeline } from "@/components/crm/Pipeline";
 import { useClients, useDashboard } from "@/hooks/use-api";
@@ -19,9 +27,11 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 
 export default function CRMPage() {
-  const { data: clients, loading: clientsLoading } = useClients();
+  const { data: clients, loading: clientsLoading, refetch: refetchClients } = useClients();
   const { data: dashboard, loading: dashboardLoading } = useDashboard();
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const loading = clientsLoading || dashboardLoading;
   const deals = dashboard?.deals ?? [];
@@ -36,6 +46,35 @@ export default function CRMPage() {
   const activeCount = clients.filter((c) => c.status === "active").length;
   const prospectCount = clients.filter((c) => c.status === "prospect").length;
   const supplierCount = clients.filter((c) => c.isSupplier).length;
+
+  async function handleCreateClient(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreating(true);
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          name_alias: form.get("name_alias"),
+          email: form.get("email"),
+          phone: form.get("phone"),
+          town: form.get("town"),
+          client: form.get("type") === "client" ? "1" : "0",
+          prospect: form.get("type") === "prospect" ? "1" : "0",
+          fournisseur: form.get("type") === "fournisseur" ? "1" : "0",
+          note_public: form.get("note_public"),
+        }),
+      });
+      if (res.ok) {
+        setShowCreate(false);
+        refetchClients();
+      }
+    } finally {
+      setCreating(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -55,53 +94,29 @@ export default function CRMPage() {
         title="CRM / Activite"
         subtitle={`${clients.length} tiers · ${formatCurrency(pipelineValue)} pipeline`}
         actions={
-          <a
-            href="https://crm-mybotia.mybotia.com/societe/card.php?action=create"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2.5 bg-accent-primary text-white text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-all"
-          >
+          <button onClick={() => setShowCreate(true)} className={btnPrimary}>
             <Plus className="w-3.5 h-3.5" />
-            Nouveau contact
-          </a>
+            Nouveau tiers
+          </button>
         }
       />
 
       {/* KPI strip */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          {
-            label: "Clients actifs",
-            value: activeCount.toString(),
-            sub: "en portefeuille",
-          },
-          {
-            label: "Pipeline",
-            value: formatCurrency(pipelineValue),
-            sub: `${deals.length} opportunites`,
-          },
-          {
-            label: "Prospects",
-            value: prospectCount.toString(),
-            sub: "en attente",
-          },
-          {
-            label: "Fournisseurs",
-            value: supplierCount.toString(),
-            sub: "dans Dolibarr",
-          },
+          { label: "Clients actifs", value: activeCount.toString(), sub: "en portefeuille" },
+          { label: "Pipeline", value: formatCurrency(pipelineValue), sub: `${deals.length} opportunites` },
+          { label: "Prospects", value: prospectCount.toString(), sub: "en attente" },
+          { label: "Fournisseurs", value: supplierCount.toString(), sub: "dans Dolibarr" },
         ].map((kpi) => (
           <div key={kpi.label} className="card-sharp-high p-5">
             <span className="micro-label text-text-muted">{kpi.label}</span>
-            <p className="text-2xl font-headline font-extrabold text-text-primary mt-2">
-              {kpi.value}
-            </p>
+            <p className="text-2xl font-headline font-extrabold text-text-primary mt-2">{kpi.value}</p>
             <p className="text-[10px] text-text-muted mt-1">{kpi.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Pipeline */}
       {deals.length > 0 && <Pipeline deals={deals} />}
 
       {/* Clients grid */}
@@ -132,6 +147,46 @@ export default function CRMPage() {
           ))}
         </div>
       </div>
+
+      {/* Create client modal */}
+      <FormModal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau tiers">
+        <form onSubmit={handleCreateClient}>
+          <FormField label="Nom de la societe *">
+            <input name="name" required className={inputClass} placeholder="Ex: Cabinet Martin & Associes" />
+          </FormField>
+          <FormField label="Alias / nom court">
+            <input name="name_alias" className={inputClass} placeholder="Ex: Martin" />
+          </FormField>
+          <FormField label="Type">
+            <select name="type" className={selectClass} defaultValue="client">
+              <option value="client">Client</option>
+              <option value="prospect">Prospect</option>
+              <option value="fournisseur">Fournisseur</option>
+            </select>
+          </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Email">
+              <input name="email" type="email" className={inputClass} placeholder="contact@..." />
+            </FormField>
+            <FormField label="Telephone">
+              <input name="phone" className={inputClass} placeholder="+33 6..." />
+            </FormField>
+          </div>
+          <FormField label="Ville">
+            <input name="town" className={inputClass} placeholder="Paris" />
+          </FormField>
+          <FormField label="Note">
+            <textarea name="note_public" className={inputClass} rows={2} placeholder="Notes..." />
+          </FormField>
+          <div className="flex items-center justify-end gap-3 mt-6">
+            <button type="button" onClick={() => setShowCreate(false)} className={btnSecondary}>Annuler</button>
+            <button type="submit" disabled={creating} className={btnPrimary}>
+              {creating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Creer
+            </button>
+          </div>
+        </form>
+      </FormModal>
     </div>
   );
 }

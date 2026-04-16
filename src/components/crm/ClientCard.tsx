@@ -73,7 +73,7 @@ export function ClientCard({ client }: { client: Client }) {
       )}
 
       {client.assignedAgent && (
-        <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-2">
+        <div className="mt-3 pt-3 border-t border-border-subtle flex items-center gap-2">
           <span className="micro-label text-text-muted">Agent</span>
           <span className="text-[11px] text-accent-glow font-bold">{client.assignedAgent}</span>
         </div>

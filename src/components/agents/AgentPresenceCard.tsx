@@ -109,7 +109,7 @@ export function AgentPresenceCard({ agent }: { agent: Agent }) {
             return (
               <div
                 key={ch}
-                className="flex items-center justify-center w-8 h-8 bg-surface-3/50 border border-white/[0.04]"
+                className="flex items-center justify-center w-8 h-8 bg-surface-3/50 border border-border-subtle"
                 title={ch}
               >
                 <Icon className="w-3.5 h-3.5 text-text-muted" />
@@ -128,7 +128,7 @@ export function AgentPresenceCard({ agent }: { agent: Agent }) {
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-white/[0.04]">
+      <div className="flex items-center gap-2 pt-3 border-t border-border-subtle">
         <a
           href="/conversations"
           className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent-primary/10 border border-accent-primary/20 text-accent-glow text-xs font-bold uppercase tracking-wider hover:bg-accent-primary/15 transition-all"

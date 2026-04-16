@@ -65,7 +65,7 @@ export default function LoginPage() {
               required
               autoFocus
               autoComplete="email"
-              className="w-full px-4 py-3 bg-surface-2 border border-white/[0.06] text-text-primary text-sm placeholder:text-text-muted/50 focus:outline-none focus:border-accent-primary/40 transition-colors"
+              className="w-full px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary text-sm placeholder:text-text-muted/50 focus:outline-none focus:border-accent-primary/40 transition-colors"
               placeholder="votre@email.com"
             />
           </div>
@@ -78,7 +78,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full px-4 py-3 bg-surface-2 border border-white/[0.06] text-text-primary text-sm placeholder:text-text-muted/50 focus:outline-none focus:border-accent-primary/40 transition-colors"
+              className="w-full px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary text-sm placeholder:text-text-muted/50 focus:outline-none focus:border-accent-primary/40 transition-colors"
               placeholder="••••••••"
             />
           </div>

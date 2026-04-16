@@ -5,53 +5,67 @@ import {
   MessageSquare,
   Phone,
   Send,
-  Mail,
   Globe,
-  Mic,
+  Plus,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatRelativeTime, truncate } from "@/lib/utils";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import type { Conversation } from "@/types";
+import { formatRelativeTime } from "@/lib/utils";
+import type { ConversationItem } from "@/hooks/use-api";
 
 const channelIcons: Record<string, typeof MessageSquare> = {
   whatsapp: Phone,
   telegram: Send,
-  email: Mail,
   webchat: Globe,
-  voice: Mic,
+  direct: Bot,
+  unknown: MessageSquare,
 };
 
-type FilterKey = "all" | "active" | "pending";
+type FilterKey = "all" | "whatsapp" | "telegram" | "webchat";
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "Toutes" },
-  { key: "active", label: "Actives" },
-  { key: "pending", label: "En attente" },
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "telegram", label: "Telegram" },
+  { key: "webchat", label: "WebChat" },
 ];
 
 export function ConversationList({
   conversations,
   activeId,
   onSelect,
+  onNewChat,
 }: {
-  conversations: Conversation[];
+  conversations: ConversationItem[];
   activeId?: string;
   onSelect: (id: string) => void;
+  onNewChat?: () => void;
 }) {
   const [filter, setFilter] = useState<FilterKey>("all");
 
   const filtered = conversations.filter((c) => {
     if (filter === "all") return true;
-    if (filter === "active") return c.status === "active";
-    return c.status === "pending";
+    return c.channel === filter;
   });
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-white/[0.04]">
-        <h2 className="text-sm font-bold font-headline text-text-primary mb-3">Conversations</h2>
+      <div className="px-5 py-4 border-b border-border-subtle">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold font-headline text-text-primary">
+            Conversations
+          </h2>
+          {onNewChat && (
+            <button
+              onClick={onNewChat}
+              className="flex items-center justify-center w-7 h-7 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20 transition-all rounded-sm"
+              title="Nouvelle conversation"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
         <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
           {FILTERS.map((f) => (
             <button
@@ -72,6 +86,13 @@ export function ConversationList({
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
+        {filtered.length === 0 && (
+          <div className="flex items-center justify-center h-32">
+            <span className="micro-label text-text-muted">
+              Aucune conversation
+            </span>
+          </div>
+        )}
         {filtered.map((conv) => {
           const ChannelIcon = channelIcons[conv.channel] || MessageSquare;
           const isActive = conv.id === activeId;
@@ -81,7 +102,7 @@ export function ConversationList({
               key={conv.id}
               onClick={() => onSelect(conv.id)}
               className={cn(
-                "w-full text-left px-5 py-3.5 border-b border-white/[0.04] transition-all",
+                "w-full text-left px-5 py-3.5 border-b border-border-subtle transition-all",
                 isActive
                   ? "bg-accent-primary/5 border-l-2 border-l-accent-primary"
                   : "hover:bg-surface-3/30 border-l-2 border-l-transparent"
@@ -93,24 +114,22 @@ export function ConversationList({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <span className="text-xs font-bold text-text-primary truncate">{conv.title}</span>
+                    <span className="text-xs font-bold text-text-primary truncate">
+                      {conv.title}
+                    </span>
                     <span className="text-[10px] text-text-muted font-mono shrink-0">
-                      {formatRelativeTime(conv.lastMessageAt)}
+                      {formatRelativeTime(conv.updatedAt)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <StatusBadge status={conv.status} size="xs" />
-                    {conv.agentName && (
-                      <span className="text-[10px] text-accent-glow font-semibold">{conv.agentName}</span>
-                    )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-accent-glow font-semibold">
+                      {conv.agentName}
+                    </span>
+                    <span className="text-[10px] text-text-muted">
+                      {conv.channel}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-text-muted truncate">{truncate(conv.lastMessage, 80)}</p>
                 </div>
-                {conv.unread > 0 && (
-                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-accent-primary text-white shrink-0">
-                    {conv.unread}
-                  </span>
-                )}
               </div>
             </button>
           );

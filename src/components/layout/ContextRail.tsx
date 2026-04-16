@@ -66,7 +66,7 @@ export function ContextRail({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Agent Presence Widget — centered, Jarvis style */}
-      <div className="px-6 pb-6 flex flex-col items-center text-center border-b border-white/[0.04]">
+      <div className="px-6 pb-6 flex flex-col items-center text-center border-b border-border-subtle">
         <div className="relative mb-4">
           {/* Outer ring */}
           <div className="w-20 h-20 rounded-full bg-accent-primary/10 flex items-center justify-center border border-accent-primary/20">
@@ -87,7 +87,7 @@ export function ContextRail({ onClose }: { onClose: () => void }) {
             <Mic className="w-3.5 h-3.5" />
             Parler
           </button>
-          <button className="flex items-center justify-center w-9 h-9 bg-surface-3 border border-white/[0.06] text-text-muted hover:text-text-primary transition-all">
+          <button className="flex items-center justify-center w-9 h-9 bg-surface-3 border border-border-subtle text-text-muted hover:text-text-primary transition-all">
             <MicOff className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -110,7 +110,7 @@ export function ContextRail({ onClose }: { onClose: () => void }) {
                   "p-4 bg-surface-3/50 border animate-fade-in",
                   insight.priority === 'high'
                     ? "border-l-4 border-l-accent-primary border-t-white/[0.04] border-r-white/[0.04] border-b-white/[0.04]"
-                    : "border-white/[0.04] border-l-4 border-l-white/[0.08]"
+                    : "border-border-subtle border-l-4 border-l-white/[0.08]"
                 )}
                 style={{ animationDelay: `${i * 100}ms` }}
               >

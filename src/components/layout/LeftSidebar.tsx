@@ -112,7 +112,7 @@ export function LeftSidebar({
       </nav>
 
       {/* Bottom nav */}
-      <div className="px-3 py-3 border-t border-white/[0.04]">
+      <div className="px-3 py-3 border-t border-border-subtle">
         {bottomItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           const Icon = item.icon;
@@ -137,7 +137,7 @@ export function LeftSidebar({
 
       {/* User profile */}
       {!collapsed && (
-        <div className="p-4 border-t border-white/[0.04]">
+        <div className="p-4 border-t border-border-subtle">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-surface-3 ring-1 ring-accent-primary/20 flex items-center justify-center overflow-hidden">
               <span className="text-sm font-bold text-accent-glow">{initials}</span>
@@ -160,7 +160,7 @@ export function LeftSidebar({
       {/* Collapse toggle */}
       <button
         onClick={onToggle}
-        className="absolute -right-3 top-20 z-30 flex items-center justify-center w-6 h-6 rounded-full bg-surface-3 border border-white/[0.08] text-text-muted hover:text-text-primary hover:border-accent-primary/30 transition-all"
+        className="absolute -right-3 top-20 z-30 flex items-center justify-center w-6 h-6 rounded-full bg-surface-3 border border-border-default text-text-muted hover:text-text-primary hover:border-accent-primary/30 transition-all"
       >
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>

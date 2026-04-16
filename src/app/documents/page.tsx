@@ -193,7 +193,7 @@ export default function DocumentsPage() {
         <div className="card-sharp overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-white/[0.06]">
+              <tr className="border-b border-border-subtle">
                 <th className="text-left px-5 py-3 micro-label text-text-muted">
                   Type
                 </th>
@@ -224,7 +224,7 @@ export default function DocumentsPage() {
                 return (
                   <tr
                     key={doc.id}
-                    className="border-b border-white/[0.04] hover:bg-surface-3/30 transition-colors"
+                    className="border-b border-border-subtle hover:bg-surface-3/30 transition-colors"
                   >
                     <td className="px-5 py-3.5">
                       <span

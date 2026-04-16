@@ -3,6 +3,8 @@ import {
   getThirdParties,
   getThirdPartiesByCategory,
   getThirdParty,
+  createProject,
+  validateProject,
 } from "@/lib/dolibarr";
 import { mapDolibarrProject } from "@/lib/mappers";
 import { getTenantScope } from "@/lib/tenant";
@@ -11,7 +13,6 @@ export async function GET() {
   try {
     const scope = await getTenantScope();
 
-    // Get thirdparties according to tenant scope
     let thirdparties;
     if (scope.isSuperadmin) {
       thirdparties = await getThirdParties();
@@ -25,14 +26,12 @@ export async function GET() {
       thirdparties = await getThirdParties();
     }
 
-    // Build allowed socid set and name lookup
     const allowedSocids = new Set(thirdparties.map((tp) => tp.id));
     const clientNameById: Record<string, string> = {};
     for (const tp of thirdparties) {
       clientNameById[tp.id] = tp.name_alias || tp.name;
     }
 
-    // Fetch all projects, then filter by tenant's thirdparties
     const doliProjects = await getProjects();
     const filteredProjects = scope.isSuperadmin
       ? doliProjects
@@ -46,6 +45,47 @@ export async function GET() {
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
+      { status: 502 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+
+    if (!body.title || !body.ref) {
+      return Response.json(
+        { error: "title et ref sont requis" },
+        { status: 400 }
+      );
+    }
+
+    const newId = await createProject({
+      ref: body.ref,
+      title: body.title,
+      socid: body.socid || "",
+      description: body.description || "",
+      date_start: body.date_start || "",
+      date_end: body.date_end || "",
+      budget_amount: body.budget_amount || "",
+      usage_task: 1,
+      usage_opportunity: body.opp_amount ? 1 : 0,
+      opp_amount: body.opp_amount || "",
+      opp_percent: body.opp_percent || "",
+    });
+
+    // Auto-validate project
+    try {
+      await validateProject(String(newId));
+    } catch {
+      // Project created but not validated — still usable
+    }
+
+    return Response.json({ id: newId }, { status: 201 });
+  } catch (e) {
+    return Response.json(
+      { error: e instanceof Error ? e.message : "Erreur creation projet" },
       { status: 502 }
     );
   }
