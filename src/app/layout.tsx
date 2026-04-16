@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/contexts/auth-context";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { ThemeProvider } from "@/contexts/theme-context";
 import { AppShell } from "@/components/layout/AppShell";
 import "./globals.css";
 
@@ -31,8 +31,7 @@ export default function RootLayout({
     <html
       lang="fr"
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
-      // @ts-expect-error next-themes needs this for SSR
-      suppressHydrationMismatch
+      suppressHydrationWarning
     >
       <body className="h-full overflow-hidden bg-surface-0 text-text-primary">
         <ThemeProvider>

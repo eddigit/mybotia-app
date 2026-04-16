@@ -7,7 +7,7 @@ import {
   PanelRightClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
+import { ThemeSwitcher } from "@/components/shared/ThemeSwitcher";
 
 export function TopBar({
   railOpen,
