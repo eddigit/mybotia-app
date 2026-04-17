@@ -218,3 +218,107 @@ export async function getThirdPartyProjects(socid: string, tenant?: TenantConfig
   try { return await dolibarrFetch<DolibarrProject[]>(`projects?sqlfilters=(t.fk_soc:=:${socid})&sortfield=t.rowid&sortorder=DESC&limit=20`, tenant); }
   catch { return []; }
 }
+
+// --- Thirdparties by category ---
+export async function getThirdPartiesByCategory(categoryId: number, tenant?: TenantConfig): Promise<DolibarrThirdParty[]> {
+  try { return await dolibarrFetch<DolibarrThirdParty[]>(`categories/${categoryId}/objects?type=customer&limit=200`, tenant); }
+  catch { return []; }
+}
+
+// --- Tasks ---
+export interface DolibarrTask {
+  id: string;
+  ref: string;
+  label: string;
+  description: string | null;
+  fk_project: string;
+  fk_task_parent: string;
+  progress: string | null;
+  date_start: number | string | null;
+  date_end: number | string | null;
+  planned_workload: number;
+  duration_effective: number;
+  datec: string | null;
+  priority: string;
+}
+
+export async function getTasks(limit = 100, tenant?: TenantConfig): Promise<DolibarrTask[]> {
+  try { return await dolibarrFetch<DolibarrTask[]>(`tasks?sortfield=t.rowid&sortorder=DESC&limit=${limit}`, tenant); }
+  catch { return []; }
+}
+
+// ============================================
+// WRITE OPERATIONS (POST / PUT)
+// ============================================
+
+async function dolibarrWrite<T>(endpoint: string, method: "POST" | "PUT", body?: Record<string, unknown>, tenant?: TenantConfig): Promise<T> {
+  const cfg = tenant || getTenantConfig();
+  const url = `${cfg.url}/${endpoint}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      DOLAPIKEY: cfg.apiKey,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Dolibarr ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  return res.json();
+}
+
+export async function createContact(data: {
+  firstname: string;
+  lastname: string;
+  socid: string;
+  email?: string;
+  phone_pro?: string;
+  phone_mobile?: string;
+  poste?: string;
+}, tenant?: TenantConfig): Promise<string> {
+  return dolibarrWrite<string>("contacts", "POST", data, tenant);
+}
+
+export async function updateContact(id: string, data: Record<string, unknown>, tenant?: TenantConfig): Promise<unknown> {
+  return dolibarrWrite("contacts/" + id, "PUT", data, tenant);
+}
+
+export async function createProject(data: {
+  ref: string;
+  title: string;
+  socid?: string;
+  description?: string;
+  date_start?: string;
+  date_end?: string;
+  budget_amount?: string;
+  usage_task?: number;
+  usage_opportunity?: number;
+  opp_amount?: string;
+  opp_percent?: string;
+}, tenant?: TenantConfig): Promise<string> {
+  return dolibarrWrite<string>("projects", "POST", data, tenant);
+}
+
+export async function validateProject(id: string, tenant?: TenantConfig): Promise<unknown> {
+  return dolibarrWrite(`projects/${id}/validate`, "POST", {}, tenant);
+}
+
+export async function createTask(data: {
+  label: string;
+  fk_project: string;
+  description?: string;
+  date_start?: string;
+  date_end?: string;
+  planned_workload?: number;
+  priority?: string;
+}, tenant?: TenantConfig): Promise<string> {
+  return dolibarrWrite<string>("tasks", "POST", data, tenant);
+}
+
+export async function updateTask(id: string, data: Record<string, unknown>, tenant?: TenantConfig): Promise<unknown> {
+  return dolibarrWrite("tasks/" + id, "PUT", data, tenant);
+}
