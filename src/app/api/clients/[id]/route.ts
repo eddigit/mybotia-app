@@ -1,31 +1,18 @@
 import {
   getThirdParty,
-  getThirdPartiesByCategory,
   getThirdPartyContacts,
   getThirdPartyEvents,
   getThirdPartyInvoices,
   getThirdPartyProposals,
   getThirdPartyProjects,
-  updateThirdParty,
 } from "@/lib/dolibarr";
+import { getSession } from "@/lib/session";
 import {
   mapThirdPartyToClient,
   mapEventToActivity,
   mapProposal,
   mapDolibarrProject,
 } from "@/lib/mappers";
-import { getTenantScope } from "@/lib/tenant";
-
-async function checkAccess(id: string) {
-  const scope = await getTenantScope();
-  if (scope.isSuperadmin) return true;
-  if (scope.thirdpartyIds) return scope.thirdpartyIds.includes(id);
-  if (scope.categoryId) {
-    const tenantTPs = await getThirdPartiesByCategory(scope.categoryId);
-    return tenantTPs.some((tp) => tp.id === id);
-  }
-  return false;
-}
 
 export async function GET(
   _request: Request,
@@ -34,18 +21,17 @@ export async function GET(
   const { id } = await params;
 
   try {
-    if (!(await checkAccess(id))) {
-      return Response.json({ error: "Acces refuse" }, { status: 403 });
-    }
+    const session = await getSession();
+    const tenant = session?.tenant;
 
     const [tp, contacts, events, invoices, proposals, projects] =
       await Promise.all([
-        getThirdParty(id),
-        getThirdPartyContacts(id),
-        getThirdPartyEvents(id),
-        getThirdPartyInvoices(id),
-        getThirdPartyProposals(id),
-        getThirdPartyProjects(id),
+        getThirdParty(id, tenant),
+        getThirdPartyContacts(id, tenant),
+        getThirdPartyEvents(id, tenant),
+        getThirdPartyInvoices(id, tenant),
+        getThirdPartyProposals(id, tenant),
+        getThirdPartyProjects(id, tenant),
       ]);
 
     const client = mapThirdPartyToClient(tp);
@@ -54,9 +40,7 @@ export async function GET(
     const autoEvents = events.filter((e) => e.type_code === "AC_OTH_AUTO");
     const sortedEvents = [...manualEvents, ...autoEvents];
 
-    const activities = sortedEvents
-      .slice(0, 15)
-      .map((e) => mapEventToActivity(e));
+    const activities = sortedEvents.slice(0, 15).map((e) => mapEventToActivity(e));
 
     return Response.json({
       client,
@@ -88,28 +72,6 @@ export async function GET(
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
-      { status: 502 }
-    );
-  }
-}
-
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-
-  try {
-    if (!(await checkAccess(id))) {
-      return Response.json({ error: "Acces refuse" }, { status: 403 });
-    }
-
-    const body = await request.json();
-    await updateThirdParty(id, body);
-    return Response.json({ success: true });
-  } catch (e) {
-    return Response.json(
-      { error: e instanceof Error ? e.message : "Erreur mise a jour" },
       { status: 502 }
     );
   }

@@ -1,11 +1,5 @@
-import {
-  getThirdParties,
-  getThirdPartiesByCategory,
-  getThirdParty,
-  getProjects,
-  getInvoices,
-  getEvents,
-} from "@/lib/dolibarr";
+import { getThirdParties, getProjects, getInvoices, getEvents } from "@/lib/dolibarr";
+import { getSession, getSessionTenants } from "@/lib/session";
 import {
   mapThirdPartyToClient,
   mapDolibarrProject,
@@ -13,77 +7,55 @@ import {
   mapEventToActivity,
   computeMetrics,
 } from "@/lib/mappers";
-import { getTenantScope } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    const scope = await getTenantScope();
+    const session = await getSession();
+    const tenants = await getSessionTenants();
 
-    // Get thirdparties according to tenant scope
-    let thirdparties;
-    if (scope.isSuperadmin) {
-      thirdparties = await getThirdParties();
-    } else if (scope.categoryId) {
-      thirdparties = await getThirdPartiesByCategory(scope.categoryId);
-    } else if (scope.thirdpartyIds) {
-      thirdparties = await Promise.all(
-        scope.thirdpartyIds.map((id) => getThirdParty(id))
-      );
-    } else {
-      thirdparties = await getThirdParties();
+    // Fetch data from ALL tenants the user has access to
+    const allThirdparties = [];
+    const allProjects = [];
+    const allInvoices = [];
+    const allEvents = [];
+
+    for (const tenant of tenants) {
+      const [tp, proj, inv, ev] = await Promise.all([
+        getThirdParties(100, tenant).catch(() => []),
+        getProjects(100, tenant).catch(() => []),
+        getInvoices(50, tenant).catch(() => []),
+        getEvents(200, tenant).catch(() => []),
+      ]);
+      allThirdparties.push(...tp);
+      allProjects.push(...proj);
+      allInvoices.push(...inv);
+      allEvents.push(...ev);
     }
 
-    // Build filter set
-    const allowedSocids = new Set(thirdparties.map((tp) => tp.id));
+    const clients = allThirdparties.map(mapThirdPartyToClient);
+
     const clientNameById: Record<string, string> = {};
-    for (const tp of thirdparties) {
+    for (const tp of allThirdparties) {
       clientNameById[tp.id] = tp.name_alias || tp.name;
     }
 
-    // Fetch global data
-    const [doliProjects, invoices, events] = await Promise.all([
-      getProjects(),
-      getInvoices(),
-      getEvents(200),
-    ]);
-
-    // Filter by tenant
-    const filteredProjects = scope.isSuperadmin
-      ? doliProjects
-      : doliProjects.filter((dp) => allowedSocids.has(dp.socid));
-    const filteredInvoices = scope.isSuperadmin
-      ? invoices
-      : invoices.filter((inv) => allowedSocids.has(inv.socid));
-    const filteredEvents = scope.isSuperadmin
-      ? events
-      : events.filter(
-          (ev) => !ev.socid || allowedSocids.has(ev.socid)
-        );
-
-    const clients = thirdparties.map(mapThirdPartyToClient);
-
-    const projects = filteredProjects.map((dp, i) =>
+    const projects = allProjects.map((dp, i) =>
       mapDolibarrProject(dp, i, clientNameById[dp.socid])
     );
 
-    const deals = filteredProjects
+    const deals = allProjects
       .map((dp) => mapProjectToDeal(dp, clientNameById[dp.socid] || ""))
       .filter((d): d is NonNullable<typeof d> => d !== null);
 
-    // Prioritize manual events
-    const manualEvents = filteredEvents.filter(
-      (e) => e.type_code !== "AC_OTH_AUTO"
-    );
-    const autoEvents = filteredEvents.filter(
-      (e) => e.type_code === "AC_OTH_AUTO"
-    );
+    const manualEvents = allEvents.filter((e) => e.type_code !== "AC_OTH_AUTO");
+    const autoEvents = allEvents.filter((e) => e.type_code === "AC_OTH_AUTO");
     const sortedEvents = [...manualEvents, ...autoEvents];
 
     const activities = sortedEvents
       .slice(0, 15)
       .map((e) => mapEventToActivity(e, clientNameById));
 
-    const metrics = computeMetrics(clients, projects, deals, filteredInvoices);
+    const metrics = computeMetrics(clients, projects, deals, allInvoices);
 
     return Response.json({
       metrics,
@@ -91,6 +63,7 @@ export async function GET() {
       projects,
       deals,
       activities,
+      tenant: session?.tenantSlug || "mybotia",
     });
   } catch (e) {
     return Response.json(
