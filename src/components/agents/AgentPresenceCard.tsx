@@ -1,4 +1,5 @@
 import {
+  Bot,
   MessageSquare,
   Phone,
   Send,
@@ -6,10 +7,11 @@ import {
   Zap,
   Clock,
   CheckCircle,
+  Mic,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types";
-import { AgentOrb } from "@/components/agents/AgentOrb";
 
 const channelIcons: Record<string, typeof MessageSquare> = {
   whatsapp: Phone,
@@ -21,10 +23,26 @@ const channelIcons: Record<string, typeof MessageSquare> = {
 export function AgentPresenceCard({ agent }: { agent: Agent }) {
   return (
     <div className="card-sharp p-6 group">
-      {/* Centered presence widget — photo orb */}
+      {/* Centered presence widget — Jarvis style */}
       <div className="flex flex-col items-center text-center mb-5">
-        <div className="mb-3">
-          <AgentOrb agent={agent} size="xl" />
+        <div className="relative mb-3">
+          {/* Outer ring */}
+          <div className="w-20 h-20 rounded-full bg-accent-primary/10 flex items-center justify-center border border-accent-primary/20">
+            {/* Inner core */}
+            <div className={cn(
+              "w-14 h-14 rounded-full flex items-center justify-center transition-all",
+              agent.status === 'online' ? "bg-accent-primary animate-glow-breathe" :
+              agent.status === 'busy' ? "bg-amber-500/80" :
+              agent.status === 'listening' ? "bg-cyan-500/80 animate-glow-breathe" :
+              "bg-surface-4"
+            )}>
+              <Bot className="w-7 h-7 text-white" />
+            </div>
+          </div>
+          {/* Pulse ring for active agents */}
+          {(agent.status === 'online' || agent.status === 'listening') && (
+            <div className="absolute inset-0 rounded-full border border-accent-primary/15 animate-pulse-ring pointer-events-none" />
+          )}
         </div>
 
         <h3 className="text-base font-extrabold text-text-primary font-headline">{agent.name}</h3>

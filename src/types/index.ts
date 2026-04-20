@@ -13,7 +13,7 @@ export interface User {
   company: string;
 }
 
-export type AgentStatus = 'online' | 'busy' | 'offline' | 'listening' | 'speaking' | 'thinking';
+export type AgentStatus = 'online' | 'busy' | 'offline' | 'listening' | 'speaking';
 
 export interface Agent {
   id: string;
@@ -23,12 +23,6 @@ export interface Agent {
   model: string;
   status: AgentStatus;
   avatar?: string;
-  /** Photo URL (Cloudinary, /public/agents/...). Falls back to initials if absent. */
-  photo?: string;
-  /** Hue 0-360 used as a signature color ring around the orb. */
-  hue?: number;
-  /** Short live transcript line rendered in the right rail. */
-  liveTranscript?: string;
   channels: string[];
   lastActive?: string;
   specialties: string[];

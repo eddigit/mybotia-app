@@ -17,8 +17,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
-import { agents } from "@/data/mock";
-import { AgentOrb } from "@/components/agents/AgentOrb";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
@@ -112,41 +110,6 @@ export function LeftSidebar({
           );
         })}
       </nav>
-
-      {/* Live agents mini-strip */}
-      {!collapsed && (
-        <div className="px-4 pt-3 pb-4 border-t border-border-subtle">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="section-title">Equipe live</span>
-            <Link href="/agents" className="micro-label text-accent-glow hover:underline">Tout</Link>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {agents.map((agent) => (
-              <Link
-                key={agent.id}
-                href="/agents"
-                title={`${agent.name} — ${agent.role}`}
-                className="hover:scale-110 transition-transform"
-              >
-                <AgentOrb agent={agent} size="sm" showPulse={false} />
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-      {collapsed && (
-        <div className="px-2 py-3 border-t border-border-subtle flex flex-col items-center gap-1.5">
-          {agents.slice(0, 4).map((agent) => (
-            <Link
-              key={agent.id}
-              href="/agents"
-              title={`${agent.name} — ${agent.role}`}
-            >
-              <AgentOrb agent={agent} size="sm" showPulse={false} />
-            </Link>
-          ))}
-        </div>
-      )}
 
       {/* Bottom nav */}
       <div className="px-3 py-3 border-t border-border-subtle">
