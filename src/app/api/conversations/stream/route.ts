@@ -29,11 +29,16 @@ export async function POST(request: Request) {
     projectName,
     clientName,
     projectDescription,
+    modelTier: requestedModelTier,
   } = body;
 
   if (!message) {
     return Response.json({ error: "message est requis" }, { status: 400 });
   }
+
+  // Tier modele : "fast" (Sonnet, defaut) ou "deep" (Opus, mode reflexion)
+  const modelTier: "fast" | "deep" =
+    requestedModelTier === "deep" ? "deep" : "fast";
 
   const agentId =
     session.isSuperadmin && requestedAgentId
@@ -69,6 +74,7 @@ export async function POST(request: Request) {
       agent_id: agentId,
       project_context: projectContext,
       user_context: userContext,
+      model_tier: modelTier,
     }),
   });
 

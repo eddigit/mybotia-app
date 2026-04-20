@@ -138,7 +138,7 @@ export default function ConversationsPage() {
     });
   }
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, modelTier: "fast" | "deep" = "fast") {
     if (!activeConv) return;
 
     const userMsg: ChatMessage = {
@@ -159,6 +159,7 @@ export default function ConversationsPage() {
       const payload: Record<string, string | undefined> = {
         agentId: activeConv.agentId,
         message: text,
+        modelTier,
         sessionId: activeConvId?.startsWith("new-")
           ? undefined
           : activeConvId || undefined,

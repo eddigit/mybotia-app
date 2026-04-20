@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Brain, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export type ModelTier = "fast" | "deep";
 
 export function MessageComposer({
   agentName,
@@ -10,18 +12,32 @@ export function MessageComposer({
   disabled,
 }: {
   agentName: string;
-  onSend: (text: string) => void;
+  /**
+   * Appele a l'envoi. modelTier vaut "deep" si l'utilisateur a active le mode reflexion
+   * (toggle Brain) ou s'il a tape /opus en debut de message — sinon "fast" (Sonnet).
+   */
+  onSend: (text: string, modelTier: ModelTier) => void;
   disabled?: boolean;
 }) {
   const [message, setMessage] = useState("");
+  const [deepMode, setDeepMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function handleSubmit() {
-    const text = message.trim();
+    let text = message.trim();
     if (!text || disabled) return;
-    onSend(text);
+
+    // Slash command : /opus ou /reflechis force le mode deep pour ce message
+    let tier: ModelTier = deepMode ? "deep" : "fast";
+    const slashMatch = text.match(/^\/(opus|reflechis|reflechi|deep)\s+/i);
+    if (slashMatch) {
+      tier = "deep";
+      text = text.slice(slashMatch[0].length).trim();
+      if (!text) return;
+    }
+
+    onSend(text, tier);
     setMessage("");
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -36,7 +52,6 @@ export function MessageComposer({
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setMessage(e.target.value);
-    // Auto-resize
     const el = e.target;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 128) + "px";
@@ -45,7 +60,7 @@ export function MessageComposer({
   return (
     <div className="px-5 py-4 border-t border-border-subtle bg-surface-0/50 shrink-0">
       <div className="flex items-end gap-3">
-        <div className="flex-1 flex items-end gap-2 px-4 py-3 bg-surface-2 border-b-2 border-border-subtle focus-within:border-accent-primary/40 transition-all">
+        <div className="flex-1 flex flex-col gap-2 px-4 py-3 bg-surface-2 border-b-2 border-border-subtle focus-within:border-accent-primary/40 transition-all">
           <textarea
             ref={textareaRef}
             value={message}
@@ -56,6 +71,42 @@ export function MessageComposer({
             rows={1}
             disabled={disabled}
           />
+          {/* Toggle mode reflexion (Opus) — astuce slash /opus aussi disponible */}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setDeepMode((v) => !v)}
+              disabled={disabled}
+              title={
+                deepMode
+                  ? "Mode reflexion actif (Opus). Plus lent, plus profond. Cliquer pour revenir a Sonnet."
+                  : "Activer le mode reflexion (Opus). Pour analyses longues, strategies, redaction nuancee."
+              }
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold uppercase tracking-tight rounded transition-all",
+                deepMode
+                  ? "bg-accent-primary/15 text-accent-glow border border-accent-primary/30"
+                  : "text-text-muted hover:text-text-secondary hover:bg-surface-3/50"
+              )}
+            >
+              {deepMode ? (
+                <>
+                  <Brain className="w-3 h-3" />
+                  Mode reflexion
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3 h-3" />
+                  Rapide
+                </>
+              )}
+            </button>
+            <span className="text-[10px] text-text-muted/70 italic">
+              {deepMode
+                ? "Opus — plus lent, plus profond"
+                : "Sonnet — astuce: tape /opus pour ce message"}
+            </span>
+          </div>
         </div>
         <button
           onClick={handleSubmit}

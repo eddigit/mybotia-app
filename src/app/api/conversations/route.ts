@@ -65,7 +65,12 @@ export async function POST(request: Request) {
       projectName,
       clientName,
       projectDescription,
+      modelTier: requestedModelTier,
     } = body;
+
+    // Sanitize tier — n'accepte que "fast" ou "deep" ; defaut "fast"
+    const modelTier: "fast" | "deep" =
+      requestedModelTier === "deep" ? "deep" : "fast";
 
     if (!message) {
       return Response.json({ error: "message est requis" }, { status: 400 });
@@ -104,13 +109,16 @@ export async function POST(request: Request) {
           }
         : undefined;
 
-    // 6. Envoyer au bridge avec TOUT le contexte
+    // 6. Envoyer au bridge avec TOUT le contexte + tier du modele
     const response = await sendAgentMessage(
       agentId,
       message,
       effectiveSessionId,
       projectContext,
-      userContext
+      userContext,
+      undefined, // onStatus (non-streaming ici)
+      undefined, // onDelta
+      modelTier
     );
 
     if (response.error) {

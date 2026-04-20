@@ -59,8 +59,13 @@ export interface AgentResponse {
   content: string;
   sessionId: string;
   model?: string;
+  tierUsed?: string;
   error?: string;
 }
+
+// Tier de modele : "fast" (Sonnet, defaut) ou "deep" (Opus, mode reflexion)
+// Ignore par le bridge sur canaux temps reel (voice / whatsapp) — toujours Sonnet.
+export type ModelTier = "fast" | "deep";
 
 // ---- Session listing ----
 
@@ -128,7 +133,8 @@ export async function sendAgentMessage(
   },
   userContext?: UserContext,
   onStatus?: (status: string) => void,
-  onDelta?: (delta: string) => void
+  onDelta?: (delta: string) => void,
+  modelTier: ModelTier = "fast"
 ): Promise<AgentResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 180_000);
@@ -147,6 +153,7 @@ export async function sendAgentMessage(
         agent_id: agentId,
         project_context: projectContext,
         user_context: userContext,
+        model_tier: modelTier,
       }),
     });
     clearTimeout(timeoutId);
@@ -160,6 +167,7 @@ export async function sendAgentMessage(
           agent_id: agentId,
           project_context: projectContext,
           user_context: userContext,
+          model_tier: modelTier,
         }),
       });
       const data = await fallback.json();
@@ -167,6 +175,7 @@ export async function sendAgentMessage(
         content: data.result || "",
         sessionId: data.session_id || sessionId || "",
         model: data.model_used,
+        tierUsed: data.tier_used,
         error: !fallback.ok ? (data.detail || `Bridge error`) : undefined,
       };
     }
@@ -222,6 +231,7 @@ export async function sendAgentMessage(
         agent_id: agentId,
         project_context: projectContext,
         user_context: userContext,
+        model_tier: modelTier,
       }),
     });
     const data = await fallback.json();
@@ -229,6 +239,7 @@ export async function sendAgentMessage(
       content: data.result || "",
       sessionId: data.session_id || sessionId || "",
       model: data.model_used,
+      tierUsed: data.tier_used,
     };
   }
 }
