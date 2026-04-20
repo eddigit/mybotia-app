@@ -8,16 +8,12 @@ import {
   computeMetrics,
 } from "@/lib/mappers";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const session = await getSession();
-    const { searchParams } = new URL(request.url);
-    const allTenantsMode = searchParams.get("all") === "1";
+    const tenants = await getSessionTenants();
 
-    const tenants = allTenantsMode
-      ? await getSessionTenants()
-      : session?.tenant ? [session.tenant] : await getSessionTenants();
-
+    // Fetch data from ALL tenants the user has access to
     const allThirdparties = [];
     const allProjects = [];
     const allInvoices = [];
@@ -55,19 +51,9 @@ export async function GET(request: Request) {
     const autoEvents = allEvents.filter((e) => e.type_code === "AC_OTH_AUTO");
     const sortedEvents = [...manualEvents, ...autoEvents];
 
-    // Mapping id/ref -> title projet pour enrichir les activites
-    const projectTitleById: Record<string, string> = {};
-    const projectTitleByRef: Record<string, string> = {};
-    for (const p of allProjects) {
-      if (p.title) {
-        if (p.id) projectTitleById[String(p.id)] = p.title;
-        if (p.ref) projectTitleByRef[p.ref] = p.title;
-      }
-    }
-
     const activities = sortedEvents
       .slice(0, 15)
-      .map((e) => mapEventToActivity(e, clientNameById, projectTitleById, projectTitleByRef));
+      .map((e) => mapEventToActivity(e, clientNameById));
 
     const metrics = computeMetrics(clients, projects, deals, allInvoices);
 
