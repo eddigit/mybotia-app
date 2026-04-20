@@ -1,7 +1,17 @@
-import { Bot, ChevronRight, Zap, CheckCircle } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types";
 import Link from "next/link";
+import { AgentOrb } from "@/components/agents/AgentOrb";
+
+const STATUS_LABEL: Record<string, string> = {
+  online: "Disponible",
+  busy: "Occupe",
+  listening: "Ecoute",
+  speaking: "Parle",
+  thinking: "Reflechit",
+  offline: "Hors ligne",
+};
 
 export function AgentStatusGrid({ agents }: { agents: Agent[] }) {
   return (
@@ -19,36 +29,25 @@ export function AgentStatusGrid({ agents }: { agents: Agent[] }) {
           <Link
             key={agent.id}
             href="/agents"
-            className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-3/30 transition-all cursor-pointer group"
+            className="flex items-center justify-between px-3 py-2.5 hover:bg-surface-3/30 transition-all cursor-pointer group rounded-md"
           >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-8 h-8 rounded-full bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-accent-glow" />
-                </div>
-                <div className={cn(
-                  "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full",
-                  agent.status === 'online' && "bg-emerald-400",
-                  agent.status === 'busy' && "bg-amber-400",
-                  agent.status === 'listening' && "bg-cyan-400",
-                  agent.status === 'offline' && "bg-zinc-500",
-                )} />
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-text-primary">{agent.name}</span>
-                <p className="text-[10px] text-text-muted">{agent.role}</p>
+            <div className="flex items-center gap-3 min-w-0">
+              <AgentOrb agent={agent} size="sm" />
+              <div className="min-w-0">
+                <span className="text-xs font-semibold text-text-primary block truncate">{agent.name}</span>
+                <p className="text-[10px] text-text-muted truncate">{agent.role}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {agent.tasksCompleted && (
-                <span className="text-[10px] text-text-muted font-mono">{agent.tasksCompleted}</span>
-              )}
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-[10px] text-text-muted hidden lg:inline">
+                {STATUS_LABEL[agent.status] ?? agent.status}
+              </span>
               <div className="flex gap-0.5">
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
                     className={cn(
-                      "w-1 h-3",
+                      "w-1 h-3 rounded-sm",
                       i <= (agent.status === 'online' ? 4 : agent.status === 'busy' ? 3 : agent.status === 'listening' ? 2 : 1)
                         ? "bg-accent-primary"
                         : "bg-surface-3/30"

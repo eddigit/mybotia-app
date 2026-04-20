@@ -7,6 +7,7 @@ import { QuickActions } from "@/components/home/QuickActions";
 import { InsightCard } from "@/components/home/InsightCard";
 import { AgentStatusGrid } from "@/components/home/AgentStatusGrid";
 import { ProjectProgress } from "@/components/home/ProjectProgress";
+import { LiveAgentBand } from "@/components/home/LiveAgentBand";
 import { useDashboard, useAgents, useTasks } from "@/hooks/use-api";
 import { insights } from "@/data/mock";
 import { ArrowRight } from "lucide-react";
@@ -34,9 +35,12 @@ export default function HomePage() {
   }
 
   return (
-    <div className="p-8 min-h-screen">
+    <div className="p-8 min-h-screen bg-gradient-hero">
       {/* Hero omnibar */}
       <CommandCenterHero />
+
+      {/* Live agent band — signature vivant */}
+      <LiveAgentBand agents={agents} />
 
       {/* Bento grid — Sovereign style */}
       <section className="mb-10">
