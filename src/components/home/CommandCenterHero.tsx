@@ -1,24 +1,45 @@
+"use client";
+
 import { Zap } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+
+// Mapping tenant_slug -> info agent principal (affichage front)
+const TENANT_AGENT_INFO: Record<string, { name: string; count: string }> = {
+  mybotia:     { name: "Lea",     count: "votre collaborateur IA est en ligne" },
+  vlmedical:   { name: "Max",     count: "votre collaborateur IA est en ligne" },
+  igh:         { name: "Lucy",    count: "votre collaborateur IA est en ligne" },
+  cmb_lux:     { name: "Raphael", count: "votre collaborateur IA est en ligne" },
+  esprit_loft: { name: "Maria",   count: "votre collaborateur IA est en ligne" },
+};
 
 export function CommandCenterHero() {
+  const { user } = useAuth();
   const now = new Date();
   const greeting = now.getHours() < 12 ? "Bonjour" : now.getHours() < 18 ? "Bon apres-midi" : "Bonsoir";
 
+  const displayName = user?.first_name || user?.email?.split("@")[0] || "";
+  const agentInfo =
+    (user && TENANT_AGENT_INFO[user.tenant_slug]) ||
+    { name: "Lea", count: "votre collaborateur IA est en ligne" };
+
+  const subtitle = user?.is_superadmin
+    ? "MyBotIA — interface de pilotage multi-tenant."
+    : `${agentInfo.name}, ${agentInfo.count}.`;
+
   return (
     <section className="mb-8">
-      {/* Greeting */}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-extrabold tracking-tight text-text-primary font-headline mb-2">
-          {greeting}, <span className="text-gradient">Gilles</span>.
+          {greeting}
+          {displayName ? ", " : ""}
+          <span className="text-gradient">{displayName}</span>.
         </h1>
         <p className="text-text-secondary font-medium">
-          MyBotIA est synchronise sur 7 agents actifs et 5 projets en cours.
+          {subtitle}
         </p>
       </div>
 
-      {/* Omnibar — Sovereign style */}
       <div className="relative group max-w-4xl mx-auto">
-        {/* Glow backdrop */}
         <div className="absolute -inset-1 bg-gradient-to-r from-accent-primary/15 to-transparent blur-xl opacity-40 group-focus-within:opacity-80 transition duration-500 pointer-events-none" />
 
         <div className="relative flex items-center bg-surface-2 border-b-2 border-accent-primary/25 focus-within:border-accent-primary/60 transition-all">

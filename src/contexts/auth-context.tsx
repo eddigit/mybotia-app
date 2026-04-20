@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 interface AuthUser {
   user_id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   tenant_id: string;
   tenant_slug: string;
   role: string;

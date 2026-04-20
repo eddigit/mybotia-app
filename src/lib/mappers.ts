@@ -160,13 +160,29 @@ const EVENT_TYPE_MAP: Record<string, Activity["type"]> = {
 
 export function mapEventToActivity(
   ev: DolibarrEvent,
-  clientNameById?: Record<string, string>
+  clientNameById?: Record<string, string>,
+  projectTitleById?: Record<string, string>,
+  projectTitleByRef?: Record<string, string>
 ): Activity {
   const clientId = ev.socid || undefined;
+  let title = ev.label || "Evenement";
+
+  // Si l'evenement est lie a un projet, remplacer la reference (PJ...) par l'intitule
+  if (ev.fk_project && projectTitleById && projectTitleById[ev.fk_project]) {
+    const projectTitle = projectTitleById[ev.fk_project];
+    // Remplacer toute occurrence de PJXXXX-XXXX dans le label par le titre
+    title = title.replace(/PJ\d+-\d+/g, `"${projectTitle}"`);
+  } else if (projectTitleByRef) {
+    // Fallback : remplacer la reference dans le label si on la trouve dans le mapping
+    title = title.replace(/PJ\d+-\d+/g, (match) => {
+      return projectTitleByRef[match] ? `"${projectTitleByRef[match]}"` : match;
+    });
+  }
+
   return {
     id: `ev-${ev.id}`,
     type: EVENT_TYPE_MAP[ev.type_code] || "system",
-    title: ev.label || "Evenement",
+    title,
     description: ev.note_private || undefined,
     timestamp: parseDate(ev.datep) || new Date().toISOString(),
     clientId,

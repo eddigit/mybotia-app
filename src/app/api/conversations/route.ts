@@ -2,12 +2,42 @@ import {
   listConversations,
   sendAgentMessage,
   projectSessionId,
-  getProjectMemory,
-} from "@/lib/openclaw";
+} from "@/lib/claude-bridge";
+import { getSession } from "@/lib/session";
+
+// Mapping tenant_slug -> agent_id
+// Determine quel collaborateur IA repond par defaut selon le tenant du user connecte.
+const TENANT_AGENT_MAP: Record<string, string> = {
+  mybotia: "lea",
+  vlmedical: "max",
+  igh: "lucy",
+  cmb_lux: "raphael",
+  esprit_loft: "maria",
+};
+
+function resolveAgentId(
+  tenantSlug: string,
+  requestedAgentId: string | undefined,
+  isSuperadmin: boolean
+): string {
+  // Le superadmin peut overrider l'agent via le body de la requete
+  if (isSuperadmin && requestedAgentId) {
+    return requestedAgentId;
+  }
+  // Sinon : l'agent est determine par le tenant du user connecte (non overridable)
+  return TENANT_AGENT_MAP[tenantSlug] || "lea";
+}
 
 export async function GET() {
   try {
-    const conversations = await listConversations();
+    const session = await getSession();
+    if (!session) {
+      return Response.json({ error: "Non authentifie" }, { status: 401 });
+    }
+    // Superadmin voit tout, user normal ne voit que ses propres conversations
+    const conversations = await listConversations(
+      session.isSuperadmin ? undefined : session.email
+    );
     return Response.json(conversations);
   } catch (e) {
     return Response.json(
@@ -19,9 +49,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // 1. Authentification : recuperer la session depuis le cookie JWT
+    const session = await getSession();
+    if (!session) {
+      return Response.json({ error: "Non authentifie" }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
-      agentId,
+      agentId: requestedAgentId,
       message,
       sessionId,
       projectId,
@@ -32,18 +68,32 @@ export async function POST(request: Request) {
     } = body;
 
     if (!message) {
-      return Response.json(
-        { error: "message est requis" },
-        { status: 400 }
-      );
+      return Response.json({ error: "message est requis" }, { status: 400 });
     }
 
-    // Determine session ID — use deterministic project session if project is specified
+    // 2. Determiner l'agent cote serveur (pas de confiance dans le client)
+    const agentId = resolveAgentId(
+      session.tenantSlug,
+      requestedAgentId,
+      session.isSuperadmin
+    );
+
+    // 3. Construire le userContext depuis la session JWT
+    // TODO: enrichir le JWT avec first_name/last_name pour avoir un vrai nom humain
+    const userContext = {
+      name: session.email,
+      email: session.email,
+      role: session.role,
+      tenant_slug: session.tenantSlug,
+      is_superadmin: session.isSuperadmin,
+    };
+
+    // 4. Session ID deterministe pour un projet, sinon on utilise celui fourni
     const effectiveSessionId =
       sessionId ||
-      (projectId ? projectSessionId(projectId, agentId || "main") : undefined);
+      (projectId ? projectSessionId(projectId, agentId) : undefined);
 
-    // Build project context if project info is provided
+    // 5. Construire le projectContext si fourni
     const projectContext =
       projectRef && projectName
         ? {
@@ -54,11 +104,13 @@ export async function POST(request: Request) {
           }
         : undefined;
 
+    // 6. Envoyer au bridge avec TOUT le contexte
     const response = await sendAgentMessage(
-      agentId || "main",
+      agentId,
       message,
       effectiveSessionId,
-      projectContext
+      projectContext,
+      userContext
     );
 
     if (response.error) {

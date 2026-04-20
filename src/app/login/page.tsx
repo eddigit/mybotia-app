@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
@@ -10,6 +11,7 @@ const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_aut
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
@@ -72,15 +74,26 @@ export default function LoginPage() {
 
           <div>
             <label className="micro-label text-text-muted block mb-2">Mot de passe</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full px-4 py-3 bg-surface-2 border border-border-subtle text-text-primary text-sm placeholder:text-text-muted/50 focus:outline-none focus:border-accent-primary/40 transition-colors"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="w-full px-4 py-3 pr-12 bg-surface-2 border border-border-subtle text-text-primary text-sm placeholder:text-text-muted/50 focus:outline-none focus:border-accent-primary/40 transition-colors"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                tabIndex={-1}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-text-muted hover:text-text-primary transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -107,7 +120,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-text-muted/40 text-[10px] mt-10 tracking-wide">
-          MyBotIA &mdash; Coach Digital Paris
+          version #8c6137a &middot; 2026-04-18 10:23 &middot; con&ccedil;u par <a href="https://coachdigitalparis.com" target="_blank" rel="noopener" className="hover:text-text-primary transition-colors">G.KORZEC</a>
         </p>
       </div>
     </div>

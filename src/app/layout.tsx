@@ -20,6 +20,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MyBotIA — Environnement de travail augmente",
   description: "Interface premium de pilotage et d'orchestration metier avec collaborateurs IA",
+  icons: {
+    icon: [
+      { url: "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg",
+    apple: "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg",
+  },
 };
 
 export default function RootLayout({

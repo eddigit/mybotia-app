@@ -1,43 +1,26 @@
-import {
-  getProjects,
-  getThirdParties,
-  getThirdPartiesByCategory,
-  getThirdParty,
-  createProject,
-  validateProject,
-} from "@/lib/dolibarr";
+import { getProjects, getThirdParties, createProject, validateProject } from "@/lib/dolibarr";
+import { getSession, getSessionTenants } from "@/lib/session";
 import { mapDolibarrProject } from "@/lib/mappers";
-import { getTenantScope } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    const scope = await getTenantScope();
+    const tenants = await getSessionTenants();
 
-    let thirdparties;
-    if (scope.isSuperadmin) {
-      thirdparties = await getThirdParties();
-    } else if (scope.categoryId) {
-      thirdparties = await getThirdPartiesByCategory(scope.categoryId);
-    } else if (scope.thirdpartyIds) {
-      thirdparties = await Promise.all(
-        scope.thirdpartyIds.map((id) => getThirdParty(id))
-      );
-    } else {
-      thirdparties = await getThirdParties();
-    }
-
-    const allowedSocids = new Set(thirdparties.map((tp) => tp.id));
     const clientNameById: Record<string, string> = {};
-    for (const tp of thirdparties) {
-      clientNameById[tp.id] = tp.name_alias || tp.name;
+    const allProjects = [];
+
+    for (const tenant of tenants) {
+      const [tp, proj] = await Promise.all([
+        getThirdParties(100, tenant).catch(() => []),
+        getProjects(100, tenant).catch(() => []),
+      ]);
+      for (const t of tp) {
+        clientNameById[t.id] = t.name_alias || t.name;
+      }
+      allProjects.push(...proj);
     }
 
-    const doliProjects = await getProjects();
-    const filteredProjects = scope.isSuperadmin
-      ? doliProjects
-      : doliProjects.filter((dp) => allowedSocids.has(dp.socid));
-
-    const projects = filteredProjects.map((dp, i) =>
+    const projects = allProjects.map((dp, i) =>
       mapDolibarrProject(dp, i, clientNameById[dp.socid])
     );
 
@@ -52,6 +35,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getSession();
     const body = await request.json();
 
     if (!body.title || !body.ref) {
@@ -73,11 +57,10 @@ export async function POST(request: Request) {
       usage_opportunity: body.opp_amount ? 1 : 0,
       opp_amount: body.opp_amount || "",
       opp_percent: body.opp_percent || "",
-    });
+    }, session?.tenant);
 
-    // Auto-validate project
     try {
-      await validateProject(String(newId));
+      await validateProject(String(newId), session?.tenant);
     } catch {
       // Project created but not validated — still usable
     }

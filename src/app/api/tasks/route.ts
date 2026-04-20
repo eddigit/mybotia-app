@@ -2,58 +2,36 @@ import {
   getTasks,
   getProjects,
   getThirdParties,
-  getThirdPartiesByCategory,
-  getThirdParty,
   createTask,
   updateTask,
 } from "@/lib/dolibarr";
-import { getTenantScope } from "@/lib/tenant";
+import { getSession, getSessionTenants } from "@/lib/session";
 
 export async function GET() {
   try {
-    const scope = await getTenantScope();
+    const tenants = await getSessionTenants();
 
-    // Get thirdparties for tenant scope
-    let thirdparties;
-    if (scope.isSuperadmin) {
-      thirdparties = await getThirdParties();
-    } else if (scope.categoryId) {
-      thirdparties = await getThirdPartiesByCategory(scope.categoryId);
-    } else if (scope.thirdpartyIds) {
-      thirdparties = await Promise.all(
-        scope.thirdpartyIds.map((id) => getThirdParty(id))
-      );
-    } else {
-      thirdparties = await getThirdParties();
+    const allTasks = [];
+    const allProjects = [];
+
+    for (const tenant of tenants) {
+      const [tasks, projects] = await Promise.all([
+        getTasks(200, tenant).catch(() => []),
+        getProjects(200, tenant).catch(() => []),
+      ]);
+      allTasks.push(...tasks);
+      allProjects.push(...projects);
     }
 
-    const allowedSocids = new Set(thirdparties.map((tp) => tp.id));
-
-    // Get all tasks and projects
-    const [doliTasks, doliProjects] = await Promise.all([
-      getTasks(200),
-      getProjects(200),
-    ]);
-
-    // Build project lookup
     const projectById: Record<
       string,
       { ref: string; title: string; socid: string }
     > = {};
-    for (const p of doliProjects) {
+    for (const p of allProjects) {
       projectById[p.id] = { ref: p.ref, title: p.title, socid: p.socid };
     }
 
-    // Filter tasks by tenant (through their project's socid)
-    const filteredTasks = scope.isSuperadmin
-      ? doliTasks
-      : doliTasks.filter((task) => {
-          const proj = projectById[task.fk_project];
-          return proj && allowedSocids.has(proj.socid);
-        });
-
-    // Map to app format
-    const tasks = filteredTasks.map((t) => {
+    const tasks = allTasks.map((t) => {
       const proj = projectById[t.fk_project];
       const progress = parseFloat(t.progress || "0");
       return {
@@ -100,6 +78,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getSession();
     const body = await request.json();
 
     if (!body.label || !body.fk_project) {
@@ -116,7 +95,7 @@ export async function POST(request: Request) {
       date_start: body.date_start || "",
       date_end: body.date_end || "",
       priority: body.priority || "0",
-    });
+    }, session?.tenant);
 
     return Response.json({ id: newId }, { status: 201 });
   } catch (e) {
@@ -129,12 +108,13 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const session = await getSession();
     const body = await request.json();
     const { id, ...data } = body;
     if (!id) {
       return Response.json({ error: "id requis" }, { status: 400 });
     }
-    await updateTask(id, data);
+    await updateTask(id, data, session?.tenant);
     return Response.json({ success: true });
   } catch (e) {
     return Response.json(

@@ -19,6 +19,7 @@ import {
   useConversations,
   useMessages,
   useProjects,
+  useAgents,
   type ConversationItem,
   type ChatMessage,
 } from "@/hooks/use-api";
@@ -33,14 +34,7 @@ import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Project } from "@/types";
 
-const AGENTS = [
-  { id: "main", name: "Lea" },
-  { id: "julian", name: "Julian" },
-  { id: "nina", name: "Nina" },
-  { id: "oscar", name: "Oscar" },
-  { id: "bullsage", name: "BullSage" },
-  { id: "agent-rh", name: "Agent RH" },
-];
+// AGENTS loaded dynamically from /api/agents (tenant-filtered)
 
 const channelIcons: Record<string, typeof MessageSquare> = {
   whatsapp: Phone,
@@ -63,8 +57,10 @@ export default function ConversationsPage() {
     refetch: refetchConvs,
   } = useConversations();
   const { data: projects } = useProjects();
+  const { data: agents } = useAgents();
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [tempConv, setTempConv] = useState<ConversationItem | null>(null);
@@ -153,9 +149,9 @@ export default function ConversationsPage() {
     };
     setLocalMessages((prev) => [...prev, userMsg]);
     setSending(true);
+    setStatusText("");
 
     try {
-      // Find the associated project for context injection
       const project = activeConv.projectId
         ? projects.find((p) => p.id === activeConv.projectId)
         : null;
@@ -168,7 +164,6 @@ export default function ConversationsPage() {
           : activeConvId || undefined,
       };
 
-      // Add project context if this is a project conversation
       if (project && activeConv.projectId) {
         payload.projectId = activeConv.projectId;
         payload.projectRef = project.ref;
@@ -177,57 +172,72 @@ export default function ConversationsPage() {
         payload.projectDescription = project.description;
       }
 
-      const res = await fetch("/api/conversations", {
+      const res = await fetch("/api/conversations/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      if (!res.ok || !res.body) {
+        const fallback = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await fallback.json();
+        if (data.error) {
+          setLocalMessages((prev) => [...prev, { id: `local-error-${Date.now()}`, role: "system", content: `Erreur: ${data.error}`, timestamp: new Date().toISOString() }]);
+        } else {
+          setLocalMessages((prev) => [...prev, { id: `local-agent-${Date.now()}`, role: "assistant", content: data.content, timestamp: new Date().toISOString() }]);
+        }
+        return;
+      }
 
-      if (data.error) {
-        setLocalMessages((prev) => [
-          ...prev,
-          {
-            id: `local-error-${Date.now()}`,
-            role: "system",
-            content: `Erreur: ${data.error}`,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      } else {
-        setLocalMessages((prev) => [
-          ...prev,
-          {
-            id: `local-agent-${Date.now()}`,
-            role: "assistant",
-            content: data.content,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let newSessionId = "";
+      let buffer = "";
 
-        if (data.sessionId && activeConvId?.startsWith("new-")) {
-          setActiveConvId(data.sessionId);
-          refetchConvs();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.status) setStatusText(evt.status);
+            if (evt.delta) fullContent += evt.delta;
+            if (evt.done) {
+              newSessionId = evt.session_id || "";
+              if (evt.result && !fullContent) fullContent = evt.result;
+            }
+          } catch { /* skip */ }
         }
       }
+
+      if (fullContent) {
+        setLocalMessages((prev) => [...prev, { id: `local-agent-${Date.now()}`, role: "assistant", content: fullContent, timestamp: new Date().toISOString() }]);
+      }
+      if (newSessionId && activeConvId?.startsWith("new-")) {
+        setActiveConvId(newSessionId);
+        refetchConvs();
+      }
     } catch {
-      setLocalMessages((prev) => [
-        ...prev,
-        {
-          id: `local-error-${Date.now()}`,
-          role: "system",
-          content: "Erreur de connexion",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      setLocalMessages((prev) => [...prev, { id: `local-error-${Date.now()}`, role: "system", content: "Erreur de connexion", timestamp: new Date().toISOString() }]);
     } finally {
       setSending(false);
+      setStatusText("");
     }
   }
 
   function startNewChat(agentId: string, projectId?: string) {
-    const agent = AGENTS.find((a) => a.id === agentId);
+    const agent = (agents ?? []).find((a) => a.id === agentId);
     const project = projectId
       ? projects.find((p) => p.id === projectId)
       : null;
@@ -403,6 +413,7 @@ export default function ConversationsPage() {
             messages={displayMessages}
             loading={msgsLoading}
             sending={sending}
+            statusText={statusText}
             onSend={handleSend}
           />
         ) : (
@@ -464,7 +475,7 @@ export default function ConversationsPage() {
           </FormField>
           <FormField label="Agent">
             <select name="agent" className={selectClass} defaultValue="main">
-              {AGENTS.map((a) => (
+              {(agents ?? []).map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>

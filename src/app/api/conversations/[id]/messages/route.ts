@@ -1,4 +1,4 @@
-import { getSessionMessages } from "@/lib/openclaw";
+import { getSessionMessages } from "@/lib/claude-bridge";
 
 export async function GET(
   _request: Request,

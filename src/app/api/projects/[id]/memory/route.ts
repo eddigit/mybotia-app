@@ -1,4 +1,4 @@
-import { getProjectMemory, saveProjectMemory } from "@/lib/openclaw";
+import { getProjectMemory, saveProjectMemory } from "@/lib/claude-bridge";
 import { getProject } from "@/lib/dolibarr";
 
 export async function GET(

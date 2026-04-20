@@ -27,6 +27,8 @@ export async function GET() {
     return Response.json({
       user_id: payload.sub,
       email: payload.email,
+      first_name: payload.first_name ?? null,
+      last_name: payload.last_name ?? null,
       tenant_id: payload.tenant_id,
       tenant_slug: payload.tenant_slug,
       role: payload.role,

@@ -1,51 +1,29 @@
-import {
-  getInvoices,
-  getProposals,
-  getThirdParties,
-  getThirdPartiesByCategory,
-  getThirdParty,
-} from "@/lib/dolibarr";
-import { getTenantScope } from "@/lib/tenant";
+import { getInvoices, getProposals, getThirdParties } from "@/lib/dolibarr";
+import { getSessionTenants } from "@/lib/session";
 
 export async function GET() {
   try {
-    const scope = await getTenantScope();
+    const tenants = await getSessionTenants();
 
-    // Get thirdparties according to tenant scope
-    let thirdparties;
-    if (scope.isSuperadmin) {
-      thirdparties = await getThirdParties();
-    } else if (scope.categoryId) {
-      thirdparties = await getThirdPartiesByCategory(scope.categoryId);
-    } else if (scope.thirdpartyIds) {
-      thirdparties = await Promise.all(
-        scope.thirdpartyIds.map((id) => getThirdParty(id))
-      );
-    } else {
-      thirdparties = await getThirdParties();
-    }
-
-    const allowedSocids = new Set(thirdparties.map((tp) => tp.id));
+    const allInvoices = [];
+    const allProposals = [];
     const clientNameById: Record<string, string> = {};
-    for (const tp of thirdparties) {
-      clientNameById[tp.id] = tp.name_alias || tp.name;
+
+    for (const tenant of tenants) {
+      const [tp, inv, prop] = await Promise.all([
+        getThirdParties(100, tenant).catch(() => []),
+        getInvoices(200, tenant).catch(() => []),
+        getProposals(200, tenant).catch(() => []),
+      ]);
+      for (const t of tp) {
+        clientNameById[t.id] = t.name_alias || t.name;
+      }
+      allInvoices.push(...inv);
+      allProposals.push(...prop);
     }
-
-    const [invoices, proposals] = await Promise.all([
-      getInvoices(200),
-      getProposals(200),
-    ]);
-
-    // Filter by tenant
-    const filteredInvoices = scope.isSuperadmin
-      ? invoices
-      : invoices.filter((inv) => allowedSocids.has(inv.socid));
-    const filteredProposals = scope.isSuperadmin
-      ? proposals
-      : proposals.filter((prop) => allowedSocids.has(prop.socid));
 
     const docs = [
-      ...filteredInvoices.map((inv) => ({
+      ...allInvoices.map((inv) => ({
         id: `inv-${inv.id}`,
         type: "facture" as const,
         ref: inv.ref,
@@ -63,7 +41,7 @@ export async function GET() {
           : "",
         modulepart: "facture",
       })),
-      ...filteredProposals.map((prop) => {
+      ...allProposals.map((prop) => {
         const statusMap: Record<string, string> = {
           "0": "draft",
           "1": "validated",
@@ -81,9 +59,7 @@ export async function GET() {
           status: statusMap[prop.statut] || "draft",
           date: prop.date
             ? new Date(
-                typeof prop.date === "number"
-                  ? prop.date * 1000
-                  : prop.date
+                typeof prop.date === "number" ? prop.date * 1000 : prop.date
               )
                 .toISOString()
                 .slice(0, 10)
@@ -93,7 +69,6 @@ export async function GET() {
       }),
     ];
 
-    // Sort by date descending
     docs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
     return Response.json(docs);
