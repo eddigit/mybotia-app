@@ -1,4 +1,5 @@
 import type { Agent } from "@/types";
+import { getSession } from "@/lib/session";
 
 const MYBOTIA_API_URL = process.env.MYBOTIA_API_URL;
 const MYBOTIA_API_TOKEN = process.env.MYBOTIA_API_TOKEN;
@@ -104,6 +105,47 @@ const AGENT_META: Record<
     tasksCompleted: 156,
     responseTime: "< 3s",
   },
+  raphael: {
+    name: "Raphael",
+    role: "Agent CMB Luxembourg",
+    description:
+      "Agent principal du client CMB Luxembourg. Configuration a finaliser.",
+    model: "Claude Opus 4.6",
+    channels: ["whatsapp", "telegram", "email"],
+    specialties: [
+      "Conseil",
+      "Gestion",
+      "Administration",
+      "Relation client",
+    ],
+    tasksCompleted: 0,
+    responseTime: "< 3s",
+  },
+  maria: {
+    name: "Maria",
+    role: "Agent Esprit Loft",
+    description:
+      "Agent principal du client Esprit Loft (renovation). Configuration a finaliser.",
+    model: "Claude Opus 4.6",
+    channels: ["whatsapp", "telegram", "email"],
+    specialties: [
+      "Renovation",
+      "Suivi chantier",
+      "Devis",
+      "Relation client",
+    ],
+    tasksCompleted: 0,
+    responseTime: "< 3s",
+  },
+};
+
+// Mapping tenant → agents autorises (l'ordre determine l'agent "principal" affiche)
+const TENANT_AGENTS: Record<string, string[]> = {
+  mybotia: ["lea", "julian", "nina", "oscar", "bullsage"],
+  vlmedical: ["max"],
+  igh: ["lucy"],
+  esprit_loft: ["maria"],
+  cmb_lux: ["raphael"],
 };
 
 // Map API status to app status
@@ -149,17 +191,27 @@ async function fetchLiveStatus(): Promise<
 }
 
 export async function GET() {
+  const session = await getSession();
   const liveStatus = await fetchLiveStatus();
 
-  const agents: Agent[] = Object.entries(AGENT_META).map(([id, meta]) => {
-    const live = liveStatus?.[id];
-    return {
-      id,
-      ...meta,
-      status: live ? mapStatus(live.status) : "offline",
-      lastActive: live?.lastActive || undefined,
-    };
-  });
+  // Superadmin sans tenant explicite -> tous les agents
+  // Sinon -> liste filtree selon TENANT_AGENTS (fallback mybotia -> lea)
+  const allowedIds = session?.isSuperadmin
+    ? Object.keys(AGENT_META)
+    : TENANT_AGENTS[session?.tenantSlug ?? "mybotia"] ?? ["lea"];
+
+  const agents: Agent[] = allowedIds
+    .filter((id) => AGENT_META[id])
+    .map((id) => {
+      const meta = AGENT_META[id];
+      const live = liveStatus?.[id];
+      return {
+        id,
+        ...meta,
+        status: live ? mapStatus(live.status) : "offline",
+        lastActive: live?.lastActive || undefined,
+      };
+    });
 
   return Response.json(agents);
 }
