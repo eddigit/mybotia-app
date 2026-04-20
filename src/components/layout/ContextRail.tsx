@@ -14,6 +14,9 @@ import { cn } from "@/lib/utils";
 import type { Agent } from "@/types";
 import type { TaskItem } from "@/hooks/use-api";
 import { AgentAvatar } from "@/components/shared/AgentAvatar";
+import { VoicePanel } from "@/components/voice/VoicePanel";
+import { getVoiceConfig } from "@/lib/voice-config";
+import { getAgentAvatar } from "@/lib/agent-avatars";
 
 type TabId = 'suggestions' | 'activity' | 'tasks';
 
@@ -25,7 +28,10 @@ interface ContextRailProps {
 
 export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
   const [activeTab, setActiveTab] = useState<TabId>('suggestions');
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const activeAgent = agents[0] ?? null;
+  const voiceConfig = activeAgent ? getVoiceConfig(activeAgent.id) : null;
+  const agentAvatarConfig = activeAgent ? getAgentAvatar(activeAgent.id) : null;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'suggestions', label: 'Suggestions' },
@@ -91,15 +97,30 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
           <p className="text-xs text-text-muted mb-3">Aucun agent disponible</p>
         )}
 
-        {/* Voice + quick input */}
+        {/* Voice toggle */}
         <div className="flex items-center gap-2 w-full">
-          <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-accent-primary/10 border border-accent-primary/20 text-accent-glow text-xs font-bold hover:bg-accent-primary/15 transition-all">
-            <Mic className="w-3.5 h-3.5" />
-            Parler
-          </button>
-          <button className="flex items-center justify-center w-9 h-9 bg-surface-3 border border-border-subtle text-text-muted hover:text-text-primary transition-all">
-            <MicOff className="w-3.5 h-3.5" />
-          </button>
+          {voiceConfig ? (
+            <button
+              onClick={() => setVoiceOpen(!voiceOpen)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 border text-xs font-bold transition-all",
+                voiceOpen
+                  ? "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/15"
+                  : "bg-accent-primary/10 border-accent-primary/20 text-accent-glow hover:bg-accent-primary/15"
+              )}
+            >
+              {voiceOpen ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              {voiceOpen ? "Fermer" : "Parler"}
+            </button>
+          ) : (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 py-2 bg-surface-3/50 border border-border-subtle text-text-muted text-xs font-bold cursor-not-allowed"
+            >
+              <MicOff className="w-3.5 h-3.5" />
+              Voix indisponible
+            </button>
+          )}
         </div>
 
         {/* Accuracy indicator */}
@@ -109,15 +130,24 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
         </div>
       </div>
 
-      {/* Tab content */}
+      {/* Tab content / Voice Panel */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'suggestions' && (
-          <div className="p-6">
-            <p className="text-xs text-text-muted text-center py-8">Aucune suggestion</p>
-          </div>
-        )}
+        {voiceOpen && activeAgent && voiceConfig ? (
+          <VoicePanel
+            agentName={activeAgent.name}
+            agentAvatar={agentAvatarConfig?.url ?? null}
+            voiceWsUrl={voiceConfig.wsUrl}
+            wakeWord={voiceConfig.wakeWord}
+          />
+        ) : (
+          <>
+            {activeTab === 'suggestions' && (
+              <div className="p-6">
+                <p className="text-xs text-text-muted text-center py-8">Aucune suggestion</p>
+              </div>
+            )}
 
-        {activeTab === 'tasks' && (
+            {activeTab === 'tasks' && (
           <div className="p-6">
             <h4 className="section-title mb-4">Taches en cours</h4>
             {tasks && tasks.length > 0 ? (
@@ -176,6 +206,8 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
               ))}
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
 
