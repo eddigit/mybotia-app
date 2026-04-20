@@ -5,15 +5,15 @@ export interface VoiceConfig {
 
 const VOICE_AGENTS: Record<string, VoiceConfig> = {
   lea: {
-    wsUrl: "wss://voice.mybotia.com",
+    wsUrl: "wss://voice.mybotia.com/ws",
     wakeWord: "léa",
   },
   max: {
-    wsUrl: "wss://voice-vlmedical.mybotia.com",
+    wsUrl: "wss://voice-vlmedical.mybotia.com/ws",
     wakeWord: "max",
   },
   lucy: {
-    wsUrl: "wss://voice-lucy.mybotia.com",
+    wsUrl: "wss://voice-lucy.mybotia.com/ws",
     wakeWord: "lucy",
   },
 };
