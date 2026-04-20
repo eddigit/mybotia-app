@@ -1,12 +1,13 @@
 import type { Agent } from "@/types";
+import { getSession } from "@/lib/session";
+import { AGENT_AVATARS } from "@/lib/agent-avatars";
 
 const MYBOTIA_API_URL = process.env.MYBOTIA_API_URL;
 const MYBOTIA_API_TOKEN = process.env.MYBOTIA_API_TOKEN;
 
-// Static agent metadata — enriches live status data
 const AGENT_META: Record<
   string,
-  Omit<Agent, "id" | "status" | "lastActive">
+  Omit<Agent, "id" | "status" | "lastActive"> & { tenants: string[] }
 > = {
   lea: {
     name: "Lea",
@@ -14,6 +15,8 @@ const AGENT_META: Record<
     description:
       "Administration, orchestration, juridique. Coordinatrice de l'equipe IA.",
     model: "Claude Opus 4.6",
+    photo: AGENT_AVATARS.lea?.url ?? undefined,
+    hue: 270,
     channels: ["whatsapp", "telegram", "webchat", "email"],
     specialties: [
       "Administration",
@@ -23,6 +26,7 @@ const AGENT_META: Record<
     ],
     tasksCompleted: 847,
     responseTime: "< 3s",
+    tenants: ["mybotia"],
   },
   julian: {
     name: "Julian",
@@ -30,10 +34,13 @@ const AGENT_META: Record<
     description:
       "Operations, monitoring, debugging, infrastructure technique.",
     model: "Claude Opus 4.6",
+    photo: AGENT_AVATARS.julian?.url ?? undefined,
+    hue: 200,
     channels: ["telegram"],
     specialties: ["Infrastructure", "Monitoring", "DevOps", "Debug"],
     tasksCompleted: 523,
     responseTime: "< 2s",
+    tenants: ["mybotia"],
   },
   nina: {
     name: "Nina",
@@ -41,10 +48,13 @@ const AGENT_META: Record<
     description:
       "Gestion des reseaux sociaux, contenu, strategie de communication.",
     model: "Claude Sonnet 4.5",
+    photo: AGENT_AVATARS.nina?.url ?? undefined,
+    hue: 330,
     channels: ["whatsapp", "telegram"],
     specialties: ["Social Media", "Contenu", "Communication", "Branding"],
     tasksCompleted: 312,
     responseTime: "< 5s",
+    tenants: ["mybotia"],
   },
   oscar: {
     name: "Oscar",
@@ -52,6 +62,8 @@ const AGENT_META: Record<
     description:
       "Recherche prospects, qualification leads, suivi commercial.",
     model: "Claude Opus 4.6",
+    photo: AGENT_AVATARS.oscar?.url ?? undefined,
+    hue: 35,
     channels: ["telegram", "email"],
     specialties: [
       "Prospection",
@@ -61,6 +73,7 @@ const AGENT_META: Record<
     ],
     tasksCompleted: 689,
     responseTime: "< 4s",
+    tenants: ["mybotia"],
   },
   max: {
     name: "Max",
@@ -68,6 +81,8 @@ const AGENT_META: Record<
     description:
       "Agent principal du client VL Medical. Administration et veille sectorielle.",
     model: "Claude Opus 4.6",
+    photo: AGENT_AVATARS.max?.url ?? undefined,
+    hue: 155,
     channels: ["whatsapp", "telegram"],
     specialties: [
       "Medical",
@@ -77,6 +92,7 @@ const AGENT_META: Record<
     ],
     tasksCompleted: 234,
     responseTime: "< 3s",
+    tenants: ["vlmedical"],
   },
   lucy: {
     name: "Lucy",
@@ -84,6 +100,8 @@ const AGENT_META: Record<
     description:
       "Agent dedie au groupe IGH (20 EHPAD/cliniques). Phase d'apprentissage.",
     model: "Claude Sonnet 4.6",
+    photo: AGENT_AVATARS.lucy?.url ?? undefined,
+    hue: 185,
     channels: ["whatsapp"],
     specialties: [
       "Sante",
@@ -93,20 +111,23 @@ const AGENT_META: Record<
     ],
     tasksCompleted: 45,
     responseTime: "< 5s",
+    tenants: ["igh"],
   },
   bullsage: {
     name: "BullSage",
     role: "Finance & Crypto",
     description: "Analyse financiere, suivi crypto, veille marches.",
     model: "Claude Sonnet 4.5",
+    photo: AGENT_AVATARS.bullsage?.url ?? undefined,
+    hue: 25,
     channels: ["telegram"],
     specialties: ["Finance", "Crypto", "Analyse marche", "Trading"],
     tasksCompleted: 156,
     responseTime: "< 3s",
+    tenants: ["mybotia"],
   },
 };
 
-// Map API status to app status
 function mapStatus(
   apiStatus: string | undefined
 ): Agent["status"] {
@@ -132,7 +153,6 @@ async function fetchLiveStatus(): Promise<
     if (!res.ok) return null;
     const data = await res.json();
 
-    // Normalize response — API returns { agents: { lea: { status, ... }, ... } }
     const agents = data.agents || data;
     if (Array.isArray(agents)) {
       const map: Record<string, { status: string; lastActive?: string }> = {};
@@ -149,17 +169,23 @@ async function fetchLiveStatus(): Promise<
 }
 
 export async function GET() {
+  const session = await getSession();
+  const tenantSlug = session?.tenantSlug || "mybotia";
+  const isSuperadmin = session?.isSuperadmin === true;
+
   const liveStatus = await fetchLiveStatus();
 
-  const agents: Agent[] = Object.entries(AGENT_META).map(([id, meta]) => {
-    const live = liveStatus?.[id];
-    return {
-      id,
-      ...meta,
-      status: live ? mapStatus(live.status) : "offline",
-      lastActive: live?.lastActive || undefined,
-    };
-  });
+  const agents: Agent[] = Object.entries(AGENT_META)
+    .filter(([, meta]) => isSuperadmin || meta.tenants.includes(tenantSlug))
+    .map(([id, { tenants: _tenants, ...meta }]) => {
+      const live = liveStatus?.[id];
+      return {
+        id,
+        ...meta,
+        status: live ? mapStatus(live.status) : "offline",
+        lastActive: live?.lastActive || undefined,
+      };
+    });
 
   return Response.json(agents);
 }
