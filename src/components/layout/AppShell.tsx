@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { useAgents, useTasks } from "@/hooks/use-api";
+import { useAgents } from "@/hooks/use-api";
 import { LeftSidebar } from "./LeftSidebar";
 import { TopBar } from "./TopBar";
 import { ContextRail } from "./ContextRail";
@@ -15,7 +15,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading } = useAuth();
   const { data: agents } = useAgents();
-  const { data: tasks } = useTasks();
 
   // Login page: render children directly (no shell)
   if (pathname === "/login") {
@@ -73,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Context Rail (right) */}
-      {railOpen && <ContextRail onClose={() => setRailOpen(false)} agents={agents} tasks={tasks} />}
+      {railOpen && <ContextRail onClose={() => setRailOpen(false)} agents={agents} />}
     </div>
   );
 }

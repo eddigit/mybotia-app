@@ -4,40 +4,26 @@ import { useState } from "react";
 import {
   Mic,
   MicOff,
-  FileText,
-  ChevronRight,
   Zap,
-  Clock,
   MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types";
-import type { TaskItem } from "@/hooks/use-api";
 import { AgentAvatar } from "@/components/shared/AgentAvatar";
 import { VoicePanel } from "@/components/voice/VoicePanel";
 import { getVoiceConfig } from "@/lib/voice-config";
 import { getAgentAvatar } from "@/lib/agent-avatars";
 
-type TabId = 'suggestions' | 'activity' | 'tasks';
-
 interface ContextRailProps {
   onClose: () => void;
   agents: Agent[];
-  tasks?: TaskItem[];
 }
 
-export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('suggestions');
+export function ContextRail({ onClose, agents }: ContextRailProps) {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const activeAgent = agents[0] ?? null;
   const voiceConfig = activeAgent ? getVoiceConfig(activeAgent.id) : null;
   const agentAvatarConfig = activeAgent ? getAgentAvatar(activeAgent.id) : null;
-
-  const tabs: { id: TabId; label: string }[] = [
-    { id: 'suggestions', label: 'Suggestions' },
-    { id: 'activity', label: 'Activite' },
-    { id: 'tasks', label: 'Taches' },
-  ];
 
   return (
     <aside className="w-[320px] h-full bg-surface-1/90 backdrop-blur-xl flex flex-col shrink-0 animate-slide-in-right shadow-[-20px_0_40px_rgba(99,102,241,0.03)]">
@@ -45,8 +31,8 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-accent-glow font-extrabold font-headline text-sm">IA Insights</h3>
-            <p className="micro-label text-text-muted mt-0.5">Analyse active</p>
+            <h3 className="text-accent-glow font-extrabold font-headline text-sm">Voice Panel MBIA</h3>
+            <p className="micro-label text-text-muted mt-0.5">Echange vocal avec ton agent</p>
           </div>
           <button
             onClick={onClose}
@@ -54,24 +40,6 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
           >
             <MoreVertical className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 bg-surface-1 p-1 rounded-sm">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex-1 py-2 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all",
-                activeTab === tab.id
-                  ? "bg-accent-primary/10 text-accent-glow"
-                  : "text-text-muted hover:bg-surface-3/50"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -130,7 +98,7 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
         </div>
       </div>
 
-      {/* Tab content / Voice Panel */}
+      {/* Voice Panel */}
       <div className="flex-1 overflow-y-auto">
         {voiceOpen && activeAgent && voiceConfig ? (
           <VoicePanel
@@ -140,74 +108,11 @@ export function ContextRail({ onClose, agents, tasks }: ContextRailProps) {
             wakeWord={voiceConfig.wakeWord}
           />
         ) : (
-          <>
-            {activeTab === 'suggestions' && (
-              <div className="p-6">
-                <p className="text-xs text-text-muted text-center py-8">Aucune suggestion</p>
-              </div>
-            )}
-
-            {activeTab === 'tasks' && (
           <div className="p-6">
-            <h4 className="section-title mb-4">Taches en cours</h4>
-            {tasks && tasks.length > 0 ? (
-              <div className="space-y-2">
-                {tasks
-                  .filter(t => t.status !== 'done')
-                  .slice(0, 5)
-                  .map((task) => (
-                    <button
-                      key={task.id}
-                      className="w-full text-left px-4 py-3 bg-surface-1 hover:bg-surface-3/50 transition-all flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn(
-                          "w-1.5 h-1.5 rounded-full shrink-0",
-                          task.priority === 'critical' && "bg-red-400",
-                          task.priority === 'high' && "bg-orange-400",
-                          task.priority === 'medium' && "bg-amber-400",
-                          task.priority === 'low' && "bg-zinc-400",
-                        )} />
-                        <span className="text-xs text-text-secondary truncate">{task.title}</span>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-text-muted group-hover:text-accent-glow shrink-0 transition-colors" />
-                    </button>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-xs text-text-muted text-center py-8">Aucune tache en cours</p>
-            )}
+            <p className="text-xs text-text-muted text-center py-8">
+              Clique sur <span className="text-accent-glow font-bold">Parler</span> pour demarrer la conversation vocale.
+            </p>
           </div>
-        )}
-
-        {activeTab === 'activity' && (
-          <div className="p-6">
-            <h4 className="section-title mb-4">Documents recents</h4>
-            {/* TODO: replace placeholder data with real API data */}
-            <div className="space-y-2">
-              {[
-                { name: "Devis Systemic v2.pdf", time: "Il y a 2h" },
-                { name: "CR reunion IGH.docx", time: "Hier" },
-                { name: "Pipeline Q2 2026.xlsx", time: "12 avr" },
-              ].map((doc) => (
-                <button
-                  key={doc.name}
-                  className="w-full text-left px-4 py-3 bg-surface-1 hover:bg-surface-3/50 transition-all flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                    <span className="text-xs text-text-secondary truncate">{doc.name}</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px] text-text-muted shrink-0">
-                    <Clock className="w-2.5 h-2.5" />
-                    {doc.time}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-          </>
         )}
       </div>
 
