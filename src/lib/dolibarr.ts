@@ -135,12 +135,16 @@ export interface DolibarrProposal {
   fin_validite: number | string | null;
 }
 
-async function dolibarrFetch<T>(endpoint: string, tenant?: TenantConfig): Promise<T> {
+async function dolibarrFetch<T>(
+  endpoint: string,
+  tenant?: TenantConfig,
+  opts: { noCache?: boolean } = {}
+): Promise<T> {
   const cfg = tenant || getTenantConfig();
   const url = `${cfg.url}/${endpoint}`;
   const res = await fetch(url, {
     headers: { DOLAPIKEY: cfg.apiKey },
-    next: { revalidate: 60 },
+    ...(opts.noCache ? { cache: "no-store" } : { next: { revalidate: 60 } }),
   });
 
   if (!res.ok) {
@@ -267,7 +271,7 @@ export async function getTasks(
     limit: String(limit),
   });
   if (filters.length) qs.set("sqlfilters", filters.join(" and "));
-  try { return await dolibarrFetch<DolibarrTask[]>(`tasks?${qs.toString()}`, tenant); }
+  try { return await dolibarrFetch<DolibarrTask[]>(`tasks?${qs.toString()}`, tenant, { noCache: true }); }
   catch { return []; }
 }
 
@@ -291,7 +295,7 @@ export async function getTaskContacts(
   // Dolibarr 23's /tasks/{id}/contacts `type` query param is mis-routed to the
   // contact code (e.g. TASKEXECUTIVE) instead of the source filter. Pass none
   // and filter on `source`/`code` client-side when needed.
-  try { return await dolibarrFetch<DolibarrTaskContact[]>(`tasks/${taskId}/contacts`, tenant); }
+  try { return await dolibarrFetch<DolibarrTaskContact[]>(`tasks/${taskId}/contacts`, tenant, { noCache: true }); }
   catch { return []; }
 }
 
