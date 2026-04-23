@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import Image from "next/image";
 import { Mic, Square, Phone, MessageCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +15,6 @@ type VoiceMode = "on-call" | "free" | "meeting";
 
 interface VoicePanelProps {
   agentName: string;
-  agentAvatar: string | null;
   voiceWsUrl: string;
   wakeWord: string;
 }
@@ -28,7 +26,6 @@ interface Transcript {
 
 export function VoicePanel({
   agentName,
-  agentAvatar,
   voiceWsUrl,
   wakeWord,
 }: VoicePanelProps) {
@@ -267,36 +264,10 @@ export function VoicePanel({
 
   return (
     <div className="flex flex-col h-full px-6 pb-4 overflow-hidden">
-      {/* Avatar + nom */}
-      <div className="pt-2 pb-4 flex flex-col items-center text-center">
-        {agentAvatar ? (
-          <div className="w-20 h-20 rounded-full bg-accent-primary/10 flex items-center justify-center border border-accent-primary/20 overflow-hidden mb-3">
-            <Image
-              src={agentAvatar}
-              alt={agentName}
-              width={80}
-              height={80}
-              className="w-full h-full object-cover"
-              unoptimized
-            />
-          </div>
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-accent-primary/10 flex items-center justify-center border border-accent-primary/20 mb-3">
-            <span className="text-xl font-bold text-accent-glow">
-              {agentName.slice(0, 2).toUpperCase()}
-            </span>
-          </div>
-        )}
-        <h3 className="text-sm font-bold text-text-primary font-headline">
-          {agentName}
-        </h3>
-        <p className="micro-label text-text-muted mt-0.5">Collaborateur IA</p>
-      </div>
-
       {/* Mode tabs */}
       <div
         className={cn(
-          "flex items-center gap-1 bg-surface-2 p-1 mb-4 rounded-sm",
+          "flex items-center gap-1 bg-surface-2 p-1 mt-4 mb-4 rounded-sm",
           isActive && "opacity-60 pointer-events-none"
         )}
       >

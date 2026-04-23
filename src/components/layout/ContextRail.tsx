@@ -12,7 +12,6 @@ import type { Agent } from "@/types";
 import { AgentAvatar } from "@/components/shared/AgentAvatar";
 import { VoicePanel } from "@/components/voice/VoicePanel";
 import { getVoiceConfig } from "@/lib/voice-config";
-import { getAgentAvatar } from "@/lib/agent-avatars";
 
 interface ContextRailProps {
   onClose: () => void;
@@ -23,7 +22,6 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const activeAgent = agents[0] ?? null;
   const voiceConfig = activeAgent ? getVoiceConfig(activeAgent.id) : null;
-  const agentAvatarConfig = activeAgent ? getAgentAvatar(activeAgent.id) : null;
 
   return (
     <aside className="w-[320px] h-full bg-surface-1/90 backdrop-blur-xl flex flex-col shrink-0 animate-slide-in-right shadow-[-20px_0_40px_rgba(99,102,241,0.03)]">
@@ -103,7 +101,6 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
         {voiceOpen && activeAgent && voiceConfig ? (
           <VoicePanel
             agentName={activeAgent.name}
-            agentAvatar={agentAvatarConfig?.url ?? null}
             voiceWsUrl={voiceConfig.wsUrl}
             wakeWord={voiceConfig.wakeWord}
           />
