@@ -237,6 +237,7 @@ export interface DolibarrTask {
   description: string | null;
   fk_project: string;
   fk_task_parent: string;
+  fk_user_creat: string | null;
   progress: string | null;
   date_start: number | string | null;
   date_end: number | string | null;

@@ -58,6 +58,13 @@ export async function GET(request: Request) {
         allTasks.map(async ({ task, tenant }) => {
           const uid = userByTenantUrl.get(tenant.url);
           if (!uid) return;
+          // Fast path : l'user courant a créé la tâche — on la considère sienne.
+          // Évite aussi le N+1 sur /contacts pour ses propres créations.
+          if (task.fk_user_creat && String(task.fk_user_creat) === String(uid)) {
+            keep.push({ task, tenant });
+            return;
+          }
+          // Fallback : vérifier si l'user est assigné comme TASKEXECUTIVE.
           const contacts = await getTaskContacts(task.id, tenant).catch(() => []);
           const assigned = contacts.some(
             (c) =>
