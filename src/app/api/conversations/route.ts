@@ -28,16 +28,19 @@ function resolveAgentId(
   return TENANT_AGENT_MAP[tenantSlug] || "lea";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session) {
       return Response.json({ error: "Non authentifie" }, { status: 401 });
     }
-    // Superadmin voit tout, user normal ne voit que ses propres conversations
-    const conversations = await listConversations(
-      session.isSuperadmin ? undefined : session.email
-    );
+    // Isolation par user_email par defaut, MEME pour superadmin.
+    // Un superadmin peut explicitement passer ?scope=all pour voir toutes les
+    // conversations (debug / supervision) — jamais par defaut.
+    const url = new URL(request.url);
+    const scope = url.searchParams.get("scope");
+    const showAll = session.isSuperadmin && scope === "all";
+    const conversations = await listConversations(showAll ? undefined : session.email);
     return Response.json(conversations);
   } catch (e) {
     return Response.json(
