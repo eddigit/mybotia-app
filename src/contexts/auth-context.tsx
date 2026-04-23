@@ -39,11 +39,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Check session on mount
   useEffect(() => {
     fetch("/api/auth/me")
-      .then((res) => {
-        if (res.ok) return res.json();
-        throw new Error("Not authenticated");
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.authenticated) {
+          setUser(data);
+        } else {
+          setUser(null);
+        }
       })
-      .then((data) => setUser(data))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
@@ -68,7 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const meRes = await fetch("/api/auth/me");
       if (meRes.ok) {
         const meData = await meRes.json();
-        setUser(meData);
+        if (meData && meData.authenticated) {
+          setUser(meData);
+        }
       }
 
       return { ok: true };

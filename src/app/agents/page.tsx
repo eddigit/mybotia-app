@@ -6,7 +6,7 @@ import { AgentPresenceCard } from "@/components/agents/AgentPresenceCard";
 import { useAgents } from "@/hooks/use-api";
 
 export default function AgentsPage() {
-  const { data: agents, loading } = useAgents();
+  const { data: agents, loading } = useAgents(true);
 
   const onlineCount = agents.filter(a => a.status === 'online' || a.status === 'listening' || a.status === 'busy').length;
   const totalTasks = agents.reduce((sum, a) => sum + (a.tasksCompleted || 0), 0);

@@ -190,15 +190,29 @@ async function fetchLiveStatus(): Promise<
   }
 }
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
   const session = await getSession();
+
+  if (!session) {
+    return Response.json([], {
+      status: 401,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
+  const url = new URL(request.url);
+  const wantAll = url.searchParams.get("all") === "true";
+
   const liveStatus = await fetchLiveStatus();
 
-  // Superadmin sans tenant explicite -> tous les agents
-  // Sinon -> liste filtree selon TENANT_AGENTS (fallback mybotia -> lea)
-  const allowedIds = session?.isSuperadmin
-    ? Object.keys(AGENT_META)
-    : TENANT_AGENTS[session?.tenantSlug ?? "mybotia"] ?? ["lea"];
+  // Par défaut : filtrer par tenant du user connecté (même pour superadmin).
+  // ?all=true réservé aux pages admin (ex: /agents) qui listent tous les agents.
+  const allowedIds =
+    wantAll && session.isSuperadmin
+      ? Object.keys(AGENT_META)
+      : TENANT_AGENTS[session.tenantSlug] ?? [];
 
   const agents: Agent[] = allowedIds
     .filter((id) => AGENT_META[id])
@@ -213,5 +227,7 @@ export async function GET() {
       };
     });
 
-  return Response.json(agents);
+  return Response.json(agents, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

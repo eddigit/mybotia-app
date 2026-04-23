@@ -3,6 +3,11 @@ export interface VoiceConfig {
   wakeWord: string;
 }
 
+// NEXT_PUBLIC_VOICE_ENABLED doit être "true" pour activer la voix.
+// Tant que voice-poc n'est pas migré de Jacques vers Damien, on le laisse à false
+// pour éviter les erreurs WebSocket dans la console.
+const VOICE_ENABLED = process.env.NEXT_PUBLIC_VOICE_ENABLED === "true";
+
 const VOICE_AGENTS: Record<string, VoiceConfig> = {
   lea: {
     wsUrl: "wss://voice.mybotia.com/ws",
@@ -19,5 +24,10 @@ const VOICE_AGENTS: Record<string, VoiceConfig> = {
 };
 
 export function getVoiceConfig(agentId: string): VoiceConfig | null {
+  if (!VOICE_ENABLED) return null;
   return VOICE_AGENTS[agentId.toLowerCase()] ?? null;
+}
+
+export function isVoiceEnabled(): boolean {
+  return VOICE_ENABLED;
 }

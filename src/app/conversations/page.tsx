@@ -226,6 +226,11 @@ export default function ConversationsPage() {
         setLocalMessages((prev) => [...prev, { id: `local-agent-${Date.now()}`, role: "assistant", content: fullContent, timestamp: new Date().toISOString() }]);
       }
       if (newSessionId && activeConvId?.startsWith("new-")) {
+        setTempConv((prev) =>
+          prev && prev.id === activeConvId
+            ? { ...prev, id: newSessionId, sessionId: newSessionId }
+            : prev
+        );
         setActiveConvId(newSessionId);
         refetchConvs();
       }
