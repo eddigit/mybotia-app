@@ -242,9 +242,95 @@ export interface DolibarrTask {
   priority: string;
 }
 
-export async function getTasks(limit = 100, tenant?: TenantConfig): Promise<DolibarrTask[]> {
-  try { return await dolibarrFetch<DolibarrTask[]>(`tasks?sortfield=t.rowid&sortorder=DESC&limit=${limit}`, tenant); }
+export interface GetTasksOptions {
+  /** Filtre SQL : ne retourne que les tâches avec `datee <= dueBeforeOrEqual` (date ISO `YYYY-MM-DD`). */
+  dueBeforeOrEqual?: string;
+  /** Filtre SQL : exclut les tâches où `progress >= 100`. */
+  notDoneOnly?: boolean;
+}
+
+export async function getTasks(
+  limit = 100,
+  tenant?: TenantConfig,
+  opts: GetTasksOptions = {}
+): Promise<DolibarrTask[]> {
+  const filters: string[] = [];
+  if (opts.dueBeforeOrEqual) {
+    filters.push(`(t.datee:<=:'${opts.dueBeforeOrEqual} 23:59:59')`);
+  }
+  if (opts.notDoneOnly) {
+    filters.push(`((t.progress:<:100) or (t.progress:is:NULL))`);
+  }
+  const qs = new URLSearchParams({
+    sortfield: "t.datee",
+    sortorder: "ASC",
+    limit: String(limit),
+  });
+  if (filters.length) qs.set("sqlfilters", filters.join(" and "));
+  try { return await dolibarrFetch<DolibarrTask[]>(`tasks?${qs.toString()}`, tenant); }
   catch { return []; }
+}
+
+// --- Task contacts (assignees) ---
+export interface DolibarrTaskContact {
+  id: string;
+  rowid?: string;
+  source: string;
+  socid?: string | null;
+  fk_socpeople?: string | null;
+  code: string; // 'TASKEXECUTIVE' etc
+  libelle?: string;
+  email?: string | null;
+  login?: string | null;
+}
+
+export async function getTaskContacts(
+  taskId: string,
+  tenant?: TenantConfig
+): Promise<DolibarrTaskContact[]> {
+  // Dolibarr 23's /tasks/{id}/contacts `type` query param is mis-routed to the
+  // contact code (e.g. TASKEXECUTIVE) instead of the source filter. Pass none
+  // and filter on `source`/`code` client-side when needed.
+  try { return await dolibarrFetch<DolibarrTaskContact[]>(`tasks/${taskId}/contacts`, tenant); }
+  catch { return []; }
+}
+
+export async function addTaskContact(
+  taskId: string,
+  userId: string,
+  tenant?: TenantConfig,
+  code: string = "TASKEXECUTIVE",
+  source: "internal" | "external" = "internal"
+): Promise<unknown> {
+  return dolibarrWrite(
+    `tasks/${taskId}/contacts?fk_socpeople=${userId}&type_contact=${encodeURIComponent(code)}&source=${source}`,
+    "POST",
+    undefined,
+    tenant
+  );
+}
+
+// --- Users (for session → Dolibarr user resolution) ---
+export interface DolibarrUser {
+  id: string;
+  login: string;
+  email: string | null;
+  firstname: string | null;
+  lastname: string | null;
+}
+
+export async function getUserByEmail(email: string, tenant?: TenantConfig): Promise<DolibarrUser | null> {
+  if (!email) return null;
+  const safe = email.replace(/'/g, "");
+  try {
+    const list = await dolibarrFetch<DolibarrUser[]>(
+      `users?sqlfilters=${encodeURIComponent(`(t.email:=:'${safe}')`)}&limit=1`,
+      tenant
+    );
+    return Array.isArray(list) && list.length ? list[0] : null;
+  } catch {
+    return null;
+  }
 }
 
 // ============================================
@@ -315,8 +401,11 @@ export async function createTask(data: {
   date_end?: string;
   planned_workload?: number;
   priority?: string;
+  ref?: string;
 }, tenant?: TenantConfig): Promise<string> {
-  return dolibarrWrite<string>("tasks", "POST", data, tenant);
+  // Dolibarr requires `ref`. "auto" triggers server-side auto-numbering via PROJECT_TASK_ADDON.
+  const body = { ref: "auto", ...data };
+  return dolibarrWrite<string>("tasks", "POST", body, tenant);
 }
 
 export async function updateTask(id: string, data: Record<string, unknown>, tenant?: TenantConfig): Promise<unknown> {

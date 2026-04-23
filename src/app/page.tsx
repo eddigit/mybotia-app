@@ -7,6 +7,7 @@ import { QuickActions } from "@/components/home/QuickActions";
 import { InsightCard } from "@/components/home/InsightCard";
 import { AgentStatusGrid } from "@/components/home/AgentStatusGrid";
 import { ProjectProgress } from "@/components/home/ProjectProgress";
+import { TodayTasksCard } from "@/components/home/TodayTasksCard";
 import { useDashboard, useAgents, useTasks } from "@/hooks/use-api";
 import { insights } from "@/data/mock";
 import { ArrowRight } from "lucide-react";
@@ -103,8 +104,9 @@ export default function HomePage() {
           <ActivityFeed activities={displayActivities} />
         </div>
 
-        {/* Right: Agents + Projects + Quick actions */}
+        {/* Right: Today tasks + Agents + Projects + Quick actions */}
         <div className="space-y-5">
+          <TodayTasksCard />
           <AgentStatusGrid agents={agents} />
           <ProjectProgress projects={displayProjects} />
           <QuickActions />

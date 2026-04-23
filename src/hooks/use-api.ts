@@ -105,11 +105,16 @@ export interface TaskItem {
   projectName: string;
   projectRef: string;
   dueDate?: string;
+  overdue?: boolean;
   createdAt: string;
 }
 
 export function useTasks() {
   return useApi<TaskItem[]>("/api/tasks", []);
+}
+
+export function useTodayTasks() {
+  return useApi<TaskItem[]>("/api/tasks?today=1&mine=1", []);
 }
 
 export function useAgents(all = false, enabled = true) {

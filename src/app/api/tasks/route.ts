@@ -4,23 +4,71 @@ import {
   getThirdParties,
   createTask,
   updateTask,
+  getTaskContacts,
+  addTaskContact,
+  getUserByEmail,
+  type TenantConfig,
 } from "@/lib/dolibarr";
 import { getSession, getSessionTenants } from "@/lib/session";
 
-export async function GET() {
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const todayOnly = url.searchParams.get("today") === "1";
+    const mineOnly = url.searchParams.get("mine") === "1";
+
+    const session = await getSession();
     const tenants = await getSessionTenants();
 
-    const allTasks = [];
-    const allProjects = [];
+    const allTasks: Array<{ task: any; tenant: TenantConfig }> = [];
+    const allProjects: any[] = [];
 
     for (const tenant of tenants) {
       const [tasks, projects] = await Promise.all([
-        getTasks(200, tenant).catch(() => []),
+        getTasks(
+          200,
+          tenant,
+          todayOnly ? { dueBeforeOrEqual: todayISO(), notDoneOnly: true } : {}
+        ).catch(() => []),
         getProjects(200, tenant).catch(() => []),
       ]);
-      allTasks.push(...tasks);
+      for (const t of tasks) allTasks.push({ task: t, tenant });
       allProjects.push(...projects);
+    }
+
+    // Filter by current user as TASKEXECUTIVE when requested
+    let filteredTasks = allTasks;
+    if (mineOnly && session?.email) {
+      // Resolve Dolibarr user per tenant (id differs per instance)
+      const userByTenantUrl = new Map<string, string | null>();
+      for (const tenant of tenants) {
+        const u = await getUserByEmail(session.email, tenant).catch(() => null);
+        userByTenantUrl.set(tenant.url, u?.id ?? null);
+      }
+      const keep: typeof allTasks = [];
+      await Promise.all(
+        allTasks.map(async ({ task, tenant }) => {
+          const uid = userByTenantUrl.get(tenant.url);
+          if (!uid) return;
+          const contacts = await getTaskContacts(task.id, tenant).catch(() => []);
+          const assigned = contacts.some(
+            (c) =>
+              c.code === "TASKEXECUTIVE" &&
+              c.source === "internal" &&
+              String(c.id) === String(uid)
+          );
+          if (assigned) keep.push({ task, tenant });
+        })
+      );
+      filteredTasks = keep;
     }
 
     const projectById: Record<
@@ -31,9 +79,16 @@ export async function GET() {
       projectById[p.id] = { ref: p.ref, title: p.title, socid: p.socid };
     }
 
-    const tasks = allTasks.map((t) => {
+    const today = todayISO();
+    const tasks = filteredTasks.map(({ task: t }) => {
       const proj = projectById[t.fk_project];
       const progress = parseFloat(t.progress || "0");
+      const dueRaw = t.date_end;
+      const dueDate = dueRaw
+        ? new Date(typeof dueRaw === "number" ? dueRaw * 1000 : dueRaw)
+            .toISOString()
+            .slice(0, 10)
+        : undefined;
       return {
         id: t.id,
         title: t.label,
@@ -54,15 +109,8 @@ export async function GET() {
         projectId: t.fk_project,
         projectName: proj?.title || "",
         projectRef: proj?.ref || "",
-        dueDate: t.date_end
-          ? new Date(
-              typeof t.date_end === "number"
-                ? t.date_end * 1000
-                : t.date_end
-            )
-              .toISOString()
-              .slice(0, 10)
-          : undefined,
+        dueDate,
+        overdue: dueDate ? dueDate < today && progress < 100 : false,
         createdAt: t.datec || "",
       };
     });
@@ -88,14 +136,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const newId = await createTask({
-      label: body.label,
-      fk_project: body.fk_project,
-      description: body.description || "",
-      date_start: body.date_start || "",
-      date_end: body.date_end || "",
-      priority: body.priority || "0",
-    }, session?.tenant);
+    const newId = await createTask(
+      {
+        label: body.label,
+        fk_project: body.fk_project,
+        description: body.description || "",
+        date_start: body.date_start || "",
+        date_end: body.date_end || "",
+        priority: body.priority || "0",
+      },
+      session?.tenant
+    );
+
+    // Auto-assign current user as TASKEXECUTIVE so "mine=1" view picks it up
+    if (session?.email && session.tenant && newId) {
+      const user = await getUserByEmail(session.email, session.tenant).catch(() => null);
+      if (user?.id) {
+        await addTaskContact(String(newId), user.id, session.tenant).catch(() => null);
+      }
+    }
 
     return Response.json({ id: newId }, { status: 201 });
   } catch (e) {
