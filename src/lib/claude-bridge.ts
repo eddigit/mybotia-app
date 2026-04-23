@@ -45,6 +45,15 @@ export interface ConversationSummary {
   projectId?: string;
   projectRef?: string;
   projectName?: string;
+  folderId?: string | null;
+}
+
+export interface ConversationFolder {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  count: number;
 }
 
 export interface ChatMessage {
@@ -91,6 +100,91 @@ export async function getSessionMessages(
     throw new Error(`Bridge error: ${res.status}`);
   }
   return res.json();
+}
+
+// ---- Delete / move / rename conversations ----
+
+export async function deleteConversation(
+  conversationId: string,
+  userEmail?: string
+): Promise<void> {
+  const qs = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : "";
+  const res = await bridgeFetch(
+    `/conversations/${encodeURIComponent(conversationId)}${qs}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok) {
+    throw new Error(`Bridge error: ${res.status}`);
+  }
+}
+
+export async function updateConversation(
+  conversationId: string,
+  patch: { folder_id?: string | null; title?: string },
+  userEmail?: string
+): Promise<void> {
+  const qs = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : "";
+  const res = await bridgeFetch(
+    `/conversations/${encodeURIComponent(conversationId)}${qs}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Bridge error: ${res.status} ${detail}`);
+  }
+}
+
+// ---- Folders ----
+
+export async function listFolders(userEmail: string): Promise<ConversationFolder[]> {
+  const res = await bridgeFetch(
+    `/folders?user_email=${encodeURIComponent(userEmail)}`
+  );
+  if (!res.ok) {
+    throw new Error(`Bridge error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function createFolder(
+  userEmail: string,
+  name: string
+): Promise<ConversationFolder> {
+  const res = await bridgeFetch(`/folders`, {
+    method: "POST",
+    body: JSON.stringify({ user_email: userEmail, name }),
+  });
+  if (!res.ok) {
+    throw new Error(`Bridge error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function renameFolder(
+  folderId: string,
+  userEmail: string,
+  name: string
+): Promise<void> {
+  const res = await bridgeFetch(
+    `/folders/${encodeURIComponent(folderId)}?user_email=${encodeURIComponent(userEmail)}`,
+    { method: "PATCH", body: JSON.stringify({ name }) }
+  );
+  if (!res.ok) {
+    throw new Error(`Bridge error: ${res.status}`);
+  }
+}
+
+export async function deleteFolder(
+  folderId: string,
+  userEmail: string
+): Promise<void> {
+  const res = await bridgeFetch(
+    `/folders/${encodeURIComponent(folderId)}?user_email=${encodeURIComponent(userEmail)}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok) {
+    throw new Error(`Bridge error: ${res.status}`);
+  }
 }
 
 // ---- Project memory ----

@@ -166,6 +166,15 @@ export interface ConversationItem {
   projectId?: string;
   projectRef?: string;
   projectName?: string;
+  folderId?: string | null;
+}
+
+export interface ConversationFolderItem {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  count: number;
 }
 
 export interface ChatMessage {
@@ -180,9 +189,72 @@ export function useConversations() {
   return useApi<ConversationItem[]>("/api/conversations", []);
 }
 
+export function useFolders() {
+  return useApi<ConversationFolderItem[]>("/api/folders", []);
+}
+
 export function useMessages(sessionId: string | null) {
   return useApi<ChatMessage[]>(
     sessionId ? `/api/conversations/${sessionId}/messages` : "",
     []
   );
+}
+
+// --- Mutations conversations / folders ---
+
+export async function deleteConversationApi(id: string): Promise<void> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function moveConversationApi(
+  id: string,
+  folderId: string | null
+): Promise<void> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder_id: folderId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function renameConversationApi(
+  id: string,
+  title: string
+): Promise<void> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function createFolderApi(name: string): Promise<ConversationFolderItem> {
+  const res = await fetch(`/api/folders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function renameFolderApi(id: string, name: string): Promise<void> {
+  const res = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function deleteFolderApi(id: string): Promise<void> {
+  const res = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
