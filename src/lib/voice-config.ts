@@ -6,6 +6,7 @@ export interface VoiceConfig {
 // NEXT_PUBLIC_VOICE_ENABLED doit être "true" pour activer la voix.
 // Tant que voice-poc n'est pas migré de Jacques vers Damien, on le laisse à false
 // pour éviter les erreurs WebSocket dans la console.
+// Flag pilote par NEXT_PUBLIC_VOICE_ENABLED (cf .env.local)
 const VOICE_ENABLED = process.env.NEXT_PUBLIC_VOICE_ENABLED === "true";
 
 const VOICE_AGENTS: Record<string, VoiceConfig> = {
