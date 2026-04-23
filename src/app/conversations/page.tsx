@@ -40,10 +40,28 @@ const channelIcons: Record<string, typeof MessageSquare> = {
   whatsapp: Phone,
   telegram: Send,
   webchat: Globe,
+  chat: Globe,
   direct: Bot,
   project: FolderOpen,
+  crm_widget: Bot,
   unknown: MessageSquare,
 };
+
+// Libelle humain pour chaque source de conversation (UI front-safe).
+const channelLabels: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  webchat: "App MyBotIA",
+  chat: "App MyBotIA",
+  direct: "Direct",
+  project: "Session projet",
+  crm_widget: "CRM MyBotIA",
+  unknown: "Autre",
+};
+
+function channelLabel(channel: string): string {
+  return channelLabels[channel] || channel || "Autre";
+}
 
 // Helper: deterministic session ID for a project conversation
 function projectSessionId(projectId: string, agentId: string): string {
@@ -545,18 +563,22 @@ function ConvRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-0.5">
-            <span className="text-[11px] font-bold text-text-primary truncate">
-              {conv.agentName}
+            <span className="text-[12px] font-semibold text-text-primary truncate">
+              {conv.title || "Nouvelle conversation"}
             </span>
             <span className="text-[9px] text-text-muted font-mono shrink-0">
               {formatRelativeTime(conv.updatedAt)}
             </span>
           </div>
-          <span className="text-[10px] text-text-muted">
-            {conv.channel === "project"
-              ? "session projet"
-              : conv.channel}
-          </span>
+          <div className="flex items-center gap-1.5 text-[10px]">
+            <span className="text-accent-glow font-medium truncate">
+              {conv.agentName}
+            </span>
+            <span className="text-text-muted">·</span>
+            <span className="text-text-muted truncate">
+              {channelLabel(conv.channel)}
+            </span>
+          </div>
         </div>
       </div>
     </button>
