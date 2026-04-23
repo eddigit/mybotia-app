@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "predev": "node scripts/generate-build-info.js",
+    "prebuild": "node scripts/generate-build-info.js"
   },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.30",

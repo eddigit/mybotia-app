@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { Footer } from "@/components/shared/Footer";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
@@ -119,9 +120,7 @@ export default function LoginPage() {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-text-muted/40 text-[10px] mt-10 tracking-wide">
-          version #8c6137a &middot; 2026-04-18 10:23 &middot; con&ccedil;u par <a href="https://coachdigitalparis.com" target="_blank" rel="noopener" className="hover:text-text-primary transition-colors">G.KORZEC</a>
-        </p>
+        <Footer variant="login" />
       </div>
     </div>
   );

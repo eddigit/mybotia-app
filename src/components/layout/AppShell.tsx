@@ -7,6 +7,7 @@ import { useAgents } from "@/hooks/use-api";
 import { LeftSidebar } from "./LeftSidebar";
 import { TopBar } from "./TopBar";
 import { ContextRail } from "./ContextRail";
+import { Footer } from "@/components/shared/Footer";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -56,19 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
-        <footer className="shrink-0 border-t border-border-subtle bg-surface-0 py-1 text-center">
-          <span className="text-[10px] text-text-muted tracking-wide">
-            v1.0 · 20 avril 2026 · Conçu et réalisé par{" "}
-            <a
-              href="https://coachdigitalparis.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#6366f1] hover:underline"
-            >
-              Gilles Korzec
-            </a>
-          </span>
-        </footer>
+        <Footer />
       </div>
 
       {/* Context Rail (right) */}
