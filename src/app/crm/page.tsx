@@ -107,7 +107,7 @@ export default function CRMPage() {
           { label: "Clients actifs", value: activeCount.toString(), sub: "en portefeuille" },
           { label: "Pipeline", value: formatCurrency(pipelineValue), sub: `${deals.length} opportunites` },
           { label: "Prospects", value: prospectCount.toString(), sub: "en attente" },
-          { label: "Fournisseurs", value: supplierCount.toString(), sub: "dans Dolibarr" },
+          { label: "Fournisseurs", value: supplierCount.toString(), sub: "dans MyBotIA CRM" },
         ].map((kpi) => (
           <div key={kpi.label} className="card-sharp-high p-5">
             <span className="micro-label text-text-muted">{kpi.label}</span>

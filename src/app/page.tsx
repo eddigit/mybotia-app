@@ -4,12 +4,10 @@ import { CommandCenterHero } from "@/components/home/CommandCenterHero";
 import { MetricCard } from "@/components/shared/MetricCard";
 import { ActivityFeed } from "@/components/home/ActivityFeed";
 import { QuickActions } from "@/components/home/QuickActions";
-import { InsightCard } from "@/components/home/InsightCard";
 import { AgentStatusGrid } from "@/components/home/AgentStatusGrid";
 import { ProjectProgress } from "@/components/home/ProjectProgress";
 import { TodayTasksCard } from "@/components/home/TodayTasksCard";
 import { useDashboard, useAgents, useTasks } from "@/hooks/use-api";
-import { insights } from "@/data/mock";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
@@ -63,7 +61,7 @@ export default function HomePage() {
                 Donnees en direct
               </div>
               <h3 className="text-2xl lg:text-3xl font-headline font-extrabold mb-4 leading-tight text-text-primary">
-                {dashboard?.clients?.length ?? 0} clients dans Dolibarr
+                {dashboard?.clients?.length ?? 0} clients dans MyBotIA CRM
               </h3>
               <p className="text-text-secondary mb-6 max-w-md leading-relaxed">
                 {dashboard?.deals?.length ?? 0} opportunites en pipeline pour un total de {displayMetrics.find(m => m.id === 'metric-pipeline')?.value ?? '0 EUR'}.
@@ -85,14 +83,9 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Metric cards */}
-          {displayMetrics.slice(0, 2).map((m) => (
+          {/* Metric cards — 4 vraies métriques CRM (clients / pipeline / projets / CA) */}
+          {displayMetrics.slice(0, 4).map((m) => (
             <MetricCard key={m.id} metric={m} />
-          ))}
-
-          {/* Insight cards — border-left accent */}
-          {insights.slice(0, 2).map((insight) => (
-            <InsightCard key={insight.id} insight={insight} />
           ))}
         </div>
       </section>
