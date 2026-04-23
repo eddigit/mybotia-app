@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronRight, Plus, X, AlertTriangle, Loader2 } from "lucide-react";
 import { useTodayTasks, useProjects, type TaskItem } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
 
-function todayISO(): string {
+function todayAt2359(): string {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return `${y}-${m}-${day}T23:59`;
 }
 
 export function TodayTasksCard() {
@@ -21,9 +22,25 @@ export function TodayTasksCard() {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [dueDate, setDueDate] = useState(todayISO());
+  const [dueLocal, setDueLocal] = useState(todayAt2359());
   const [submitting, setSubmitting] = useState(false);
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+
+  const activeProjects = projects.filter((p) => p.status === "active");
+  const sortedProjects = [...activeProjects].sort((a, b) => {
+    if (a.ref === "PERSO") return -1;
+    if (b.ref === "PERSO") return 1;
+    return (a.ref || a.name).localeCompare(b.ref || b.name);
+  });
+  const persoProject = activeProjects.find((p) => p.ref === "PERSO");
+
+  // Preselect "Tâches personnelles" when the form opens and projects are loaded
+  useEffect(() => {
+    if (adding && !projectId && persoProject) {
+      setProjectId(persoProject.id);
+    }
+  }, [adding, projectId, persoProject]);
 
   const pending = tasks.filter((t) => t.status !== "done");
 
@@ -51,19 +68,22 @@ export function TodayTasksCard() {
     if (!title.trim() || !projectId) return;
     setSubmitting(true);
     try {
+      const epoch = dueLocal
+        ? Math.floor(new Date(dueLocal).getTime() / 1000)
+        : Math.floor(new Date(todayAt2359()).getTime() / 1000);
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label: title.trim(),
           fk_project: projectId,
-          date_end: Math.floor(new Date(dueDate + "T23:59:59").getTime() / 1000),
+          date_end: epoch,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setTitle("");
-      setProjectId("");
-      setDueDate(todayISO());
+      setProjectId(persoProject?.id || "");
+      setDueLocal(todayAt2359());
       setAdding(false);
       refetch();
     } catch {
@@ -124,20 +144,16 @@ export function TodayTasksCard() {
               required
               className="bg-surface-2 px-3 py-2 text-xs text-text-primary border border-border-subtle focus:outline-none focus:border-accent-glow"
             >
-              <option value="">Projet (requis)…</option>
-              {projects
-                .filter((p) => p.status === "active")
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.ref ? `${p.ref} — ${p.name}` : p.name}
-                  </option>
-                ))}
+              {sortedProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.ref ? `${p.ref} — ${p.name}` : p.name}
+                </option>
+              ))}
             </select>
             <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              required
+              type="datetime-local"
+              value={dueLocal}
+              onChange={(e) => setDueLocal(e.target.value)}
               className="bg-surface-2 px-3 py-2 text-xs text-text-primary border border-border-subtle focus:outline-none focus:border-accent-glow"
             />
           </div>
@@ -208,9 +224,14 @@ export function TodayTasksCard() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-text-primary truncate">
+                    <button
+                      type="button"
+                      onClick={() => setEditingTask(t)}
+                      className="text-xs font-medium text-text-primary truncate text-left hover:text-accent-glow transition-colors"
+                      title="Modifier"
+                    >
                       {t.title}
-                    </span>
+                    </button>
                     {t.overdue && (
                       <span className="flex items-center gap-0.5 text-[9px] font-bold text-red-400 uppercase tracking-wider shrink-0">
                         <AlertTriangle className="w-2.5 h-2.5" /> Retard
@@ -234,6 +255,12 @@ export function TodayTasksCard() {
           })}
         </ul>
       )}
+
+      <TaskEditPanel
+        task={editingTask}
+        onClose={() => setEditingTask(null)}
+        onSaved={refetch}
+      />
     </div>
   );
 }
