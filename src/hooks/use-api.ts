@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { Client, Project, Agent, Deal, Activity, Metric } from "@/types";
 
 // Generic fetcher with fallback and refetch
-function useApi<T>(url: string, fallback: T): {
+function useApi<T>(url: string | null, fallback: T): {
   data: T;
   loading: boolean;
   error: string | null;
@@ -21,6 +21,7 @@ function useApi<T>(url: string, fallback: T): {
     let cancelled = false;
 
     if (!url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -111,8 +112,9 @@ export function useTasks() {
   return useApi<TaskItem[]>("/api/tasks", []);
 }
 
-export function useAgents() {
-  return useApi<Agent[]>("/api/agents", []);
+export function useAgents(all = false, enabled = true) {
+  const url = enabled ? (all ? "/api/agents?all=true" : "/api/agents") : null;
+  return useApi<Agent[]>(url, []);
 }
 
 export interface DashboardData {

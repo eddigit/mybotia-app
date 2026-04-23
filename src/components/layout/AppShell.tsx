@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { data: agents } = useAgents();
+  const { data: agents } = useAgents(false, !loading && !!user);
 
   // Login page: render children directly (no shell)
   if (pathname === "/login") {
