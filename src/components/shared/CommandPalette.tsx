@@ -294,7 +294,7 @@ export function CommandPalette({
             </div>
             <div className="ml-auto flex items-center gap-1.5">
               <Zap className="w-3 h-3 text-accent-glow" />
-              <span className="text-[10px] text-text-muted font-bold">MyBotIA</span>
+              <span className="text-[10px] text-text-muted mybotia-wordmark">MyBotIA</span>
             </div>
           </div>
         </div>

@@ -49,7 +49,7 @@ export default function LoginPage() {
               unoptimized
             />
           </div>
-          <h1 className="text-2xl font-headline font-extrabold text-text-primary tracking-tight">
+          <h1 className="text-2xl mybotia-wordmark text-text-primary">
             MyBotIA
           </h1>
           <p className="text-text-muted text-sm mt-1">

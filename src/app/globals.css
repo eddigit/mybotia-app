@@ -21,10 +21,11 @@
   --color-status-danger: #ef4444;
   --color-status-info: #3b82f6;
 
-  /* Fonts — Inter only (MyBotIA official) */
+  /* Fonts — Inter (corps), Orbitron (wordmark "MyBotIA" uniquement, weight 400 charte Gilles) */
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --font-headline: var(--font-inter);
+  --font-brand: var(--font-orbitron);
 
   /* ---- LIGHT theme (default) ---- */
   --color-surface-0: #f8f9fc;
@@ -43,6 +44,13 @@
 
   --color-background: var(--color-surface-0);
   --color-foreground: var(--color-text-primary);
+}
+
+/* Wordmark MyBotIA — Orbitron weight fin, seul le mot "MyBotIA" l'utilise */
+.mybotia-wordmark {
+  font-family: var(--font-orbitron), sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.04em;
 }
 
 /* ---- DARK theme overrides ---- */

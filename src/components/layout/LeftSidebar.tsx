@@ -68,7 +68,7 @@ export function LeftSidebar({
         </div>
         {!collapsed && (
           <div>
-            <div className="text-[17px] font-extrabold tracking-tight text-accent-glow">MyBotIA</div>
+            <div className="text-[17px] mybotia-wordmark text-accent-glow">MyBotIA</div>
             <div className="micro-label text-text-muted">Premium</div>
           </div>
         )}
