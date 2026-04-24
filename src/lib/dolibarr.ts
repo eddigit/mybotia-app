@@ -24,17 +24,35 @@ const TENANT_CRM: Record<string, TenantConfig> = {
     apiKey: process.env.DOLIBARR_KEY_IGH || "doli_lucy_tenant_5c31ea581c85d5ac93ebc5e4654c654e",
     label: "IGH",
   },
+  cmb_lux: {
+    url: process.env.DOLIBARR_URL_CMBLUX || "https://crm-cmb.mybotia.com/api/index.php",
+    apiKey: process.env.DOLIBARR_KEY_CMBLUX || "",
+    label: "CMB Conseil",
+  },
+  esprit_loft: {
+    url: process.env.DOLIBARR_URL_ESPRITLOFT || "",
+    apiKey: process.env.DOLIBARR_KEY_ESPRITLOFT || "",
+    label: "Esprit Loft",
+  },
 };
 
-// Fallback pour les anciens env vars (compatibilité)
+// Fallback MyBotIA — RÉSERVÉ aux requêtes anonymes (page publique, login).
+// Un tenantSlug connu mais absent du mapping TENANT_CRM doit LEVER, pas tomber
+// sur MyBotIA en silence (fuite cross-tenant confirmée 2026-04-24 sur cmb_lux).
 const FALLBACK_URL = process.env.DOLIBARR_URL || "https://crm-mybotia.mybotia.com/api/index.php";
 const FALLBACK_KEY = process.env.DOLIBARR_API_KEY || "doli_lea_tenant_b02e3a5868d646cd033da4175809b585";
 
 export function getTenantConfig(tenantSlug?: string | null): TenantConfig {
-  if (tenantSlug && TENANT_CRM[tenantSlug]) {
-    return TENANT_CRM[tenantSlug];
+  if (tenantSlug === null || tenantSlug === undefined || tenantSlug === "") {
+    // Requête anonyme (login public, page d'accueil) → fallback MyBotIA.
+    return { url: FALLBACK_URL, apiKey: FALLBACK_KEY, label: "MyBotIA" };
   }
-  return { url: FALLBACK_URL, apiKey: FALLBACK_KEY, label: "MyBotIA" };
+  const cfg = TENANT_CRM[tenantSlug];
+  if (!cfg) {
+    // Tenant identifié mais non mappé → REFUS STRICT (pas de fallback silencieux).
+    throw new Error(`Tenant non configuré: ${tenantSlug}`);
+  }
+  return cfg;
 }
 
 // Superadmin: retourne TOUTES les configs pour agréger
