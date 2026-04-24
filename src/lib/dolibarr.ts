@@ -29,11 +29,6 @@ const TENANT_CRM: Record<string, TenantConfig> = {
     apiKey: process.env.DOLIBARR_KEY_CMBLUX || "",
     label: "CMB Conseil",
   },
-  esprit_loft: {
-    url: process.env.DOLIBARR_URL_ESPRITLOFT || "",
-    apiKey: process.env.DOLIBARR_KEY_ESPRITLOFT || "",
-    label: "Esprit Loft",
-  },
 };
 
 // Fallback MyBotIA — RÉSERVÉ aux requêtes anonymes (page publique, login).
