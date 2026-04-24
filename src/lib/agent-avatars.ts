@@ -49,7 +49,7 @@ export const AGENT_AVATARS: Record<string, AgentAvatarConfig> = {
     color: "bg-blue-600",
   },
   raphael: {
-    url: null,
+    url: "https://res.cloudinary.com/dniurvpzd/image/upload/v1777016211/Raphael_CMB_oehdpr.jpg",
     initials: "RA",
     color: "bg-indigo-600",
   },
