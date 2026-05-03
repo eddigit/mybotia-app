@@ -52,30 +52,19 @@ function isTestProject(project: { ref?: string; title?: string }): boolean {
   );
 }
 
-// Bloc 5E-SAFE-2 (post-incident LUCY-IGH) : projets liés à IGH ou Lucy
-// PROTÉGÉS de manière absolue. Lucy = collaboratrice IA importante client IGH,
-// elle vit dans son environnement IGH dédié — la trace CRM côté MyBotIA reste
-// utile pour le suivi commercial mais ne doit JAMAIS être supprimée.
-// Doctrine : "rien delete de IGH ou Lucy, quitte à archiver".
-function isProtectedByName(project: { ref?: string; title?: string }): string | null {
-  const ref = (project.ref || "").toUpperCase();
-  const title = (project.title || "").toUpperCase();
-  const blob = `${ref} ${title}`;
-  if (/\bIGH\b/.test(blob) || /\bLUCY\b/.test(blob)) {
-    return "Projet IGH/Lucy — suppression INTERDITE par doctrine. Archive uniquement.";
-  }
-  return null;
-}
-
+// Bloc 5E-SAFE corrigé : doctrine = tenantSlug est l'unique critère d'autorité.
+// L'isolation tenant est garantie par le hostname resolver côté serveur :
+// un cockpit mybotia ne peut accéder qu'aux projets du tenant mybotia. Donc
+// pas besoin de filtrer par contenu textuel (CMB/IGH/Lucy/VL Medical peuvent
+// légitimement apparaître dans MyBotIA si ce sont des affaires commerciales
+// portées par le tenant mybotia : ex. projet "LUCY-IGH" = mission MyBotIA
+// vendue au Groupe IGH, ou "Préparation Raphaël" = tâche MyBotIA de
+// livraison du collaborateur IA au client CMB).
 function evaluateDeleteGuards(
   project: Awaited<ReturnType<typeof getProject>>,
   proposals: Awaited<ReturnType<typeof getProjectProposals>>,
   invoices: Awaited<ReturnType<typeof getProjectInvoices>>
 ): string | null {
-  // Barrière nominative IGH/Lucy en premier — la plus stricte.
-  const nameBlock = isProtectedByName(project);
-  if (nameBlock) return nameBlock;
-
   if (proposals.length > 0) {
     return `${proposals.length} devis lié(s) — suppression interdite. Archive le projet ou supprime les devis d'abord.`;
   }
