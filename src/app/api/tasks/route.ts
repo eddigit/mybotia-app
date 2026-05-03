@@ -1,15 +1,19 @@
+// Bloc 5G — /api/tasks verrouillé sur le cockpit hostname.
+// GET/POST/PUT : un cockpit = un tenant. Plus d'agrégation multi-tenant.
+
 import {
   getTasks,
   getProjects,
-  getThirdParties,
   createTask,
   updateTask,
   getTaskContacts,
   addTaskContact,
   getUserByEmail,
-  type TenantConfig,
 } from "@/lib/dolibarr";
-import { getSession, getSessionTenants } from "@/lib/session";
+import { getSession } from "@/lib/session";
+import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+
+const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
 function todayISO(): string {
   const d = new Date();
@@ -25,69 +29,60 @@ export async function GET(request: Request) {
     const todayOnly = url.searchParams.get("today") === "1";
     const mineOnly = url.searchParams.get("mine") === "1";
 
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+    }
+    const { tenant, slug: tenantSlug } = cockpit;
+
     const session = await getSession();
-    const tenants = await getSessionTenants();
-
-    const allTasks: Array<{ task: any; tenant: TenantConfig }> = [];
-    const allProjects: any[] = [];
-
-    for (const tenant of tenants) {
-      const [tasks, projects] = await Promise.all([
-        getTasks(
-          200,
-          tenant,
-          todayOnly ? { dueBeforeOrEqual: todayISO(), notDoneOnly: true } : {}
-        ).catch(() => []),
-        getProjects(200, tenant).catch(() => []),
-      ]);
-      for (const t of tasks) allTasks.push({ task: t, tenant });
-      allProjects.push(...projects);
+    if (!session) {
+      return Response.json({ error: "Non authentifie" }, { status: 401, headers: NO_STORE });
     }
 
-    // Filter by current user as TASKEXECUTIVE when requested
-    let filteredTasks = allTasks;
-    if (mineOnly && session?.email) {
-      // Resolve Dolibarr user per tenant (id differs per instance)
-      const userByTenantUrl = new Map<string, string | null>();
-      for (const tenant of tenants) {
-        const u = await getUserByEmail(session.email, tenant).catch(() => null);
-        userByTenantUrl.set(tenant.url, u?.id ?? null);
+    const [tasksRaw, projects] = await Promise.all([
+      getTasks(
+        200,
+        tenant,
+        todayOnly ? { dueBeforeOrEqual: todayISO(), notDoneOnly: true } : {}
+      ).catch(() => []),
+      getProjects(200, tenant).catch(() => []),
+    ]);
+
+    type Task = (typeof tasksRaw)[number];
+    let filteredTasks: Task[] = tasksRaw;
+    if (mineOnly && session.email) {
+      const u = await getUserByEmail(session.email, tenant).catch(() => null);
+      if (!u?.id) {
+        filteredTasks = [];
+      } else {
+        const uid = String(u.id);
+        const keep: Task[] = [];
+        await Promise.all(
+          tasksRaw.map(async (task) => {
+            if (task.fk_user_creat && String(task.fk_user_creat) === uid) {
+              keep.push(task);
+              return;
+            }
+            const contacts = await getTaskContacts(task.id, tenant).catch(() => []);
+            const assigned = contacts.some(
+              (c) =>
+                c.code === "TASKEXECUTIVE" &&
+                c.source === "internal" &&
+                String(c.id) === uid
+            );
+            if (assigned) keep.push(task);
+          })
+        );
+        filteredTasks = keep;
       }
-      const keep: typeof allTasks = [];
-      await Promise.all(
-        allTasks.map(async ({ task, tenant }) => {
-          const uid = userByTenantUrl.get(tenant.url);
-          if (!uid) return;
-          // Fast path : l'user courant a créé la tâche — on la considère sienne.
-          // Évite aussi le N+1 sur /contacts pour ses propres créations.
-          if (task.fk_user_creat && String(task.fk_user_creat) === String(uid)) {
-            keep.push({ task, tenant });
-            return;
-          }
-          // Fallback : vérifier si l'user est assigné comme TASKEXECUTIVE.
-          const contacts = await getTaskContacts(task.id, tenant).catch(() => []);
-          const assigned = contacts.some(
-            (c) =>
-              c.code === "TASKEXECUTIVE" &&
-              c.source === "internal" &&
-              String(c.id) === String(uid)
-          );
-          if (assigned) keep.push({ task, tenant });
-        })
-      );
-      filteredTasks = keep;
     }
 
-    const projectById: Record<
-      string,
-      { ref: string; title: string; socid: string }
-    > = {};
-    for (const p of allProjects) {
-      projectById[p.id] = { ref: p.ref, title: p.title, socid: p.socid };
-    }
+    const projectById: Record<string, { ref: string; title: string; socid: string }> = {};
+    for (const p of projects) projectById[p.id] = { ref: p.ref, title: p.title, socid: p.socid };
 
     const today = todayISO();
-    const tasks = filteredTasks.map(({ task: t }) => {
+    const tasks = filteredTasks.map((t) => {
       const proj = projectById[t.fk_project];
       const progress = parseFloat(t.progress || "0");
       const dueRaw = t.date_end;
@@ -101,45 +96,45 @@ export async function GET(request: Request) {
         title: t.label,
         description: t.description || undefined,
         status:
-          progress >= 100
-            ? "done"
-            : progress > 0
-              ? "in_progress"
-              : ("todo" as string),
+          progress >= 100 ? "done" : progress > 0 ? "in_progress" : "todo",
         priority:
-          t.priority === "2"
-            ? "high"
-            : t.priority === "1"
-              ? "medium"
-              : ("low" as string),
+          t.priority === "2" ? "high" : t.priority === "1" ? "medium" : "low",
         progress,
         projectId: t.fk_project,
         projectName: proj?.title || "",
         projectRef: proj?.ref || "",
+        clientId: proj?.socid || undefined,
+        tenantSlug,
         dueDate,
         overdue: dueDate ? dueDate < today && progress < 100 : false,
         createdAt: t.datec || "",
       };
     });
 
-    return Response.json(tasks);
+    return Response.json(tasks, { headers: NO_STORE });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
-      { status: 502 }
+      { status: 502, headers: NO_STORE }
     );
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+    }
+    const { tenant } = cockpit;
+
     const session = await getSession();
     const body = await request.json();
 
     if (!body.label || !body.fk_project) {
       return Response.json(
         { error: "label et fk_project sont requis" },
-        { status: 400 }
+        { status: 400, headers: NO_STORE }
       );
     }
 
@@ -152,40 +147,49 @@ export async function POST(request: Request) {
         date_end: body.date_end || "",
         priority: body.priority || "0",
       },
-      session?.tenant
+      tenant
     );
 
-    // Auto-assign current user as TASKEXECUTIVE so "mine=1" view picks it up
-    if (session?.email && session.tenant && newId) {
-      const user = await getUserByEmail(session.email, session.tenant).catch(() => null);
-      if (user?.id) {
-        await addTaskContact(String(newId), user.id, session.tenant).catch(() => null);
+    if (session?.email && newId) {
+      const u = await getUserByEmail(session.email, tenant).catch(() => null);
+      if (u?.id) {
+        await addTaskContact(String(newId), u.id, tenant).catch(() => null);
       }
     }
 
-    return Response.json({ id: newId }, { status: 201 });
+    return Response.json(
+      { id: newId, tenant_slug: cockpit.slug },
+      { status: 201, headers: NO_STORE }
+    );
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur creation tache" },
-      { status: 502 }
+      { status: 502, headers: NO_STORE }
     );
   }
 }
 
+// Legacy — conservé pour compat. Le drawer Bloc 5D utilise PATCH /api/tasks/[id].
 export async function PUT(request: Request) {
   try {
-    const session = await getSession();
-    const body = await request.json();
-    const { id, ...data } = body;
-    if (!id) {
-      return Response.json({ error: "id requis" }, { status: 400 });
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
     }
-    await updateTask(id, data, session?.tenant);
-    return Response.json({ success: true });
+    const body = await request.json();
+    const { id, tenant_slug: _, ...data } = body as Record<string, unknown>;
+    if (!id) {
+      return Response.json({ error: "id requis" }, { status: 400, headers: NO_STORE });
+    }
+    await updateTask(String(id), data, cockpit.tenant);
+    return Response.json(
+      { success: true, tenant_slug: cockpit.slug },
+      { headers: NO_STORE }
+    );
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur mise a jour tache" },
-      { status: 502 }
+      { status: 502, headers: NO_STORE }
     );
   }
 }

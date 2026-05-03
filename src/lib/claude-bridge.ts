@@ -1,9 +1,19 @@
 // Claude Code Bridge integration — replaces OpenClaw
-// Connects to the Claude Bridge HTTP service on VPS2 (Damien)
+// Connects to the Claude Bridge HTTP service on VPS Hostinger (Damien)
 // Uses claude -p (headless mode) under Max x20 subscription
 
 const BRIDGE_URL = process.env.CLAUDE_BRIDGE_URL || "http://127.0.0.1:9400";
-const BRIDGE_TOKEN = process.env.CLAUDE_BRIDGE_TOKEN || "mybotia-bridge-poc-2026";
+// Sprint clôture hotfix 2026-04-25 : token strictement via env, zéro fallback.
+function requireBridgeToken(): string {
+  const t = process.env.CLAUDE_BRIDGE_TOKEN;
+  if (!t) {
+    throw new Error(
+      "CLAUDE_BRIDGE_TOKEN missing. Set it in /opt/mybotia/mybotia-app/.env.local",
+    );
+  }
+  return t;
+}
+const BRIDGE_TOKEN = requireBridgeToken();
 
 async function bridgeFetch(path: string, options?: RequestInit) {
   const controller = new AbortController();

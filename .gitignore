@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -41,3 +42,19 @@ yarn-error.log*
 next-env.d.ts
 *.bak*
 src/lib/build-info.ts
+
+# Bloc 5G — secrets / keys / logs / IDE
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.vault
+.vault.bak*
+logs/
+*.log
+.idea/
+.vscode/
+Thumbs.db
+*.swp
+*.orig

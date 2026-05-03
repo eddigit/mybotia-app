@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { useAgents } from "@/hooks/use-api";
@@ -8,14 +8,32 @@ import { LeftSidebar } from "./LeftSidebar";
 import { TopBar } from "./TopBar";
 import { ContextRail } from "./ContextRail";
 import { Footer } from "@/components/shared/Footer";
+import { CommandPalette } from "@/components/shared/CommandPalette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
+  // Bloc 4C — Global Command Palette
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
   const { data: agents } = useAgents(false, !loading && !!user);
+
+  // Bloc 4C — raccourci global Cmd+K (Mac) / Ctrl+K (Win/Linux)
+  // Ne s'active pas sur /login (avant auth).
+  useEffect(() => {
+    if (pathname === "/login") return;
+    function handler(e: KeyboardEvent) {
+      // Cmd+K ou Ctrl+K toggle palette ; Esc handled in CommandPalette
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [pathname]);
 
   // Login page: render children directly (no shell)
   if (pathname === "/login") {
@@ -53,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <TopBar
           railOpen={railOpen}
           onToggleRail={() => setRailOpen(!railOpen)}
+          onOpenPalette={() => setPaletteOpen(true)}
         />
         <main className="flex-1 overflow-y-auto">
           {children}
@@ -62,6 +81,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Context Rail (right) */}
       {railOpen && <ContextRail onClose={() => setRailOpen(false)} agents={agents} />}
+
+      {/* Bloc 4C — Global Command Palette (Cmd/Ctrl+K) */}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

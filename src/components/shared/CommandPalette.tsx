@@ -18,9 +18,15 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useClients, useProjects, useAgents, useTasks } from "@/hooks/use-api";
+import {
+  useScopedClients,
+  useScopedProjects,
+  useAgents,
+  useScopedTasks,
+  useScopedDocuments,
+} from "@/hooks/use-api";
 import type { Client, Project, Agent } from "@/types";
-import type { TaskItem } from "@/hooks/use-api";
+import type { TaskItem, DocumentItem } from "@/hooks/use-api";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -72,7 +78,8 @@ function buildResults(
   clients: Client[],
   projects: Project[],
   agents: Agent[],
-  tasks: TaskItem[]
+  tasks: TaskItem[],
+  documents: DocumentItem[]
 ): SearchResult[] {
   if (!query.trim()) return NAV_COMMANDS;
 
@@ -102,15 +109,36 @@ function buildResults(
     if (s > 0) all.push({ id: `task-${t.id}`, label: t.title, sublabel: t.projectName, icon: <CheckSquare className="w-4 h-4" />, href: `/tasks`, category: "Taches", score: s });
   }
 
+  // Search documents (devis/factures) — Bloc 4C
+  for (const d of documents) {
+    const s = Math.max(
+      matchScore(query, d.ref),
+      matchScore(query, d.clientName || ""),
+      matchScore(query, d.type)
+    );
+    if (s > 0) {
+      const cat = d.type === "facture" ? "Factures" : "Devis";
+      all.push({
+        id: `doc-${d.id}`,
+        label: d.ref,
+        sublabel: `${d.clientName} · ${d.totalTTC.toFixed(2)} €`,
+        icon: <FileText className="w-4 h-4" />,
+        href: `/documents`,
+        category: cat,
+        score: s,
+      });
+    }
+  }
+
   // Nav commands also searchable
   for (const n of NAV_COMMANDS) {
     const s = Math.max(matchScore(query, n.label), matchScore(query, n.sublabel || ""));
     if (s > 0) all.push({ ...n, score: s });
   }
 
-  // sort by score desc, limit 12
+  // sort by score desc, limit 14
   all.sort((a, b) => b.score - a.score);
-  return all.slice(0, 12);
+  return all.slice(0, 14);
 }
 
 /* ------------------------------------------------------------------ */
@@ -130,14 +158,16 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const { data: clients } = useClients();
-  const { data: projects } = useProjects();
+  // Cmd+K = recherche cockpit (résolu par hostname côté serveur, doctrine 5G).
+  const { data: clients } = useScopedClients();
+  const { data: projects } = useScopedProjects();
   const { data: agents } = useAgents();
-  const { data: tasks } = useTasks();
+  const { data: tasks } = useScopedTasks();
+  const { data: documents } = useScopedDocuments();
 
   const results = useMemo(
-    () => buildResults(query, clients, projects, agents, tasks),
-    [query, clients, projects, agents, tasks]
+    () => buildResults(query, clients, projects, agents, tasks, documents),
+    [query, clients, projects, agents, tasks, documents]
   );
 
   // Reset on open

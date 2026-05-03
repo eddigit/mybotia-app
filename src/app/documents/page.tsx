@@ -10,7 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
-import { useDocuments } from "@/hooks/use-api";
+import { useScopedDocuments } from "@/hooks/use-api";
 import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | "devis" | "facture";
@@ -41,7 +41,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
 };
 
 export default function DocumentsPage() {
-  const { data: documents, loading } = useDocuments();
+  const { data: documents, loading } = useScopedDocuments();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [generating, setGenerating] = useState<string | null>(null);
 

@@ -100,6 +100,7 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
       <div className="flex-1 overflow-y-auto">
         {voiceOpen && activeAgent && voiceConfig ? (
           <VoicePanel
+            key={activeAgent.id}
             agentName={activeAgent.name}
             voiceWsUrl={voiceConfig.wsUrl}
             wakeWord={voiceConfig.wakeWord}

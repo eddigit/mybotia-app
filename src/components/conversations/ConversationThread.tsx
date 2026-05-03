@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { User, Settings2, Loader2, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,37 @@ import type { ConversationItem, ChatMessage } from "@/hooks/use-api";
 import { getAgentAvatar, MYBOTIA_LOGO } from "@/lib/agent-avatars";
 import { MessageComposer } from "./MessageComposer";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { ClientContextCard } from "./ClientContextCard";
+import {
+  DocumentCard,
+  detectDocumentReferences,
+} from "@/components/shared/DocumentCard";
+import { SourcesCard } from "./SourcesCard";
+import { ChatActionBar } from "./ChatActionBar";
+
+// Cle localStorage pour le contexte client d'une conversation.
+// Ecrite par /conversations/page.tsx lors d'un seed depuis /crm/[id]
+// (et lors du remplacement temp-id -> session-id reel apres 1er message).
+const CLIENT_CONTEXT_KEY_PREFIX = "client-context-conv-";
+
+function readClientContext(
+  conversationId: string
+): { id: string; name: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(
+      CLIENT_CONTEXT_KEY_PREFIX + conversationId
+    );
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.id === "string" && typeof parsed.name === "string") {
+      return { id: parsed.id, name: parsed.name };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function AgentAvatar({
   agentId,
@@ -42,10 +73,14 @@ function MessageBubble({
   message,
   agentId,
   agentName,
+  clientContext,
+  onSeedPrompt,
 }: {
   message: ChatMessage;
   agentId?: string;
   agentName?: string;
+  clientContext?: { id: string; name: string } | null;
+  onSeedPrompt?: (text: string) => void;
 }) {
   const isAssistant = message.role === "assistant";
   const isSystem = message.role === "system";
@@ -110,6 +145,16 @@ function MessageBubble({
         {isAssistant ? (
           <div className="text-sm leading-relaxed">
             <MarkdownRenderer content={message.content} />
+            <DocumentReferencesInline content={message.content} />
+            {message.toolsCalled !== undefined && (
+              <SourcesCard tools={message.toolsCalled} />
+            )}
+            <ChatActionBar
+              agentName={agentName}
+              messageContent={message.content}
+              clientContext={clientContext}
+              onSeedPrompt={onSeedPrompt}
+            />
           </div>
         ) : (
           <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
@@ -117,6 +162,26 @@ function MessageBubble({
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// Detecte les references documents (devis/factures) dans un message Lea
+// et affiche une DocumentCard cliquable pour chacune. Lecture seule par
+// defaut (boutons FSM Telecharger/Generer geres par DocumentCard).
+function DocumentReferencesInline({ content }: { content: string }) {
+  const refs = detectDocumentReferences(content);
+  if (refs.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {refs.map(({ ref, kind }) => (
+        <DocumentCard
+          key={`${kind}-${ref}`}
+          modulepart={kind}
+          reference={ref}
+          compact
+        />
+      ))}
     </div>
   );
 }
@@ -137,12 +202,21 @@ export function ConversationThread({
   onSend: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [clientCtx, setClientCtx] = useState<{ id: string; name: string } | null>(
+    null
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Charger le contexte client (si conv issue d'un seed depuis /crm/[id]).
+  // Re-evalue a chaque changement de conv : le contexte est specifique au sessionId.
+  useEffect(() => {
+    setClientCtx(readClientContext(conversation.id));
+  }, [conversation.id]);
 
   const agentId = conversation.agentId;
   const agentName = conversation.agentName;
@@ -189,6 +263,11 @@ export function ConversationThread({
         </div>
       </div>
 
+      {/* Client context card (seed depuis /crm/[id]) */}
+      {clientCtx && (
+        <ClientContextCard clientId={clientCtx.id} clientName={clientCtx.name} />
+      )}
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
         {loading && (
@@ -213,6 +292,8 @@ export function ConversationThread({
             message={msg}
             agentId={agentId}
             agentName={agentName}
+            clientContext={clientCtx}
+            onSeedPrompt={onSend}
           />
         ))}
         {sending && (

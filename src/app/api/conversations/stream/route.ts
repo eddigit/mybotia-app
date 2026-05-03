@@ -2,8 +2,17 @@ import { getSession } from "@/lib/session";
 import { projectSessionId } from "@/lib/claude-bridge";
 
 const BRIDGE_URL = process.env.CLAUDE_BRIDGE_URL || "http://127.0.0.1:9400";
-const BRIDGE_TOKEN =
-  process.env.CLAUDE_BRIDGE_TOKEN || "mybotia-bridge-poc-2026";
+// Sprint clôture hotfix 2026-04-25 : token strictement via env, zéro fallback.
+function requireBridgeToken(): string {
+  const t = process.env.CLAUDE_BRIDGE_TOKEN;
+  if (!t) {
+    throw new Error(
+      "CLAUDE_BRIDGE_TOKEN missing. Set it in /opt/mybotia/mybotia-app/.env.local",
+    );
+  }
+  return t;
+}
+const BRIDGE_TOKEN = requireBridgeToken();
 
 const TENANT_AGENT_MAP: Record<string, string> = {
   mybotia: "lea",

@@ -1,74 +1,95 @@
-import { getThirdParties, getProjects, getInvoices, getEvents } from "@/lib/dolibarr";
-import { getSession, getSessionTenants } from "@/lib/session";
+// Bloc 5G — /api/dashboard verrouillé sur le cockpit hostname.
+// Plus jamais d'agrégation multi-tenant ici. Pour la future zone admin
+// globale, créer une route dédiée /api/admin/dashboard.
+
+import {
+  getThirdParties,
+  getProjects,
+  getInvoices,
+  getProposals,
+  getEvents,
+} from "@/lib/dolibarr";
 import {
   mapThirdPartyToClient,
   mapDolibarrProject,
   mapProjectToDeal,
   mapEventToActivity,
+  mapProposal,
+  mapInvoice,
   computeMetrics,
 } from "@/lib/mappers";
+import { resolveCockpitTenants } from "@/lib/tenant-resolver";
 
-export async function GET() {
+const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
+
+export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    const tenants = await getSessionTenants();
-
-    // Fetch data from ALL tenants the user has access to
-    const allThirdparties = [];
-    const allProjects = [];
-    const allInvoices = [];
-    const allEvents = [];
-
-    for (const tenant of tenants) {
-      const [tp, proj, inv, ev] = await Promise.all([
-        getThirdParties(100, tenant).catch(() => []),
-        getProjects(100, tenant).catch(() => []),
-        getInvoices(50, tenant).catch(() => []),
-        getEvents(200, tenant).catch(() => []),
-      ]);
-      allThirdparties.push(...tp);
-      allProjects.push(...proj);
-      allInvoices.push(...inv);
-      allEvents.push(...ev);
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
     }
+    const { tenant, slug: tenantSlug } = cockpit;
 
-    const clients = allThirdparties.map(mapThirdPartyToClient);
+    const [tps, projects, invoices, proposals, events] = await Promise.all([
+      getThirdParties(200, tenant).catch(() => []),
+      getProjects(200, tenant).catch(() => []),
+      getInvoices(100, tenant).catch(() => []),
+      getProposals(100, tenant).catch(() => []),
+      getEvents(200, tenant).catch(() => []),
+    ]);
+
+    const clients = tps.map((tp) => ({
+      ...mapThirdPartyToClient(tp),
+      tenantSlug,
+    }));
 
     const clientNameById: Record<string, string> = {};
-    for (const tp of allThirdparties) {
-      clientNameById[tp.id] = tp.name_alias || tp.name;
-    }
+    for (const tp of tps) clientNameById[tp.id] = tp.name_alias || tp.name;
 
-    const projects = allProjects.map((dp, i) =>
-      mapDolibarrProject(dp, i, clientNameById[dp.socid])
+    const mappedProjects = projects.map((dp, i) =>
+      mapDolibarrProject(dp, i, clientNameById[dp.socid], tenantSlug)
     );
 
-    const deals = allProjects
-      .map((dp) => mapProjectToDeal(dp, clientNameById[dp.socid] || ""))
+    const deals = projects
+      .map((dp) =>
+        mapProjectToDeal(dp, clientNameById[dp.socid] || "", tenantSlug)
+      )
       .filter((d): d is NonNullable<typeof d> => d !== null);
 
-    const manualEvents = allEvents.filter((e) => e.type_code !== "AC_OTH_AUTO");
-    const autoEvents = allEvents.filter((e) => e.type_code === "AC_OTH_AUTO");
+    const manualEvents = events.filter((e) => e.type_code !== "AC_OTH_AUTO");
+    const autoEvents = events.filter((e) => e.type_code === "AC_OTH_AUTO");
     const sortedEvents = [...manualEvents, ...autoEvents];
 
     const activities = sortedEvents
       .slice(0, 15)
-      .map((e) => mapEventToActivity(e, clientNameById));
+      .map((ev) => mapEventToActivity(ev, clientNameById, undefined, undefined, tenantSlug));
 
-    const metrics = computeMetrics(clients, projects, deals, allInvoices);
+    const mappedProposals = proposals.map((p) =>
+      mapProposal(p, tenantSlug, clientNameById[p.socid])
+    );
+    const mappedInvoices = invoices.map((inv) =>
+      mapInvoice(inv, tenantSlug, clientNameById[inv.socid])
+    );
 
-    return Response.json({
-      metrics,
-      clients,
-      projects,
-      deals,
-      activities,
-      tenant: session?.tenantSlug || "mybotia",
-    });
+    const metrics = computeMetrics(clients, mappedProjects, deals, invoices);
+
+    return Response.json(
+      {
+        metrics,
+        clients,
+        projects: mappedProjects,
+        deals,
+        proposals: mappedProposals,
+        invoices: mappedInvoices,
+        activities,
+        tenant: tenantSlug,
+      },
+      { headers: NO_STORE }
+    );
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
-      { status: 502 }
+      { status: 502, headers: NO_STORE }
     );
   }
 }

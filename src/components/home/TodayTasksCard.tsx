@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronRight, Plus, X, AlertTriangle, Loader2 } from "lucide-react";
-import { useTodayTasks, useProjects, type TaskItem } from "@/hooks/use-api";
+import { useTodayTasks, useScopedProjects, type TaskItem } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
 
@@ -17,7 +17,7 @@ function todayAt2359(): string {
 
 export function TodayTasksCard() {
   const { data: tasks, loading, error, refetch } = useTodayTasks();
-  const { data: projects } = useProjects();
+  const { data: projects } = useScopedProjects();
 
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -47,10 +47,10 @@ export function TodayTasksCard() {
   async function markDone(task: TaskItem) {
     setCompletingIds((s) => new Set(s).add(task.id));
     try {
-      const res = await fetch("/api/tasks", {
-        method: "PUT",
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: task.id, progress: 100 }),
+        body: JSON.stringify({ progress: "100" }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       refetch();
@@ -71,6 +71,7 @@ export function TodayTasksCard() {
       const epoch = dueLocal
         ? Math.floor(new Date(dueLocal).getTime() / 1000)
         : Math.floor(new Date(todayAt2359()).getTime() / 1000);
+      // Bloc 5G-bis : tenant via hostname côté serveur.
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
