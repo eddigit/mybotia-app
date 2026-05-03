@@ -34,24 +34,115 @@ export function VoicePanel({
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // ── Pré-warm cold-start ──────────────────────────────────────────────────
+  // Au mount du composant, on télécharge en silence les ~15 MB d'assets VAD
+  // (modèle ONNX + runtime WASM) ainsi que le module JS lui-même.
+  // Sans ce pré-load, le premier clic sur "Démarrer" déclenche 3-4s de download
+  // bloquant. Avec, le clic est quasi-instantané (assets déjà en cache HTTP).
+  useEffect(() => {
+    // Dynamic import → cache le module dans le bundler/navigateur
+    import("@ricky0123/vad-web").catch(() => {});
+    // Pré-fetch des assets critiques. force-cache : on accepte le cache,
+    // on n'impose pas de revalidation. Ils restent dans le HTTP cache du browser.
+    const assets = [
+      "/vad/vad.worklet.bundle.min.js",
+      "/vad/silero_vad_v5.onnx",
+      "/vad/ort-wasm-simd-threaded.wasm",
+    ];
+    assets.forEach((url) => {
+      fetch(url, { cache: "force-cache" }).catch(() => {});
+    });
+  }, []);
+
   const wsRef = useRef<WebSocket | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vadRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<ArrayBuffer[]>([]);
+
+  // ── Segmented audio playback ─────────────────────────────────────────────
+  // Le serveur envoie l'audio par PHRASES (un audio_end par phrase) puis
+  // un turn_end final. Le client maintient une queue de blobs à lire en
+  // séquence. La 1ère phrase commence à jouer pendant que le LLM/TTS
+  // produit les phrases suivantes en background. C'est le pattern industry
+  // standard (Pipecat, LiveKit) pour TTFA <1s.
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const pendingChunksRef = useRef<ArrayBuffer[]>([]);  // chunks segment courant
+  const playQueueRef = useRef<string[]>([]);            // URLs blobs prêts à jouer
+  const turnEndedRef = useRef(false);                   // serveur a envoyé turn_end
   const isPlayingAudioRef = useRef(false);
-  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Playback suppression : true entre l'envoi WAV utilisateur et la fin
+  // complète de lecture du turn. Évite l'écho mic → boucle infernale.
+  const awaitingResponseRef = useRef(false);
+
+  const drainPlayQueue = useCallback(async () => {
+    const el = audioElementRef.current;
+    if (!el) return;
+    // Lecture en cours : ne touche à rien, le 'ended' relancera drain.
+    if (!el.paused && !el.ended && el.currentTime > 0) return;
+
+    const next = playQueueRef.current.shift();
+    if (!next) {
+      // Queue vide. Si le turn est fini, on signale fin de réponse + grace.
+      if (turnEndedRef.current) {
+        isPlayingAudioRef.current = false;
+        if (wsRef.current?.readyState === WebSocket.OPEN) setState("listening");
+        // Grace 1500ms : DAC tail-out (les enceintes émettent encore après ended).
+        setTimeout(() => { awaitingResponseRef.current = false; }, 1500);
+      }
+      return;
+    }
+    const oldSrc = el.src;
+    el.src = next;
+    try {
+      await el.play();
+    } catch (e) {
+      console.warn("[Audio] play() blocked", e);
+      isPlayingAudioRef.current = false;
+      setTimeout(() => { awaitingResponseRef.current = false; }, 200);
+    }
+    if (oldSrc && oldSrc.startsWith("blob:")) {
+      URL.revokeObjectURL(oldSrc);
+    }
+  }, []);
+
+  const ensureAudioElement = useCallback(() => {
+    if (audioElementRef.current) return audioElementRef.current;
+    const el = new Audio();
+    el.autoplay = false;
+    el.preload = "auto";
+    el.style.display = "none";
+    document.body.appendChild(el);
+    el.addEventListener("ended", () => {
+      // Segment fini : essayer de jouer le suivant (ou clore le turn).
+      drainPlayQueue();
+    });
+    el.addEventListener("error", () => {
+      console.error("[Audio] element error", el.error?.message);
+      setTimeout(() => { awaitingResponseRef.current = false; }, 1500);
+    });
+    audioElementRef.current = el;
+    return el;
+  }, [drainPlayQueue]);
 
   const stopAudioPlayback = useCallback(() => {
-    audioQueueRef.current = [];
-    if (currentSourceRef.current) {
-      try {
-        currentSourceRef.current.stop();
-      } catch {}
-      currentSourceRef.current = null;
+    pendingChunksRef.current = [];
+    // Revoke tous les blobs en queue (memory leak prevention).
+    playQueueRef.current.forEach((url) => {
+      try { URL.revokeObjectURL(url); } catch {}
+    });
+    playQueueRef.current = [];
+    turnEndedRef.current = false;
+    const el = audioElementRef.current;
+    if (el) {
+      const oldSrc = el.src;
+      try { el.pause(); el.removeAttribute("src"); el.load(); } catch {}
+      if (oldSrc && oldSrc.startsWith("blob:")) {
+        try { URL.revokeObjectURL(oldSrc); } catch {}
+      }
     }
     isPlayingAudioRef.current = false;
+    awaitingResponseRef.current = false;
   }, []);
 
   const bargeIn = useCallback(() => {
@@ -61,49 +152,44 @@ export function VoicePanel({
     }
   }, [stopAudioPlayback]);
 
-  const playNextChunk = useCallback(async () => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingAudioRef.current = false;
-      if (wsRef.current?.readyState === WebSocket.OPEN) setState("listening");
-      return;
+  const handleAudioChunk = useCallback((buffer: ArrayBuffer) => {
+    if (!isPlayingAudioRef.current) {
+      setState("speaking");
+      isPlayingAudioRef.current = true;
+      turnEndedRef.current = false;
     }
-    isPlayingAudioRef.current = true;
-    if (!audioContextRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AC();
-    }
-    if (audioContextRef.current.state === "suspended") {
-      await audioContextRef.current.resume();
-    }
-    const buf = audioQueueRef.current.shift()!;
-    try {
-      const audioBuffer = await audioContextRef.current.decodeAudioData(
-        buf.slice(0)
-      );
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      currentSourceRef.current = source;
-      source.onended = () => {
-        currentSourceRef.current = null;
-        playNextChunk();
-      };
-      source.start();
-    } catch {
-      currentSourceRef.current = null;
-      playNextChunk();
-    }
+    pendingChunksRef.current.push(buffer);
   }, []);
 
-  const handleAudioChunk = useCallback(
-    (buffer: ArrayBuffer) => {
-      setState("speaking");
-      audioQueueRef.current.push(buffer);
-      if (!isPlayingAudioRef.current) playNextChunk();
-    },
-    [playNextChunk]
-  );
+  // audio_end serveur = fin d'un SEGMENT (une phrase). On finalise le blob
+  // et on l'enfile dans la queue, qui se draine en arrière-plan.
+  const finishSegment = useCallback(() => {
+    const chunks = pendingChunksRef.current;
+    pendingChunksRef.current = [];
+    if (chunks.length === 0) return;
+    const blob = new Blob(chunks, { type: "audio/mpeg" });
+    const url = URL.createObjectURL(blob);
+    playQueueRef.current.push(url);
+    ensureAudioElement(); // s'assure que l'élément existe
+    drainPlayQueue();
+  }, [ensureAudioElement, drainPlayQueue]);
+
+  // turn_end serveur = plus aucun segment ne va arriver pour ce tour.
+  // Quand la queue sera vide ET la lecture finie, on clear awaitingResponse.
+  const finishTurn = useCallback(() => {
+    turnEndedRef.current = true;
+    if (pendingChunksRef.current.length === 0 && playQueueRef.current.length === 0) {
+      const el = audioElementRef.current;
+      const playing = el && !el.paused && !el.ended;
+      if (!playing) {
+        // Serveur a clos sans aucun audio (réponse vide ou aborted).
+        isPlayingAudioRef.current = false;
+        setTimeout(() => { awaitingResponseRef.current = false; }, 200);
+        if (wsRef.current?.readyState === WebSocket.OPEN) setState("listening");
+      }
+      // Sinon le 'ended' déclenchera drainPlayQueue qui appliquera la grace.
+    }
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleServerMessage = useCallback((msg: any) => {
@@ -126,11 +212,24 @@ export function VoicePanel({
           { role: "agent", text: msg.text || "" },
         ]);
         break;
+      case "audio_end":
+        // Fin d'un SEGMENT (une phrase). D'autres segments peuvent suivre.
+        finishSegment();
+        break;
+      case "turn_end":
+        // Fin du TURN entier. Plus aucun audio ne va arriver pour ce tour.
+        finishTurn();
+        break;
+      case "speaking":
+        // Démarrage du turn de parole côté serveur.
+        turnEndedRef.current = false;
+        break;
       case "error":
         setErrorMsg(msg.message || "Erreur du serveur vocal");
+        awaitingResponseRef.current = false;
         break;
     }
-  }, []);
+  }, [finishSegment, finishTurn]);
 
   const stopAll = useCallback(() => {
     if (vadRef.current) {
@@ -153,8 +252,15 @@ export function VoicePanel({
       // Dynamic import VAD (client-side only, évite SSR)
       const vadModule = await import("@ricky0123/vad-web");
 
-      // Micro permission
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // AEC + noise suppression + AGC obligatoires : sans ça, la voix de Léa
+      // revient dans le micro (surtout sur enceintes), VAD déclenche, on coupe.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       streamRef.current = stream;
 
       // WebSocket
@@ -165,15 +271,29 @@ export function VoicePanel({
       ws.onopen = async () => {
         ws.send(JSON.stringify({ type: "start", mode, rate: 0 }));
         try {
+          // Config VAD vad-web@0.0.30 (modèle Silero v5, paramètres en MS) :
+          //   - Defaults lib v5 : pos=0.3, neg=0.25, redemption=1400ms, minSpeech=400ms, preSpeechPad=800ms
+          //   - Pipecat (kwindla) : stop_secs 800ms-1s pour usages "réfléchir"
+          //   - LiveKit : min_silence_duration 0.55s default, 1s+ pour conversation naturelle
+          // Choix : conservateur sur thresholds (env potentiellement bruyant + enceintes),
+          // pause de réflexion naturelle ~1.4s sans couper.
           const vad = await vadModule.MicVAD.new({
             getStream: async () => stream,
             baseAssetPath: "/vad/",
             onnxWASMBasePath: "/vad/",
+            positiveSpeechThreshold: 0.5,   // > default 0.3 : moins de faux positifs
+            negativeSpeechThreshold: 0.35,  // > default 0.25 : idem
+            minSpeechMs: 300,                // capte "oui"/"non", filtre clics courts
+            preSpeechPadMs: 500,             // récupère attaques de mots loupées
+            redemptionMs: 1400,              // pause naturelle sans couper l'utilisateur
             onSpeechStart: () => {
-              if (isPlayingAudioRef.current) bargeIn();
+              // Playback suppression : pas de barge-in pendant que Léa prépare/parle.
+              if (awaitingResponseRef.current || isPlayingAudioRef.current) return;
               setState("recording");
             },
             onSpeechEnd: (audio: Float32Array) => {
+              if (awaitingResponseRef.current || isPlayingAudioRef.current) return;
+              awaitingResponseRef.current = true;
               const wavBuffer = float32ToWav(audio, 16000);
               if (ws.readyState === WebSocket.OPEN) ws.send(wavBuffer);
               setState("processing");

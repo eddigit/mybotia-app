@@ -1,7 +1,10 @@
 "use client";
 
+// Cockpit principal — VERROUILLÉ tenant=mybotia.
+// Plus aucun pill tenant, plus aucune vue globale.
+
 import { useState } from "react";
-import { BarChart3, Plus, Loader2 } from "lucide-react";
+import { BarChart3, Plus, FolderPlus, Loader2 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import {
   FormModal,
@@ -11,9 +14,10 @@ import {
   btnPrimary,
   btnSecondary,
 } from "@/components/shared/FormModal";
+import { CreateProjectModal } from "@/components/shared/CreateProjectModal";
 import { ClientCard } from "@/components/crm/ClientCard";
 import { Pipeline } from "@/components/crm/Pipeline";
-import { useClients, useDashboard } from "@/hooks/use-api";
+import { useScopedClients, useScopedDashboard } from "@/hooks/use-api";
 import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | "active" | "prospect" | "churned" | "supplier";
@@ -27,10 +31,11 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 
 export default function CRMPage() {
-  const { data: clients, loading: clientsLoading, refetch: refetchClients } = useClients();
-  const { data: dashboard, loading: dashboardLoading } = useDashboard();
+  const { data: clients, loading: clientsLoading, refetch: refetchClients } = useScopedClients();
+  const { data: dashboard, loading: dashboardLoading, refetch: refetchDashboard } = useScopedDashboard();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const loading = clientsLoading || dashboardLoading;
@@ -91,13 +96,19 @@ export default function CRMPage() {
     <div className="p-8 space-y-8">
       <ModuleHeader
         icon={BarChart3}
-        title="CRM / Activite"
+        title="CRM MyBotIA"
         subtitle={`${clients.length} tiers · ${formatCurrency(pipelineValue)} pipeline`}
         actions={
-          <button onClick={() => setShowCreate(true)} className={btnPrimary}>
-            <Plus className="w-3.5 h-3.5" />
-            Nouveau tiers
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowCreateProject(true)} className={btnSecondary}>
+              <FolderPlus className="w-3.5 h-3.5" />
+              Nouveau projet
+            </button>
+            <button onClick={() => setShowCreate(true)} className={btnPrimary}>
+              <Plus className="w-3.5 h-3.5" />
+              Nouveau tiers
+            </button>
+          </div>
         }
       />
 
@@ -107,7 +118,7 @@ export default function CRMPage() {
           { label: "Clients actifs", value: activeCount.toString(), sub: "en portefeuille" },
           { label: "Pipeline", value: formatCurrency(pipelineValue), sub: `${deals.length} opportunites` },
           { label: "Prospects", value: prospectCount.toString(), sub: "en attente" },
-          { label: "Fournisseurs", value: supplierCount.toString(), sub: "dans MyBotIA CRM" },
+          { label: "Fournisseurs", value: supplierCount.toString(), sub: "MyBotIA CRM" },
         ].map((kpi) => (
           <div key={kpi.label} className="card-sharp-high p-5">
             <span className="micro-label text-text-muted">{kpi.label}</span>
@@ -117,7 +128,8 @@ export default function CRMPage() {
         ))}
       </div>
 
-      {deals.length > 0 && <Pipeline deals={deals} />}
+      {/* Pipeline mybotia */}
+      {deals.length > 0 && <Pipeline deals={deals} onUpdated={refetchDashboard} />}
 
       {/* Clients grid */}
       <div>
@@ -179,7 +191,9 @@ export default function CRMPage() {
             <textarea name="note_public" className={inputClass} rows={2} placeholder="Notes..." />
           </FormField>
           <div className="flex items-center justify-end gap-3 mt-6">
-            <button type="button" onClick={() => setShowCreate(false)} className={btnSecondary}>Annuler</button>
+            <button type="button" onClick={() => setShowCreate(false)} className={btnSecondary}>
+              Annuler
+            </button>
             <button type="submit" disabled={creating} className={btnPrimary}>
               {creating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Creer
@@ -187,6 +201,11 @@ export default function CRMPage() {
           </div>
         </form>
       </FormModal>
+
+      <CreateProjectModal
+        open={showCreateProject}
+        onClose={() => setShowCreateProject(false)}
+      />
     </div>
   );
 }

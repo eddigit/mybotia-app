@@ -94,7 +94,8 @@ const PROJECT_COLORS = [
 export function mapDolibarrProject(
   dp: DolibarrProject,
   index: number,
-  clientName?: string
+  clientName?: string,
+  tenantSlug?: string
 ): Project {
   const status = projectStatus(dp.status);
   const budget = parseFloat(dp.budget_amount || "0");
@@ -113,6 +114,7 @@ export function mapDolibarrProject(
     budget: budget > 0 ? budget : undefined,
     clientId: dp.socid || undefined,
     clientName: clientName || dp.thirdparty_name || undefined,
+    tenantSlug,
   };
 }
 
@@ -128,15 +130,30 @@ const STAGE_MAP: Record<string, Deal["stage"]> = {
   "7": "lost",
 };
 
+// Bloc 5B — mapping inverse UI → Dolibarr opp_status (codes natifs).
+// "negotiation" = 3 ou 4 côté Dolibarr ; on choisit canoniquement 3.
+// Un projet déjà à 4 reste à 4 sauf modification explicite via select.
+export const STAGE_TO_OPP_STATUS: Record<Deal["stage"], string> = {
+  discovery: "1",
+  proposal: "2",
+  negotiation: "3",
+  closing: "5",
+  won: "6",
+  lost: "7",
+};
+
 export function mapProjectToDeal(
   dp: DolibarrProject,
-  clientName: string
+  clientName: string,
+  tenantSlug?: string
 ): Deal | null {
   const amount = parseFloat(dp.opp_amount || dp.budget_amount || "0");
   if (amount <= 0) return null;
 
   return {
     id: `deal-${dp.id}`,
+    projectId: dp.id,
+    tenantSlug,
     title: dp.title || dp.ref,
     clientId: dp.socid,
     clientName,
@@ -162,7 +179,8 @@ export function mapEventToActivity(
   ev: DolibarrEvent,
   clientNameById?: Record<string, string>,
   projectTitleById?: Record<string, string>,
-  projectTitleByRef?: Record<string, string>
+  projectTitleByRef?: Record<string, string>,
+  tenantSlug?: string
 ): Activity {
   const clientId = ev.socid || undefined;
   let title = ev.label || "Evenement";
@@ -187,6 +205,7 @@ export function mapEventToActivity(
     timestamp: parseDate(ev.datep) || new Date().toISOString(),
     clientId,
     clientName: clientId && clientNameById ? clientNameById[clientId] : undefined,
+    tenantSlug,
   };
 }
 
@@ -199,6 +218,24 @@ export interface MappedProposal {
   status: "draft" | "validated" | "signed" | "refused" | "billed";
   date: string;
   expiryDate: string;
+  /** Bloc 5C — tenant Dolibarr d'origine pour cockpit tenant-scopé. */
+  tenantSlug?: string;
+  clientId?: string;
+  clientName?: string;
+}
+
+/** Bloc 5C — invoice mappée pour le cockpit (lecture, pas de write/delete). */
+export interface MappedInvoice {
+  id: string;
+  ref: string;
+  total: number;
+  status: "draft" | "sent" | "paid" | "late";
+  date: string;
+  dueDate?: string;
+  daysOverdue?: number;
+  tenantSlug?: string;
+  clientId?: string;
+  clientName?: string;
 }
 
 const PROPOSAL_STATUS: Record<string, MappedProposal["status"]> = {
@@ -209,7 +246,11 @@ const PROPOSAL_STATUS: Record<string, MappedProposal["status"]> = {
   "4": "billed",
 };
 
-export function mapProposal(p: DolibarrProposal): MappedProposal {
+export function mapProposal(
+  p: DolibarrProposal,
+  tenantSlug?: string,
+  clientName?: string
+): MappedProposal {
   return {
     id: p.id,
     ref: p.ref,
@@ -217,6 +258,48 @@ export function mapProposal(p: DolibarrProposal): MappedProposal {
     status: PROPOSAL_STATUS[p.statut] || "draft",
     date: formatDateShort(p.date),
     expiryDate: formatDateShort(p.fin_validite),
+    tenantSlug,
+    clientId: p.socid || undefined,
+    clientName,
+  };
+}
+
+// Bloc 5C — mapping facture pour le cockpit. Lecture seule, jamais delete.
+export function mapInvoice(
+  inv: DolibarrInvoice,
+  tenantSlug?: string,
+  clientName?: string
+): MappedInvoice {
+  const total = parseFloat(inv.total_ttc || "0");
+  const paye = inv.paye === "1";
+  const dueRaw = inv.date_lim_reglement;
+  const dueDate = dueRaw
+    ? new Date(typeof dueRaw === "number" ? dueRaw * 1000 : dueRaw)
+        .toISOString()
+        .slice(0, 10)
+    : undefined;
+  const today = new Date().toISOString().slice(0, 10);
+  let status: MappedInvoice["status"];
+  let daysOverdue: number | undefined;
+  if (paye) status = "paid";
+  else if (inv.status === "0") status = "draft";
+  else if (dueDate && dueDate < today) {
+    status = "late";
+    const ms = new Date(today).getTime() - new Date(dueDate).getTime();
+    daysOverdue = Math.max(1, Math.floor(ms / 86400000));
+  } else status = "sent";
+
+  return {
+    id: inv.id,
+    ref: inv.ref,
+    total,
+    status,
+    date: formatDateShort(inv.date),
+    dueDate,
+    daysOverdue,
+    tenantSlug,
+    clientId: inv.socid || undefined,
+    clientName,
   };
 }
 

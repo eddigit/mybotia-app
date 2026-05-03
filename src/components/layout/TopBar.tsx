@@ -12,26 +12,40 @@ import { ThemeSwitcher } from "@/components/shared/ThemeSwitcher";
 export function TopBar({
   railOpen,
   onToggleRail,
+  onOpenPalette,
 }: {
   railOpen: boolean;
   onToggleRail: () => void;
+  onOpenPalette?: () => void;
 }) {
+  // Bloc 4C — bouton qui ouvre la Command Palette globale (Cmd/Ctrl+K).
+  // Détection plateforme pour afficher le bon raccourci visuel.
+  const isMac =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/i.test(navigator.platform);
   return (
     <header className="flex items-center justify-between h-16 px-8 bg-surface-0/80 backdrop-blur-md border-b border-border-subtle sticky top-0 z-40 shadow-2xl shadow-black/10 dark:shadow-black/20">
-      {/* Search */}
+      {/* Search — bouton qui ouvre la Command Palette */}
       <div className="flex items-center flex-1 max-w-md">
-        <div className="relative w-full group">
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="relative w-full group flex items-center bg-surface-1 hover:bg-surface-2 transition-all py-2.5 pl-10 pr-20 rounded-lg text-left focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+          title="Recherche globale (Cmd/Ctrl+K)"
+        >
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Rechercher dans l'intelligence..."
-            className="w-full bg-surface-1 border-none text-sm py-2.5 pl-10 pr-20 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-primary/40 transition-all"
-          />
+          <span className="text-sm text-text-muted truncate">
+            Rechercher clients, projets, agents…
+          </span>
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">CMD</kbd>
-            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">K</kbd>
+            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">
+              {isMac ? "⌘" : "CTRL"}
+            </kbd>
+            <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">
+              K
+            </kbd>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Right actions */}

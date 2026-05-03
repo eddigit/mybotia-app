@@ -1,7 +1,8 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -11,14 +12,34 @@ import {
   User,
   FileText,
   FolderOpen,
+  FolderPlus,
   Clock,
   MessageSquare,
   Calendar,
   Settings2,
   Truck,
+  Sparkles,
+  Download,
+  Loader2,
+  FilePlus,
+  AlertCircle,
 } from "lucide-react";
+
+// FSM pour chaque devis/facture : suit le cycle download / generate.
+// Aucune transition automatique entre "missing" et "generating" — la generation
+// PDF doit etre declenchee explicitement par l'utilisateur (regle Bloc 3).
+type DocState =
+  | "idle"        // bouton "Telecharger" disponible (etat initial)
+  | "downloading" // fetch /download en cours
+  | "missing"     // download a renvoye 404/502 -> PDF inexistant cote Dolibarr
+  | "generating"  // POST /generate en cours (declenche manuellement)
+  | "ready"       // generate OK -> bouton "Telecharger" reaffiche
+  | "error";      // erreur autre que "missing"
+
+type ModulePart = "propale" | "facture";
 import { useClient } from "@/hooks/use-api";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { CreateProjectModal } from "@/components/shared/CreateProjectModal";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Activity } from "@/types";
@@ -35,7 +56,189 @@ export default function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { data, loading, error } = useClient(id);
+  const router = useRouter();
+  const { data, loading, error, refetch } = useClient(id);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+
+  // Etat PDF par document : key = `${modulepart}-${docId}`
+  const [docStates, setDocStates] = useState<Record<string, DocState>>({});
+  const [docErrors, setDocErrors] = useState<Record<string, string>>({});
+
+  function docKey(modulepart: ModulePart, docId: string | number): string {
+    return `${modulepart}-${docId}`;
+  }
+
+  function setDoc(key: string, state: DocState, errMsg?: string) {
+    setDocStates((s) => ({ ...s, [key]: state }));
+    if (errMsg !== undefined) {
+      setDocErrors((e) => ({ ...e, [key]: errMsg }));
+    } else if (state !== "error") {
+      setDocErrors((e) => {
+        if (!(key in e)) return e;
+        const copy = { ...e };
+        delete copy[key];
+        return copy;
+      });
+    }
+  }
+
+  async function handleDownloadPdf(
+    modulepart: ModulePart,
+    ref: string,
+    docId: string | number
+  ) {
+    const key = docKey(modulepart, docId);
+    setDoc(key, "downloading");
+    try {
+      const url = `/api/documents/download?modulepart=${encodeURIComponent(
+        modulepart
+      )}&ref=${encodeURIComponent(ref)}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        const objectUrl = URL.createObjectURL(blob);
+        a.href = objectUrl;
+        a.download = `${ref}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+        setDoc(key, "idle");
+        return;
+      }
+      // 404 = Dolibarr OK mais content vide ; 502 = builddoc absent / Dolibarr KO
+      // Les deux => PDF absent du point de vue utilisateur
+      if (res.status === 404 || res.status === 502) {
+        setDoc(key, "missing");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setDoc(
+        key,
+        "error",
+        data?.error || `Erreur telechargement (${res.status})`
+      );
+    } catch (e) {
+      setDoc(key, "error", (e as Error).message);
+    }
+  }
+
+  async function handleGeneratePdf(
+    modulepart: ModulePart,
+    ref: string,
+    docId: string | number
+  ) {
+    const key = docKey(modulepart, docId);
+    setDoc(key, "generating");
+    try {
+      const res = await fetch("/api/documents/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modulepart, ref }),
+      });
+      if (res.ok) {
+        setDoc(key, "ready");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setDoc(
+        key,
+        "error",
+        data?.error || `Erreur generation (${res.status})`
+      );
+    } catch (e) {
+      setDoc(key, "error", (e as Error).message);
+    }
+  }
+
+  function handleTalkToLea() {
+    if (!data?.client) return;
+    const params = new URLSearchParams({
+      seedClient: String(data.client.id),
+      seedName: data.client.company || data.client.name || `Client #${data.client.id}`,
+      seedAgent: "lea",
+    });
+    router.push(`/conversations?${params.toString()}`);
+  }
+
+  // Rendu du bouton PDF (etat-aware) pour une ligne devis/facture.
+  // FSM stricte : aucun appel /generate sans clic explicite (regle Bloc 3).
+  function renderPdfActions(
+    modulepart: ModulePart,
+    ref: string,
+    docId: string | number
+  ) {
+    const key = docKey(modulepart, docId);
+    const state: DocState = docStates[key] || "idle";
+    const err = docErrors[key];
+
+    const baseBtn =
+      "inline-flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight transition-all";
+
+    if (state === "downloading") {
+      return (
+        <button
+          disabled
+          className={`${baseBtn} text-text-muted bg-surface-3/50 cursor-wait`}
+          title="Telechargement..."
+        >
+          <Loader2 className="w-3 h-3 animate-spin" />
+        </button>
+      );
+    }
+    if (state === "generating") {
+      return (
+        <button
+          disabled
+          className={`${baseBtn} text-amber-300 bg-amber-400/10 border border-amber-400/30 cursor-wait`}
+          title="Generation du PDF cote Dolibarr..."
+        >
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Generation...
+        </button>
+      );
+    }
+    if (state === "missing") {
+      return (
+        <button
+          onClick={() => handleGeneratePdf(modulepart, ref, docId)}
+          className={`${baseBtn} text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30`}
+          title="Le PDF n'existe pas encore cote Dolibarr. Cliquer pour le generer."
+        >
+          <FilePlus className="w-3 h-3" />
+          PDF absent — Generer
+        </button>
+      );
+    }
+    if (state === "error") {
+      return (
+        <button
+          onClick={() => handleDownloadPdf(modulepart, ref, docId)}
+          className={`${baseBtn} text-status-danger bg-status-danger/10 hover:bg-status-danger/20 border border-status-danger/30`}
+          title={err || "Erreur lors du telechargement. Cliquer pour reessayer."}
+        >
+          <AlertCircle className="w-3 h-3" />
+          Reessayer
+        </button>
+      );
+    }
+    // idle ou ready -> bouton Telecharger
+    return (
+      <button
+        onClick={() => handleDownloadPdf(modulepart, ref, docId)}
+        className={`${baseBtn} text-accent-glow hover:text-text-primary bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/20`}
+        title={
+          state === "ready"
+            ? "PDF genere — cliquer pour telecharger"
+            : "Telecharger le PDF"
+        }
+      >
+        <Download className="w-3 h-3" />
+        {state === "ready" ? "Telecharger" : "PDF"}
+      </button>
+    );
+  }
 
   if (loading) {
     return (
@@ -105,15 +308,25 @@ export default function ClientDetailPage({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {client.tags?.map((tag) => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 bg-surface-4 text-[10px] text-text-muted font-mono"
-              >
-                #{tag}
-              </span>
-            ))}
+          <div className="flex items-start gap-3">
+            <div className="flex flex-wrap items-center gap-2 max-w-[280px] justify-end">
+              {client.tags?.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 bg-surface-4 text-[10px] text-text-muted font-mono"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={handleTalkToLea}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/30 text-accent-glow text-[11px] font-bold uppercase tracking-tight transition-all whitespace-nowrap"
+              title="Ouvrir une conversation avec Léa contextualisée sur ce client"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Parler à Léa de ce client
+            </button>
           </div>
         </div>
 
@@ -204,11 +417,20 @@ export default function ClientDetailPage({
 
         {/* Projects */}
         <div className="card-sharp p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <FolderOpen className="w-4 h-4 text-accent-glow" />
-            <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
-              Projets ({projects.length})
-            </h2>
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-accent-glow" />
+              <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
+                Projets ({projects.length})
+              </h2>
+            </div>
+            <button
+              onClick={() => setShowCreateProject(true)}
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent-glow hover:text-text-primary transition-colors"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              Nouveau
+            </button>
           </div>
           {projects.length === 0 ? (
             <p className="text-sm text-text-muted">Aucun projet</p>
@@ -262,9 +484,9 @@ export default function ClientDetailPage({
                 {proposals.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between p-2 bg-surface-1/50 border border-border-subtle"
+                    className="flex items-center justify-between gap-2 p-2 bg-surface-1/50 border border-border-subtle"
                   >
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <span className="text-xs font-bold text-text-primary">
                         {p.ref}
                       </span>
@@ -274,9 +496,10 @@ export default function ClientDetailPage({
                         </span>
                       )}
                     </div>
-                    <span className="text-sm font-bold text-text-primary">
+                    <span className="text-sm font-bold text-text-primary shrink-0">
                       {formatCurrency(p.total)}
                     </span>
+                    {p.ref && renderPdfActions("propale", p.ref, p.id)}
                   </div>
                 ))}
               </div>
@@ -293,9 +516,9 @@ export default function ClientDetailPage({
                 {invoices.map((inv) => (
                   <div
                     key={inv.id}
-                    className="flex items-center justify-between p-2 bg-surface-1/50 border border-border-subtle"
+                    className="flex items-center justify-between gap-2 p-2 bg-surface-1/50 border border-border-subtle"
                   >
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <span className="text-xs font-bold text-text-primary">
                         {inv.ref}
                       </span>
@@ -305,12 +528,13 @@ export default function ClientDetailPage({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <StatusBadge status={inv.status} size="xs" />
                       <span className="text-sm font-bold text-text-primary">
                         {formatCurrency(inv.total)}
                       </span>
                     </div>
+                    {inv.ref && renderPdfActions("facture", inv.ref, inv.id)}
                   </div>
                 ))}
               </div>
@@ -371,6 +595,14 @@ export default function ClientDetailPage({
           </div>
         </div>
       )}
+
+      <CreateProjectModal
+        open={showCreateProject}
+        onClose={() => setShowCreateProject(false)}
+        onCreated={() => refetch()}
+        defaultClientId={client.id}
+        lockClient
+      />
     </div>
   );
 }

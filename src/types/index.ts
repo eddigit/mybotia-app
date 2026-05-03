@@ -106,6 +106,8 @@ export interface Project {
   budget?: number;
   clientId?: string;
   clientName?: string;
+  /** Bloc 5B-scope-global — tenant Dolibarr d'origine, pour filtrage cockpit. */
+  tenantSlug?: string;
 }
 
 export type ClientStatus = 'active' | 'prospect' | 'churned' | 'onboarding';
@@ -128,10 +130,19 @@ export interface Client {
   notePublic?: string;
   notePrivate?: string;
   isSupplier?: boolean;
+  /** Bloc 5B-scope-global — tenant Dolibarr d'origine, pour filtrage cockpit. */
+  tenantSlug?: string;
 }
 
 export interface Deal {
   id: string;
+  /** Bloc 5B — id Dolibarr brut du projet (sans préfixe "deal-"), utilisé pour PATCH /api/projects/[id].
+   *  Optionnel pour rester compatible avec les mocks. En prod (mapProjectToDeal), toujours défini. */
+  projectId?: string;
+  /** Bloc 5B-fix — tenant Dolibarr d'origine du projet (mybotia | vlmedical | igh | cmb_lux).
+   *  Indispensable pour qu'un PATCH cible la bonne instance Dolibarr quand le pipeline
+   *  agrège plusieurs tenants (cas superadmin). Renvoyé par /api/dashboard. */
+  tenantSlug?: string;
   title: string;
   clientId: string;
   clientName: string;
@@ -153,6 +164,8 @@ export interface Activity {
   priority?: 'high' | 'medium' | 'low';
   clientId?: string;
   clientName?: string;
+  /** Bloc 5B-scope-global — tenant Dolibarr d'origine, pour filtrage cockpit. */
+  tenantSlug?: string;
 }
 
 export interface Metric {

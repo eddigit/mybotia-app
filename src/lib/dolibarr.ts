@@ -1,48 +1,75 @@
 // Dolibarr CRM API client — multi-tenant routing
-// Chaque tenant a son propre CRM Dolibarr avec URL et API key distincts
+// Chaque tenant a son propre CRM Dolibarr avec URL et API key distincts.
+// Aucune valeur secrète n'est admise dans ce fichier : tout vient de l'env.
 
 export interface TenantConfig {
+  /** Bloc 5B-fix — slug identifiant le tenant (clé du mapping). Permet aux routes
+   *  multi-tenant (ex: PATCH /api/projects/[id]) de savoir quel tenant cibler. */
+  slug?: string;
   url: string;
   apiKey: string;
   label: string;
 }
 
-// Mapping tenant_slug → Dolibarr instance
-const TENANT_CRM: Record<string, TenantConfig> = {
-  mybotia: {
-    url: process.env.DOLIBARR_URL_MYBOTIA || "https://crm-mybotia.mybotia.com/api/index.php",
-    apiKey: process.env.DOLIBARR_KEY_MYBOTIA || "doli_lea_tenant_b02e3a5868d646cd033da4175809b585",
-    label: "MyBotIA",
-  },
-  vlmedical: {
-    url: process.env.DOLIBARR_URL_VLMEDICAL || "https://crm-vlmedical.mybotia.com/api/index.php",
-    apiKey: process.env.DOLIBARR_KEY_VLMEDICAL || "doli_max_tenant_baf51a9b22c02ae5433da48c2b476489",
-    label: "VL Medical",
-  },
-  igh: {
-    url: process.env.DOLIBARR_URL_IGH || "https://crm-igh.mybotia.com/api/index.php",
-    apiKey: process.env.DOLIBARR_KEY_IGH || "doli_lucy_tenant_5c31ea581c85d5ac93ebc5e4654c654e",
-    label: "IGH",
-  },
-  cmb_lux: {
-    url: process.env.DOLIBARR_URL_CMBLUX || "https://crm-cmb.mybotia.com/api/index.php",
-    apiKey: process.env.DOLIBARR_KEY_CMBLUX || "",
-    label: "CMB Conseil",
-  },
-};
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
 
-// Fallback MyBotIA — RÉSERVÉ aux requêtes anonymes (page publique, login).
-// Un tenantSlug connu mais absent du mapping TENANT_CRM doit LEVER, pas tomber
-// sur MyBotIA en silence (fuite cross-tenant confirmée 2026-04-24 sur cmb_lux).
-const FALLBACK_URL = process.env.DOLIBARR_URL || "https://crm-mybotia.mybotia.com/api/index.php";
-const FALLBACK_KEY = process.env.DOLIBARR_API_KEY || "doli_lea_tenant_b02e3a5868d646cd033da4175809b585";
+// Mapping tenant_slug → Dolibarr instance.
+// Construit paresseusement : la première lecture exige la présence des env vars.
+let _tenantCrmCache: Record<string, TenantConfig> | null = null;
+
+function buildTenantCrm(): Record<string, TenantConfig> {
+  return {
+    mybotia: {
+      slug: "mybotia",
+      url: requireEnv("DOLIBARR_URL_MYBOTIA"),
+      apiKey: requireEnv("DOLIBARR_KEY_MYBOTIA"),
+      label: "MyBotIA",
+    },
+    vlmedical: {
+      slug: "vlmedical",
+      url: requireEnv("DOLIBARR_URL_VLMEDICAL"),
+      apiKey: requireEnv("DOLIBARR_KEY_VLMEDICAL"),
+      label: "VL Medical",
+    },
+    igh: {
+      slug: "igh",
+      url: requireEnv("DOLIBARR_URL_IGH"),
+      apiKey: requireEnv("DOLIBARR_KEY_IGH"),
+      label: "IGH",
+    },
+    cmb_lux: {
+      slug: "cmb_lux",
+      url: requireEnv("DOLIBARR_URL_CMBLUX"),
+      apiKey: requireEnv("DOLIBARR_KEY_CMBLUX"),
+      label: "CMB Conseil",
+    },
+  };
+}
+
+function getTenantCrm(): Record<string, TenantConfig> {
+  if (_tenantCrmCache === null) {
+    _tenantCrmCache = buildTenantCrm();
+  }
+  return _tenantCrmCache;
+}
 
 export function getTenantConfig(tenantSlug?: string | null): TenantConfig {
   if (tenantSlug === null || tenantSlug === undefined || tenantSlug === "") {
     // Requête anonyme (login public, page d'accueil) → fallback MyBotIA.
-    return { url: FALLBACK_URL, apiKey: FALLBACK_KEY, label: "MyBotIA" };
+    // Toujours via env, jamais hardcodé.
+    return {
+      url: requireEnv("DOLIBARR_URL"),
+      apiKey: requireEnv("DOLIBARR_API_KEY"),
+      label: "MyBotIA",
+    };
   }
-  const cfg = TENANT_CRM[tenantSlug];
+  const cfg = getTenantCrm()[tenantSlug];
   if (!cfg) {
     // Tenant identifié mais non mappé → REFUS STRICT (pas de fallback silencieux).
     throw new Error(`Tenant non configuré: ${tenantSlug}`);
@@ -52,7 +79,7 @@ export function getTenantConfig(tenantSlug?: string | null): TenantConfig {
 
 // Superadmin: retourne TOUTES les configs pour agréger
 export function getAllTenantConfigs(): TenantConfig[] {
-  return Object.values(TENANT_CRM);
+  return Object.values(getTenantCrm());
 }
 
 export interface DolibarrThirdParty {
@@ -155,9 +182,14 @@ async function dolibarrFetch<T>(
 ): Promise<T> {
   const cfg = tenant || getTenantConfig();
   const url = `${cfg.url}/${endpoint}`;
+  // Bloc 5B-fix v2 — RACINE du bug "rien ne change" : Next.js mettait en cache
+  // les réponses Dolibarr 60s côté serveur (`next: { revalidate: 60 }`). Un PATCH
+  // suivi d'un refetch /api/dashboard ressortait alors la version cachée d'avant
+  // la modification. On force `cache: "no-store"` par défaut. L'option `noCache`
+  // reste lue pour rétro-compatibilité, mais elle n'a plus d'effet inverse.
   const res = await fetch(url, {
     headers: { DOLAPIKEY: cfg.apiKey },
-    ...(opts.noCache ? { cache: "no-store" } : { next: { revalidate: 60 } }),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -234,6 +266,25 @@ export async function getContacts(limit = 200, tenant?: TenantConfig): Promise<D
 export async function getThirdPartyProjects(socid: string, tenant?: TenantConfig): Promise<DolibarrProject[]> {
   try { return await dolibarrFetch<DolibarrProject[]>(`projects?sqlfilters=(t.fk_soc:=:${socid})&sortfield=t.rowid&sortorder=DESC&limit=20`, tenant); }
   catch { return []; }
+}
+
+// --- Bloc 5E — invoices/proposals liés à un projet (lecture seule pour drawer + garde-fous DELETE).
+export async function getProjectInvoices(projectId: string, tenant?: TenantConfig): Promise<DolibarrInvoice[]> {
+  try {
+    return await dolibarrFetch<DolibarrInvoice[]>(
+      `invoices?sqlfilters=(t.fk_projet:=:${projectId})&sortfield=t.rowid&sortorder=DESC&limit=50`,
+      tenant
+    );
+  } catch { return []; }
+}
+
+export async function getProjectProposals(projectId: string, tenant?: TenantConfig): Promise<DolibarrProposal[]> {
+  try {
+    return await dolibarrFetch<DolibarrProposal[]>(
+      `proposals?sqlfilters=(t.fk_projet:=:${projectId})&sortfield=t.rowid&sortorder=DESC&limit=50`,
+      tenant
+    );
+  } catch { return []; }
 }
 
 // --- Thirdparties by category ---
@@ -355,7 +406,7 @@ export async function getUserByEmail(email: string, tenant?: TenantConfig): Prom
 // WRITE OPERATIONS (POST / PUT)
 // ============================================
 
-async function dolibarrWrite<T>(endpoint: string, method: "POST" | "PUT", body?: Record<string, unknown>, tenant?: TenantConfig): Promise<T> {
+async function dolibarrWrite<T>(endpoint: string, method: "POST" | "PUT" | "DELETE", body?: Record<string, unknown>, tenant?: TenantConfig): Promise<T> {
   const cfg = tenant || getTenantConfig();
   const url = `${cfg.url}/${endpoint}`;
   const res = await fetch(url, {
@@ -409,6 +460,46 @@ export async function createProject(data: {
 
 export async function validateProject(id: string, tenant?: TenantConfig): Promise<unknown> {
   return dolibarrWrite(`projects/${id}/validate`, "POST", {}, tenant);
+}
+
+// Bloc 5B — update project (étape pipeline / montant / probabilité / titre / statut).
+// Whitelist côté lib (defense in depth). La route /api/projects/[id] filtre
+// aussi côté serveur. Aucun champ socid ici : le rattachement client se fait
+// uniquement via createProject (Bloc fix BYRON).
+// Bloc 5B-security : ajout du champ `status` Dolibarr (0=brouillon, 1=ouvert,
+// 2=clôturé/archivé) pour permettre l'archivage via le même flow PATCH.
+export async function updateProject(
+  id: string,
+  data: {
+    opp_status?: string;
+    opp_amount?: string | number;
+    opp_percent?: string | number;
+    title?: string;
+    status?: string; // "0" | "1" | "2"
+    description?: string;
+    note_public?: string;
+    note_private?: string;
+  },
+  tenant?: TenantConfig
+): Promise<unknown> {
+  return dolibarrWrite(`projects/${id}`, "PUT", data, tenant);
+}
+
+// Bloc 5B-security — DELETE projet. Dolibarr accepte DELETE /projects/{id}.
+// Le serveur applique des garde-fous métier (cf route /api/projects/[id] DELETE).
+export async function deleteProject(
+  id: string,
+  tenant?: TenantConfig
+): Promise<unknown> {
+  return dolibarrWrite(`projects/${id}`, "DELETE", undefined, tenant);
+}
+
+// Bloc 5B-security — DELETE tâche. Dolibarr accepte DELETE /tasks/{id}.
+export async function deleteTask(
+  id: string,
+  tenant?: TenantConfig
+): Promise<unknown> {
+  return dolibarrWrite(`tasks/${id}`, "DELETE", undefined, tenant);
 }
 
 export async function createTask(data: {

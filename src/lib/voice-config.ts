@@ -22,6 +22,10 @@ const VOICE_AGENTS: Record<string, VoiceConfig> = {
     wsUrl: "wss://voice-lucy.mybotia.com/ws",
     wakeWord: "lucy",
   },
+  raphael: {
+    wsUrl: "wss://voice-raphael.mybotia.com/ws",
+    wakeWord: "raphaël",
+  },
 };
 
 export function getVoiceConfig(agentId: string): VoiceConfig | null {

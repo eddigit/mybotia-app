@@ -1,26 +1,30 @@
+// Bloc 5G — /api/clients verrouillé sur le cockpit hostname.
+// Pas d'agrégation multi-tenant ici.
+
 import { getThirdParties } from "@/lib/dolibarr";
-import { getSession, getSessionTenants } from "@/lib/session";
 import { mapThirdPartyToClient } from "@/lib/mappers";
+import { resolveCockpitTenants } from "@/lib/tenant-resolver";
 
-export async function GET() {
+const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
+
+export async function GET(request: Request) {
   try {
-    const tenants = await getSessionTenants();
-
-    const allThirdparties = [];
-    for (const tenant of tenants) {
-      const tp = await getThirdParties(100, tenant).catch(() => []);
-      allThirdparties.push(...tp);
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
     }
+    const { tenant, slug: tenantSlug } = cockpit;
 
-    const clients = allThirdparties
-      .filter((tp) => tp.status !== "0" || tp.name.includes("TEST") === false)
-      .map(mapThirdPartyToClient);
+    const tps = await getThirdParties(100, tenant).catch(() => []);
+    const clients = tps
+      .filter((tp) => tp.status !== "0" || !tp.name.includes("TEST"))
+      .map((tp) => ({ ...mapThirdPartyToClient(tp), tenantSlug }));
 
-    return Response.json(clients);
+    return Response.json(clients, { headers: NO_STORE });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
-      { status: 502 }
+      { status: 502, headers: NO_STORE }
     );
   }
 }

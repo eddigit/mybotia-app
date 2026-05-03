@@ -5,9 +5,13 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Sun,
   MessagesSquare,
   CheckSquare,
   BarChart3,
+  TrendingUp,
+  Calendar,
+  Wallet,
   Bot,
   FileText,
   Settings,
@@ -20,13 +24,25 @@ import { useAuth } from "@/contexts/auth-context";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
-const navItems = [
-  { id: "home", label: "Command Center", href: "/", icon: LayoutDashboard },
-  { id: "conversations", label: "Conversations", href: "/conversations", icon: MessagesSquare, badge: 5 },
-  { id: "crm", label: "CRM / Activite", href: "/crm", icon: BarChart3 },
-  { id: "tasks", label: "Taches", href: "/tasks", icon: CheckSquare, badge: 3 },
-  { id: "agents", label: "Agents", href: "/agents", icon: Bot },
-  { id: "documents", label: "Documents", href: "/documents", icon: FileText },
+// Bloc 5A — sidebar orientée usage entrepreneur quotidien.
+// Ordre : du plus immédiat (Aujourd'hui) vers les outils transverses (Documents, Agents).
+const navItems: Array<{
+  id: string;
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  badge?: number;
+}> = [
+  { id: "home",          label: "Command Center", href: "/",              icon: LayoutDashboard },
+  { id: "today",         label: "Aujourd'hui",    href: "/today",         icon: Sun },
+  { id: "conversations", label: "Conversations",  href: "/conversations", icon: MessagesSquare },
+  { id: "crm",           label: "CRM / Clients",  href: "/crm",           icon: BarChart3 },
+  { id: "pipeline",      label: "Pipeline",       href: "/pipeline",      icon: TrendingUp },
+  { id: "tasks",         label: "Tâches",         href: "/tasks",         icon: CheckSquare },
+  { id: "agenda",        label: "Agenda",         href: "/agenda",        icon: Calendar },
+  { id: "documents",     label: "Documents",      href: "/documents",     icon: FileText },
+  { id: "agents",        label: "Agents IA",      href: "/agents",        icon: Bot },
+  { id: "finance",       label: "Finances",       href: "/finance",       icon: Wallet },
 ];
 
 const bottomItems = [

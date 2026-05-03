@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   MessagesSquare,
   Bot,
@@ -24,7 +25,7 @@ import { ConversationThread } from "@/components/conversations/ConversationThrea
 import {
   useConversations,
   useMessages,
-  useProjects,
+  useScopedProjects,
   useAgents,
   useFolders,
   deleteConversationApi,
@@ -83,12 +84,14 @@ function projectSessionId(projectId: string, agentId: string): string {
 }
 
 export default function ConversationsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const {
     data: conversations,
     loading: convsLoading,
     refetch: refetchConvs,
   } = useConversations();
-  const { data: projects } = useProjects();
+  const { data: projects } = useScopedProjects();
   const { data: agents } = useAgents();
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -102,6 +105,16 @@ export default function ConversationsPage() {
   const { data: folders, refetch: refetchFolders } = useFolders();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // Seed depuis fiche CRM : query params seedClient + seedName + seedAgent.
+  // pendingSeedMessage retient le 1er message a envoyer une fois la conv tempo prete.
+  const [pendingSeedMessage, setPendingSeedMessage] = useState<string | null>(null);
+  const [seedConsumed, setSeedConsumed] = useState(false);
+  // Contexte client a persister en localStorage des que la conv tempo est prete
+  // (sessionId temporaire `new-${ts}` connu) puis migre vers le sessionId reel
+  // apres reponse bridge. Permet a ConversationThread d'afficher la ClientContextCard.
+  const [pendingClientContext, setPendingClientContext] = useState<
+    { id: string; name: string } | null
+  >(null);
 
   // Fermer le menu au click outside
   useEffect(() => {
@@ -175,6 +188,62 @@ export default function ConversationsPage() {
     setActiveConvId(id);
     setLocalMessages([]);
   }, []);
+
+  // Effet 1 : detection seed CRM -> client. Au mount, si seedClient/seedName presents
+  // dans l'URL, ouvrir une nouvelle conv avec l'agent demande (ou "lea" par defaut)
+  // et armer le 1er message contextuel. Ne se declenche qu'une fois (seedConsumed).
+  useEffect(() => {
+    if (seedConsumed) return;
+    const seedClient = searchParams?.get("seedClient");
+    const seedName = searchParams?.get("seedName");
+    const seedAgentRaw = searchParams?.get("seedAgent") || "lea";
+    if (!seedClient || !seedName) return;
+    // Attendre que les agents soient charges pour que startNewChat resolve correctement
+    if (!agents || agents.length === 0) return;
+
+    const message =
+      `Contexte : conversation sur le client "${seedName}" (ID CRM ${seedClient}, source Dolibarr). ` +
+      `Ne modifie rien, n'envoie rien a des tiers. Confirme en une phrase courte que tu as bien le contexte, ` +
+      `puis je te poserai mes questions.`;
+    setPendingSeedMessage(message);
+    setPendingClientContext({ id: seedClient, name: seedName });
+    setSeedConsumed(true);
+    startNewChat(seedAgentRaw);
+    // Nettoyer l'URL pour eviter re-trigger sur navigation
+    router.replace("/conversations");
+  }, [searchParams, agents, seedConsumed, router]);
+
+  // Effet 1bis : ecrit le contexte client en localStorage des que la conv tempo
+  // est prete (activeConvId connu). Sera migre vers le sessionId reel dans
+  // handleSend apres reponse du bridge.
+  useEffect(() => {
+    if (!pendingClientContext) return;
+    if (!activeConvId) return;
+    try {
+      localStorage.setItem(
+        `client-context-conv-${activeConvId}`,
+        JSON.stringify(pendingClientContext)
+      );
+    } catch {
+      // localStorage indisponible (mode prive, quota...) -> silent fallback,
+      // la card client ne sera juste pas visible. Pas de crash.
+    }
+    setPendingClientContext(null);
+  }, [pendingClientContext, activeConvId]);
+
+  // Effet 2 : une fois la conv tempo prete (activeConv defini, pas en cours d'envoi),
+  // envoyer le message contextuel arme par l'effet 1.
+  useEffect(() => {
+    if (!pendingSeedMessage) return;
+    const conv = tempConv?.id === activeConvId ? tempConv : null;
+    if (!conv) return;
+    if (sending) return;
+    const msg = pendingSeedMessage;
+    setPendingSeedMessage(null);
+    handleSend(msg, "fast");
+    // handleSend est defini plus bas dans le composant et capture l'etat React courant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSeedMessage, activeConvId, tempConv, sending]);
 
   function toggleProject(id: string) {
     setExpandedProjects((prev) => {
@@ -329,6 +398,7 @@ export default function ConversationsPage() {
       let fullContent = "";
       let newSessionId = "";
       let buffer = "";
+      let toolsCalled: ChatMessage["toolsCalled"] = undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -347,15 +417,30 @@ export default function ConversationsPage() {
             if (evt.done) {
               newSessionId = evt.session_id || "";
               if (evt.result && !fullContent) fullContent = evt.result;
+              if (Array.isArray(evt.tools_called)) {
+                toolsCalled = evt.tools_called as ChatMessage["toolsCalled"];
+              }
             }
           } catch { /* skip */ }
         }
       }
 
       if (fullContent) {
-        setLocalMessages((prev) => [...prev, { id: `local-agent-${Date.now()}`, role: "assistant", content: fullContent, timestamp: new Date().toISOString() }]);
+        setLocalMessages((prev) => [...prev, { id: `local-agent-${Date.now()}`, role: "assistant", content: fullContent, timestamp: new Date().toISOString(), toolsCalled }]);
       }
       if (newSessionId && activeConvId?.startsWith("new-")) {
+        // Migrer le client-context (Bloc 4A) du tempSessionId vers le sessionId reel
+        // pour que la ClientContextCard reste visible apres refetch.
+        try {
+          const oldKey = `client-context-conv-${activeConvId}`;
+          const ctx = localStorage.getItem(oldKey);
+          if (ctx) {
+            localStorage.setItem(`client-context-conv-${newSessionId}`, ctx);
+            localStorage.removeItem(oldKey);
+          }
+        } catch {
+          // ignore — pas critique
+        }
         setTempConv((prev) =>
           prev && prev.id === activeConvId
             ? { ...prev, id: newSessionId, sessionId: newSessionId }

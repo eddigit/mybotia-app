@@ -66,7 +66,7 @@ export async function GET(
               .slice(0, 10)
           : "",
       })),
-      proposals: proposals.map(mapProposal),
+      proposals: proposals.map((p) => mapProposal(p)),
       projects: projects.map((p, i) => mapDolibarrProject(p, i, client.name)),
     });
   } catch (e) {

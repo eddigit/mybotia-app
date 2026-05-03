@@ -7,9 +7,11 @@ import type { TaskItem } from "@/hooks/use-api";
 export function TaskPanel({
   tasks,
   onUpdateStatus,
+  onOpenTask,
 }: {
   tasks: TaskItem[];
   onUpdateStatus?: (id: string, progress: number) => void;
+  onOpenTask?: (task: TaskItem) => void;
 }) {
   const columns = [
     {
@@ -50,6 +52,7 @@ export function TaskPanel({
                 key={task.id}
                 task={task}
                 onUpdateStatus={onUpdateStatus}
+                onOpenTask={onOpenTask}
               />
             ))}
             {col.tasks.length === 0 && (
@@ -67,14 +70,31 @@ export function TaskPanel({
 function TaskCard({
   task,
   onUpdateStatus,
+  onOpenTask,
 }: {
   task: TaskItem;
   onUpdateStatus?: (id: string, progress: number) => void;
+  onOpenTask?: (task: TaskItem) => void;
 }) {
+  const clickable = !!onOpenTask;
   return (
     <div
+      onClick={clickable ? () => onOpenTask(task) : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpenTask(task);
+              }
+            }
+          : undefined
+      }
       className={cn(
         "p-4 group transition-all",
+        clickable && "cursor-pointer hover:bg-surface-3/40",
         task.priority === "high"
           ? "bg-surface-2 border-l-4 border-l-accent-primary border-t border-r border-b border-border-subtle"
           : "bg-surface-2 border border-border-subtle"
@@ -141,12 +161,13 @@ function TaskCard({
           {/* Status cycle button */}
           {onUpdateStatus && task.status !== "done" && (
             <button
-              onClick={() =>
+              onClick={(e) => {
+                e.stopPropagation();
                 onUpdateStatus(
                   task.id,
                   task.status === "todo" ? 50 : 100
-                )
-              }
+                );
+              }}
               className="text-text-muted hover:text-accent-glow transition-colors"
               title={
                 task.status === "todo"
