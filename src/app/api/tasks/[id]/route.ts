@@ -4,6 +4,7 @@
 
 import { deleteTask, updateTask } from "@/lib/dolibarr";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+import { requireFeature } from "@/lib/tenant-features";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -26,6 +27,9 @@ export async function PATCH(
     if (!id || !/^\d+$/.test(id)) {
       return Response.json({ error: "id tache invalide" }, { status: 400, headers: NO_STORE });
     }
+
+    const featureCheck = await requireFeature(request, "tasks");
+    if (!featureCheck.ok) return featureCheck.response;
 
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
@@ -72,6 +76,9 @@ export async function DELETE(
     if (!id || !/^\d+$/.test(id)) {
       return Response.json({ error: "id tache invalide" }, { status: 400, headers: NO_STORE });
     }
+
+    const featureCheck = await requireFeature(request, "tasks");
+    if (!featureCheck.ok) return featureCheck.response;
 
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {

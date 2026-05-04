@@ -4,11 +4,16 @@
 import { getThirdParties } from "@/lib/dolibarr";
 import { mapThirdPartyToClient } from "@/lib/mappers";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+import { requireFeature } from "@/lib/tenant-features";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
 export async function GET(request: Request) {
   try {
+    // Bloc 6B — feature gate
+    const featureCheck = await requireFeature(request, "crm");
+    if (!featureCheck.ok) return featureCheck.response;
+
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });

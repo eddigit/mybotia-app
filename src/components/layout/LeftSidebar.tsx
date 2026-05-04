@@ -21,28 +21,33 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
+import { useCockpitFeatures } from "@/hooks/use-api";
+import { Shield, Coins } from "lucide-react";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
 // Bloc 5A — sidebar orientée usage entrepreneur quotidien.
-// Ordre : du plus immédiat (Aujourd'hui) vers les outils transverses (Documents, Agents).
+// Bloc 6B — chaque entrée peut déclarer une `feature` qui doit être activée
+// dans le tenant courant pour être visible (sauf si `alwaysVisible=true`).
 const navItems: Array<{
   id: string;
   label: string;
   href: string;
   icon: typeof LayoutDashboard;
   badge?: number;
+  feature?: string;        // si défini : feature DB requise
+  alwaysVisible?: boolean; // toujours afficher (Command Center, Aujourd'hui, Conversations)
 }> = [
-  { id: "home",          label: "Command Center", href: "/",              icon: LayoutDashboard },
-  { id: "today",         label: "Aujourd'hui",    href: "/today",         icon: Sun },
-  { id: "conversations", label: "Conversations",  href: "/conversations", icon: MessagesSquare },
-  { id: "crm",           label: "CRM / Clients",  href: "/crm",           icon: BarChart3 },
-  { id: "pipeline",      label: "Pipeline",       href: "/pipeline",      icon: TrendingUp },
-  { id: "tasks",         label: "Tâches",         href: "/tasks",         icon: CheckSquare },
-  { id: "agenda",        label: "Agenda",         href: "/agenda",        icon: Calendar },
-  { id: "documents",     label: "Documents",      href: "/documents",     icon: FileText },
-  { id: "agents",        label: "Agents IA",      href: "/agents",        icon: Bot },
-  { id: "finance",       label: "Finances",       href: "/finance",       icon: Wallet },
+  { id: "home",          label: "Command Center", href: "/",              icon: LayoutDashboard, alwaysVisible: true },
+  { id: "today",         label: "Aujourd'hui",    href: "/today",         icon: Sun,             alwaysVisible: true },
+  { id: "conversations", label: "Conversations",  href: "/conversations", icon: MessagesSquare,  alwaysVisible: true },
+  { id: "crm",           label: "CRM / Clients",  href: "/crm",           icon: BarChart3,       feature: "crm" },
+  { id: "pipeline",      label: "Pipeline",       href: "/pipeline",      icon: TrendingUp,      feature: "pipeline" },
+  { id: "tasks",         label: "Tâches",         href: "/tasks",         icon: CheckSquare,     feature: "tasks" },
+  { id: "agenda",        label: "Agenda",         href: "/agenda",        icon: Calendar,        feature: "agenda" },
+  { id: "documents",     label: "Documents",      href: "/documents",     icon: FileText,        feature: "documents" },
+  { id: "agents",        label: "Agents IA",      href: "/agents",        icon: Bot,             alwaysVisible: true },
+  { id: "finance",       label: "Finances",       href: "/finance",       icon: Wallet,          feature: "finance" },
 ];
 
 const bottomItems = [
@@ -58,6 +63,18 @@ export function LeftSidebar({
 }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  // Bloc 6B — features du cockpit courant (résolu serveur via hostname).
+  const { data: cockpitFeatures } = useCockpitFeatures();
+  const features = cockpitFeatures?.features ?? {};
+  const isSuperadmin = cockpitFeatures?.isSuperadmin ?? false;
+  // Pendant le chargement, on laisse passer (cockpitFeatures=null) pour ne pas
+  // faire scintiller la sidebar. Une fois chargé, on filtre.
+  const filteredNav = navItems.filter((item) => {
+    if (item.alwaysVisible) return true;
+    if (!item.feature) return true;
+    if (cockpitFeatures === null) return true; // loading state
+    return features[item.feature] === true;
+  });
 
   const initials = user?.email
     ? user.email.slice(0, 2).toUpperCase()
@@ -92,7 +109,7 @@ export function LeftSidebar({
 
       {/* Navigation */}
       <nav className="flex-1 mt-2 px-3 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {filteredNav.map((item) => {
           const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
 
@@ -127,7 +144,40 @@ export function LeftSidebar({
         })}
       </nav>
 
-      {/* Bottom nav */}
+      {/* Bottom nav — admin tools (superadmin + features.adminTools) */}
+      {isSuperadmin && features.adminTools === true && (
+        <div className="px-3 py-2 border-t border-border-subtle space-y-0.5">
+          <Link
+            href="/admin/tenants"
+            className={cn(
+              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
+              collapsed ? "justify-center px-2" : "pl-4",
+              pathname === "/admin/tenants" || pathname.startsWith("/admin/tenants/")
+                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
+                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
+            )}
+            title="Admin tenants (superadmin)"
+          >
+            <Shield className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Admin tenants</span>}
+          </Link>
+          <Link
+            href="/admin/usage/tokens"
+            className={cn(
+              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
+              collapsed ? "justify-center px-2" : "pl-4",
+              pathname.startsWith("/admin/usage")
+                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
+                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
+            )}
+            title="Usage tokens — admin global"
+          >
+            <Coins className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Usage tokens</span>}
+          </Link>
+        </div>
+      )}
+
       <div className="px-3 py-3 border-t border-border-subtle">
         {bottomItems.map((item) => {
           const isActive = pathname.startsWith(item.href);

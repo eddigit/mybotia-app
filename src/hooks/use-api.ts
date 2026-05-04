@@ -205,6 +205,62 @@ export function useDashboard(tenantSlug?: string) {
   return useApi<DashboardData | null>(url, null);
 }
 
+// ============================================================================
+// Bloc 6B — features du cockpit courant (résolu via hostname côté serveur).
+// ============================================================================
+
+export interface CockpitFeatures {
+  tenant: string;
+  displayName: string | null;
+  status: string | null;
+  profile: string | null;
+  features: Record<string, boolean>;
+  businessModel: Record<string, unknown> | null;
+  isSuperadmin: boolean;
+}
+
+export function useCockpitFeatures() {
+  return useApi<CockpitFeatures | null>("/api/me/features", null);
+}
+
+// ============================================================================
+// Bloc 6C — KPI Finance lecture seule
+// ============================================================================
+
+export type KpiStatus = "ready" | "partial" | "to_configure" | "error";
+
+export interface FinanceKpi {
+  id: string;
+  label: string;
+  value: number | string | null;
+  unit?: string;
+  status: KpiStatus;
+  note?: string;
+}
+
+export interface FinanceKpiSection {
+  id: string;
+  title: string;
+  kpis: FinanceKpi[];
+}
+
+export interface FinanceKpiPayload {
+  tenant: string;
+  displayName: string | null;
+  currency: string;
+  generatedAt: string;
+  sources: {
+    dolibarr: "ok" | "error" | "skipped";
+    core: "ok" | "error";
+    businessModel: "ok" | "missing";
+  };
+  sections: FinanceKpiSection[];
+}
+
+export function useFinanceKpis() {
+  return useApi<FinanceKpiPayload | null>("/api/finance/kpis", null);
+}
+
 export interface DocumentItem {
   id: string;
   type: "devis" | "facture";

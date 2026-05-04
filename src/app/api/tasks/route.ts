@@ -12,6 +12,7 @@ import {
 } from "@/lib/dolibarr";
 import { getSession } from "@/lib/session";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+import { requireFeature } from "@/lib/tenant-features";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -25,6 +26,9 @@ function todayISO(): string {
 
 export async function GET(request: Request) {
   try {
+    const featureCheck = await requireFeature(request, "tasks");
+    if (!featureCheck.ok) return featureCheck.response;
+
     const url = new URL(request.url);
     const todayOnly = url.searchParams.get("today") === "1";
     const mineOnly = url.searchParams.get("mine") === "1";
@@ -122,6 +126,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const featureCheck = await requireFeature(request, "tasks");
+    if (!featureCheck.ok) return featureCheck.response;
+
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
@@ -172,6 +179,9 @@ export async function POST(request: Request) {
 // Legacy — conservé pour compat. Le drawer Bloc 5D utilise PATCH /api/tasks/[id].
 export async function PUT(request: Request) {
   try {
+    const featureCheck = await requireFeature(request, "tasks");
+    if (!featureCheck.ok) return featureCheck.response;
+
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });

@@ -20,6 +20,7 @@ import {
   mapInvoice,
 } from "@/lib/mappers";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+import { getCockpitFeatures } from "@/lib/tenant-features";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -31,13 +32,20 @@ export async function GET(request: Request) {
     }
     const { tenant, slug: tenantSlug } = cockpit;
 
+    // Bloc 6B — soft feature gate : /today reste accessible, sections filtrées.
+    const { features } = await getCockpitFeatures(request);
+    const fCrm = features.crm === true;
+    const fPipeline = features.pipeline === true;
+    const fDocs = features.documents === true;
+    const fTasks = features.tasks === true;
+
     const [tps, projects, invoices, proposals, events, tasks] = await Promise.all([
-      getThirdParties(200, tenant).catch(() => []),
-      getProjects(200, tenant).catch(() => []),
-      getInvoices(100, tenant).catch(() => []),
-      getProposals(100, tenant).catch(() => []),
+      fCrm ? getThirdParties(200, tenant).catch(() => []) : Promise.resolve([]),
+      fPipeline ? getProjects(200, tenant).catch(() => []) : Promise.resolve([]),
+      fDocs ? getInvoices(100, tenant).catch(() => []) : Promise.resolve([]),
+      fDocs ? getProposals(100, tenant).catch(() => []) : Promise.resolve([]),
       getEvents(200, tenant).catch(() => []),
-      getTasks(200, tenant).catch(() => []),
+      fTasks ? getTasks(200, tenant).catch(() => []) : Promise.resolve([]),
     ]);
 
     const clientNameById: Record<string, string> = {};

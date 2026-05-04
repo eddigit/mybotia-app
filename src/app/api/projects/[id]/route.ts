@@ -20,6 +20,7 @@ import {
 } from "@/lib/dolibarr";
 import { mapDolibarrProject } from "@/lib/mappers";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+import { requireFeature } from "@/lib/tenant-features";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -91,6 +92,9 @@ export async function GET(
       return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
 
+    const featureCheck = await requireFeature(request, "pipeline");
+    if (!featureCheck.ok) return featureCheck.response;
+
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
@@ -158,6 +162,9 @@ export async function PATCH(
     if (!id || !/^\d+$/.test(id)) {
       return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
+
+    const featureCheck = await requireFeature(request, "pipeline");
+    if (!featureCheck.ok) return featureCheck.response;
 
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
@@ -264,6 +271,9 @@ export async function DELETE(
     if (!id || !/^\d+$/.test(id)) {
       return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
+
+    const featureCheck = await requireFeature(request, "pipeline");
+    if (!featureCheck.ok) return featureCheck.response;
 
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {

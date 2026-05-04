@@ -7,8 +7,14 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { StubPage } from "@/components/shared/StubPage";
+import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
+import { useCockpitFeatures } from "@/hooks/use-api";
 
 export default function AgendaPage() {
+  const { data: cockpitFeatures, loading } = useCockpitFeatures();
+  if (!loading && cockpitFeatures && cockpitFeatures.features.agenda !== true) {
+    return <FeatureDisabled featureKey="agenda" tenantSlug={cockpitFeatures.tenant} />;
+  }
   return (
     <StubPage
       title="Agenda"
