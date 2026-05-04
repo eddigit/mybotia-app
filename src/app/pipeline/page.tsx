@@ -7,8 +7,14 @@ import {
   ListChecks,
 } from "lucide-react";
 import { StubPage } from "@/components/shared/StubPage";
+import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
+import { useCockpitFeatures } from "@/hooks/use-api";
 
 export default function PipelinePage() {
+  const { data: cockpitFeatures, loading } = useCockpitFeatures();
+  if (!loading && cockpitFeatures && cockpitFeatures.features.pipeline !== true) {
+    return <FeatureDisabled featureKey="pipeline" tenantSlug={cockpitFeatures.tenant} />;
+  }
   return (
     <StubPage
       title="Pipeline"

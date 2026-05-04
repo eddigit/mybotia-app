@@ -13,8 +13,9 @@ export function MessageComposer({
 }: {
   agentName: string;
   /**
-   * Appele a l'envoi. modelTier vaut "deep" si l'utilisateur a active le mode reflexion
-   * (toggle Brain) ou s'il a tape /opus en debut de message — sinon "fast" (Sonnet).
+   * Appele a l'envoi. modelTier vaut "deep" si l'utilisateur a active le mode Premium
+   * (toggle Brain) — sinon "fast" (mode Standard).
+   * Slash commands acceptés en alias caché interne : /opus, /premium, /reflechis, /deep.
    */
   onSend: (text: string, modelTier: ModelTier) => void;
   disabled?: boolean;
@@ -27,9 +28,9 @@ export function MessageComposer({
     let text = message.trim();
     if (!text || disabled) return;
 
-    // Slash command : /opus ou /reflechis force le mode deep pour ce message
+    // Slash command (alias caché interne) : force le mode Premium pour ce message.
     let tier: ModelTier = deepMode ? "deep" : "fast";
-    const slashMatch = text.match(/^\/(opus|reflechis|reflechi|deep)\s+/i);
+    const slashMatch = text.match(/^\/(premium|opus|reflechis|reflechi|deep)\s+/i);
     if (slashMatch) {
       tier = "deep";
       text = text.slice(slashMatch[0].length).trim();
@@ -71,7 +72,7 @@ export function MessageComposer({
             rows={1}
             disabled={disabled}
           />
-          {/* Toggle mode reflexion (Opus) — astuce slash /opus aussi disponible */}
+          {/* Toggle mode Premium (deep) — slash commands restent acceptés en alias interne */}
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -79,8 +80,8 @@ export function MessageComposer({
               disabled={disabled}
               title={
                 deepMode
-                  ? "Mode reflexion actif (Opus). Plus lent, plus profond. Cliquer pour revenir a Sonnet."
-                  : "Activer le mode reflexion (Opus). Pour analyses longues, strategies, redaction nuancee."
+                  ? "Mode Premium actif. Plus lent, plus profond. Cliquer pour revenir au mode Standard."
+                  : "Activer le mode Premium. Pour analyses longues, strategies, redaction nuancee."
               }
               className={cn(
                 "flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold uppercase tracking-tight rounded transition-all",
@@ -92,19 +93,19 @@ export function MessageComposer({
               {deepMode ? (
                 <>
                   <Brain className="w-3 h-3" />
-                  Mode reflexion
+                  Premium
                 </>
               ) : (
                 <>
                   <Zap className="w-3 h-3" />
-                  Rapide
+                  Standard
                 </>
               )}
             </button>
             <span className="text-[10px] text-text-muted/70 italic">
               {deepMode
-                ? "Opus — plus lent, plus profond"
-                : "Sonnet — astuce: tape /opus pour ce message"}
+                ? "Mode Premium — plus lent, plus profond"
+                : "Mode Standard — rapide"}
             </span>
           </div>
         </div>

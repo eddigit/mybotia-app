@@ -14,7 +14,7 @@ const AGENT_META: Record<
     role: "Assistante principale",
     description:
       "Administration, orchestration, juridique. Coordinatrice de l'equipe IA.",
-    model: "Claude Opus 4.6",
+    model: "Premium",
     channels: ["whatsapp", "telegram", "webchat", "email"],
     specialties: [
       "Administration",
@@ -30,7 +30,7 @@ const AGENT_META: Record<
     role: "Expert IT & Technique",
     description:
       "Operations, monitoring, debugging, infrastructure technique.",
-    model: "Claude Opus 4.6",
+    model: "Premium",
     channels: ["telegram"],
     specialties: ["Infrastructure", "Monitoring", "DevOps", "Debug"],
     tasksCompleted: 523,
@@ -41,7 +41,7 @@ const AGENT_META: Record<
     role: "Communication & Social Media",
     description:
       "Gestion des reseaux sociaux, contenu, strategie de communication.",
-    model: "Claude Sonnet 4.5",
+    model: "Standard",
     channels: ["whatsapp", "telegram"],
     specialties: ["Social Media", "Contenu", "Communication", "Branding"],
     tasksCompleted: 312,
@@ -52,7 +52,7 @@ const AGENT_META: Record<
     role: "Prospection commerciale",
     description:
       "Recherche prospects, qualification leads, suivi commercial.",
-    model: "Claude Opus 4.6",
+    model: "Premium",
     channels: ["telegram", "email"],
     specialties: [
       "Prospection",
@@ -68,7 +68,7 @@ const AGENT_META: Record<
     role: "Agent VL Medical",
     description:
       "Agent principal du client VL Medical. Administration et veille sectorielle.",
-    model: "Claude Opus 4.6",
+    model: "Premium",
     channels: ["whatsapp", "telegram"],
     specialties: [
       "Medical",
@@ -84,7 +84,7 @@ const AGENT_META: Record<
     role: "Collaboratrice IGH",
     description:
       "Agent dedie au groupe IGH (20 EHPAD/cliniques). Phase d'apprentissage.",
-    model: "Claude Sonnet 4.6",
+    model: "Standard",
     channels: ["whatsapp"],
     specialties: [
       "Sante",
@@ -99,7 +99,7 @@ const AGENT_META: Record<
     name: "BullSage",
     role: "Finance & Crypto",
     description: "Analyse financiere, suivi crypto, veille marches.",
-    model: "Claude Sonnet 4.5",
+    model: "Standard",
     channels: ["telegram"],
     specialties: ["Finance", "Crypto", "Analyse marche", "Trading"],
     tasksCompleted: 156,
@@ -110,7 +110,7 @@ const AGENT_META: Record<
     role: "Agent CMB Luxembourg",
     description:
       "Agent principal du client CMB Luxembourg. Configuration a finaliser.",
-    model: "Claude Opus 4.6",
+    model: "Premium",
     channels: ["whatsapp", "telegram", "email"],
     specialties: [
       "Conseil",
@@ -126,7 +126,7 @@ const AGENT_META: Record<
     role: "Agent Esprit Loft",
     description:
       "Agent principal du client Esprit Loft (renovation). Configuration a finaliser.",
-    model: "Claude Opus 4.6",
+    model: "Premium",
     channels: ["whatsapp", "telegram", "email"],
     specialties: [
       "Renovation",

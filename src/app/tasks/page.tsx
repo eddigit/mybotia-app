@@ -13,11 +13,16 @@ import { CreateProjectModal } from "@/components/shared/CreateProjectModal";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
 import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
-import { useScopedTasks, useScopedProjects, type TaskItem } from "@/hooks/use-api";
+import { useScopedTasks, useScopedProjects, useCockpitFeatures, type TaskItem } from "@/hooks/use-api";
+import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 
 const TENANT_SLUG = "mybotia";
 
 export default function TasksPage() {
+  // Bloc 6B — feature gate
+  const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
+  const tasksEnabled = cockpitFeatures?.features?.tasks === true;
+
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useScopedTasks();
   const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useScopedProjects();
   const [projectFilter, setProjectFilter] = useState<string>("all");
@@ -52,6 +57,10 @@ export default function TasksPage() {
       body: JSON.stringify({ progress: String(progress) }),
     });
     refetchTasks();
+  }
+
+  if (!featuresLoading && cockpitFeatures && !tasksEnabled) {
+    return <FeatureDisabled featureKey="tasks" tenantSlug={cockpitFeatures.tenant} />;
   }
 
   if (loading) {

@@ -10,7 +10,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
-import { useScopedDocuments } from "@/hooks/use-api";
+import { useScopedDocuments, useCockpitFeatures } from "@/hooks/use-api";
+import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | "devis" | "facture";
@@ -41,6 +42,10 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
 };
 
 export default function DocumentsPage() {
+  // Bloc 6B — feature gate
+  const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
+  const documentsEnabled = cockpitFeatures?.features?.documents === true;
+
   const { data: documents, loading } = useScopedDocuments();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [generating, setGenerating] = useState<string | null>(null);
@@ -98,6 +103,10 @@ export default function DocumentsPage() {
       `/api/documents/download?modulepart=${encodeURIComponent(modulepart)}&ref=${encodeURIComponent(ref)}`,
       "_blank"
     );
+  }
+
+  if (!featuresLoading && cockpitFeatures && !documentsEnabled) {
+    return <FeatureDisabled featureKey="documents" tenantSlug={cockpitFeatures.tenant} />;
   }
 
   if (loading) {

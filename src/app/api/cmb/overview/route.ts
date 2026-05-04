@@ -1,6 +1,13 @@
+// Bloc 7R-SEC — auth + verrouillage tenant cmb_lux strict.
+// Cette route expose des données financières CMB ; elle ne doit JAMAIS
+// répondre publiquement.
+
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+
+const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
 const DRIVE_ROOT = "/opt/mybotia/agents/raphael/workspace/drive-work/cache/BACK UP CIE";
 
@@ -67,7 +74,19 @@ function countScans(folder: string): number {
   return count;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Bloc 7R-SEC — auth + tenant guard
+  const cockpit = await resolveCockpitTenants(request);
+  if (!cockpit.ok) {
+    return NextResponse.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+  }
+  if (cockpit.slug !== "cmb_lux") {
+    return NextResponse.json(
+      { error: "Route reservee au tenant cmb_lux" },
+      { status: 403, headers: NO_STORE }
+    );
+  }
+
   const societes = [];
   for (const [sigle, info] of Object.entries(SOC_FOLDERS)) {
     const banques = listBanqueFiles(info.folder);
@@ -77,12 +96,15 @@ export async function GET() {
     const stats = crmStats[sigle] || { factures_count: 0, ca_total: 0, documents_count: 0, events_count: 0 };
     societes.push({ id: info.id, sigle, nom: info.nom, ...stats, banques });
   }
-  return NextResponse.json({
-    societes,
-    scans_a_classer: {
-      bureau: countScans("11- SCAN BUREAU"),
-      maunia: countScans("12- SCAN MAUNIA"),
+  return NextResponse.json(
+    {
+      societes,
+      scans_a_classer: {
+        bureau: countScans("11- SCAN BUREAU"),
+        maunia: countScans("12- SCAN MAUNIA"),
+      },
+      taches_du_jour: [],
     },
-    taches_du_jour: [],
-  });
+    { headers: NO_STORE }
+  );
 }

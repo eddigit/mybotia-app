@@ -17,7 +17,8 @@ import {
 import { CreateProjectModal } from "@/components/shared/CreateProjectModal";
 import { ClientCard } from "@/components/crm/ClientCard";
 import { Pipeline } from "@/components/crm/Pipeline";
-import { useScopedClients, useScopedDashboard } from "@/hooks/use-api";
+import { useScopedClients, useScopedDashboard, useCockpitFeatures } from "@/hooks/use-api";
+import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | "active" | "prospect" | "churned" | "supplier";
@@ -31,6 +32,10 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 
 export default function CRMPage() {
+  // Bloc 6B — feature gate
+  const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
+  const crmEnabled = cockpitFeatures?.features?.crm === true;
+
   const { data: clients, loading: clientsLoading, refetch: refetchClients } = useScopedClients();
   const { data: dashboard, loading: dashboardLoading, refetch: refetchDashboard } = useScopedDashboard();
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -79,6 +84,11 @@ export default function CRMPage() {
     } finally {
       setCreating(false);
     }
+  }
+
+  // Feature gate — afficher disabled si feature off (après chargement)
+  if (!featuresLoading && cockpitFeatures && !crmEnabled) {
+    return <FeatureDisabled featureKey="crm" tenantSlug={cockpitFeatures.tenant} />;
   }
 
   if (loading) {
