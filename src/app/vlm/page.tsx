@@ -374,6 +374,19 @@ interface ContainerItem {
   notes: string | null;
   createdAt: string;
   margin: { totalCost: number; grossMargin: number | null; marginRate: number | null };
+  // Bloc 7L — agrégats devis liés
+  quotes: {
+    count: number;
+    draft: number;
+    sent: number;
+    accepted: number;
+    refused: number;
+    cancelled: number;
+    totalTtc: number;
+    latestQuoteId: string | null;
+    latestRef: string | null;
+    latestStatus: string | null;
+  };
 }
 
 function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) => void }) {
@@ -430,6 +443,7 @@ function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) =
             <th className="text-right py-2 px-2">Marge</th>
             <th className="text-right py-2 px-2">Taux</th>
             <th className="text-center py-2 px-2">Statut</th>
+            <th className="text-left py-2 px-2">Devis</th>
             <th className="text-right py-2 px-2"></th>
           </tr>
         </thead>
@@ -454,6 +468,9 @@ function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) =
               </td>
               <td className="py-2 px-2 text-center">
                 <StatusChip value={d.status} />
+              </td>
+              <td className="py-2 px-2 text-[10px] min-w-[180px]">
+                <DealQuotesCell deal={d} onOpenQuote={onQuoteCreated} />
               </td>
               <td className="py-2 px-2 text-right">
                 <div className="inline-flex items-center gap-1">
@@ -769,6 +786,45 @@ function Detail({ label, value, sub, tone }: { label: string; value: string; sub
       <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
       <p className={`text-sm font-bold font-mono mt-1 ${colorClass}`}>{value}</p>
       {sub && <p className="text-[10px] text-text-muted mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+// Bloc 7L — cellule devis liés dans la table Containers
+function DealQuotesCell({
+  deal,
+  onOpenQuote,
+}: {
+  deal: ContainerItem;
+  onOpenQuote: (quoteId: string) => void;
+}) {
+  const q = deal.quotes;
+  if (q.count === 0) {
+    return <span className="text-text-muted italic">aucun devis</span>;
+  }
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold uppercase border border-accent-primary/30 bg-accent-primary/10 text-accent-glow">
+          {q.count} {q.count > 1 ? "devis" : "devis"}
+        </span>
+        <span className="text-text-secondary font-mono">{fmtMoney(q.totalTtc, deal.currency)}</span>
+      </div>
+      {q.latestRef && (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-amber-300">{q.latestRef}</span>
+          {q.latestStatus && <StatusChip value={q.latestStatus} />}
+        </div>
+      )}
+      {q.latestQuoteId && (
+        <button
+          type="button"
+          onClick={() => onOpenQuote(q.latestQuoteId!)}
+          className="text-accent-glow text-[10px] hover:underline"
+        >
+          Voir devis →
+        </button>
+      )}
     </div>
   );
 }
