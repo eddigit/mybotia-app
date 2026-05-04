@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { useCockpitFeatures } from "@/hooks/use-api";
-import { Shield, Coins, Stethoscope } from "lucide-react";
+import { Shield, Coins, Stethoscope, MessageSquare } from "lucide-react";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
@@ -199,6 +199,20 @@ export function LeftSidebar({
           >
             <Coins className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span className="truncate">Usage tokens</span>}
+          </Link>
+          <Link
+            href="/admin/whatsapp-protocols"
+            className={cn(
+              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
+              collapsed ? "justify-center px-2" : "pl-4",
+              pathname.startsWith("/admin/whatsapp-protocols")
+                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
+                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
+            )}
+            title="Protocoles WhatsApp — admin"
+          >
+            <MessageSquare className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Protocoles WhatsApp</span>}
           </Link>
         </div>
       )}
