@@ -13,6 +13,8 @@ import {
   Trash2,
   X,
   Link2,
+  Lock,
+  History,
 } from "lucide-react";
 import {
   type VlmQuote,
@@ -21,6 +23,28 @@ import {
   VLM_QUOTE_STATUSES,
   VLM_QUOTE_STATUS_LABEL,
 } from "@/lib/vlm-quote-types";
+
+// Bloc 7J — transitions autorisées (miroir client-side de vlm-quote-events.ts)
+const ALLOWED_TRANSITIONS: Record<VlmQuoteStatus, VlmQuoteStatus[]> = {
+  draft: ["sent", "cancelled"],
+  sent: ["accepted", "refused", "cancelled"],
+  accepted: [],
+  refused: [],
+  cancelled: [],
+};
+
+// Bloc 7J — types des events
+const EVENT_LABEL: Record<string, string> = {
+  quote_created: "création",
+  quote_created_from_deal: "création depuis deal",
+  quote_updated: "modification",
+  quote_status_changed: "changement de statut",
+  line_added: "ajout ligne",
+  line_updated: "modification ligne",
+  line_deleted: "suppression ligne",
+  pdf_downloaded: "téléchargement PDF",
+  quote_cancelled: "annulation",
+};
 
 function fmtMoney(n: number, currency: string): string {
   return `${n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -180,6 +204,109 @@ function QuoteBadge({ status }: { status: VlmQuoteStatus }) {
       {VLM_QUOTE_STATUS_LABEL[status]}
     </span>
   );
+}
+
+interface QuoteEvent {
+  id: string;
+  actorEmail: string | null;
+  eventType: string;
+  beforeJsonb: Record<string, unknown> | null;
+  afterJsonb: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+function QuoteEventsSection({ quoteId }: { quoteId: string }) {
+  const [events, setEvents] = useState<QuoteEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/vlm/quotes/${quoteId}/events`)
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+        return j;
+      })
+      .then((j) => setEvents(j.items || []))
+      .catch((e) => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [quoteId]);
+
+  return (
+    <div className="border-t border-border-subtle pt-4">
+      <div className="flex items-center gap-2 mb-2">
+        <History className="w-3.5 h-3.5 text-text-muted" />
+        <h3 className="text-sm font-bold uppercase tracking-tight text-text-primary">Historique</h3>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="w-4 h-4 animate-spin text-text-muted" />
+        </div>
+      ) : err ? (
+        <p className="text-xs text-status-danger italic py-2">{err}</p>
+      ) : events.length === 0 ? (
+        <p className="text-xs text-text-muted italic py-2">Aucun événement enregistré.</p>
+      ) : (
+        <ul className="space-y-1">
+          {events.map((ev) => {
+            const summary = formatEventSummary(ev);
+            return (
+              <li key={ev.id} className="flex items-baseline gap-2 text-[11px] py-1 border-b border-border-subtle/40 last:border-b-0">
+                <span className="font-mono text-text-muted text-[10px] shrink-0 w-32">
+                  {fmtDateTime(ev.createdAt)}
+                </span>
+                <span className="font-bold text-amber-300 uppercase text-[10px] shrink-0 w-32 truncate">
+                  {EVENT_LABEL[ev.eventType] || ev.eventType}
+                </span>
+                <span className="text-text-secondary flex-1 min-w-0">{summary}</span>
+                <span className="text-text-muted text-[10px] shrink-0 truncate max-w-[12rem]">
+                  {ev.actorEmail || "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatEventSummary(ev: QuoteEvent): string {
+  const a = ev.afterJsonb || {};
+  const b = ev.beforeJsonb || {};
+  switch (ev.eventType) {
+    case "quote_status_changed":
+      return `${b.status ?? "—"} → ${a.status ?? "—"}`;
+    case "line_added":
+      return `${a.label ?? ""} (qty=${a.quantity ?? "?"} · PU=${a.unitPriceHt ?? "?"})`;
+    case "line_updated":
+      return `${b.label ?? a.lineId ?? ""}`;
+    case "line_deleted":
+      return `${b.label ?? ""}`;
+    case "quote_created":
+      return `${a.ref ?? ""} · ${a.clientName ?? ""}`;
+    case "quote_created_from_deal":
+      return `depuis deal ${a.dealRef ?? a.dealId ?? ""} · mode=${a.mode ?? ""}`;
+    case "pdf_downloaded":
+      return `${a.ref ?? ""}`;
+    case "quote_cancelled":
+      return `annulé`;
+    default:
+      return "";
+  }
 }
 
 function DealLinkChip({ dealRef }: { dealRef: string | null | undefined }) {
@@ -404,6 +531,17 @@ function QuoteDetail({ quoteId, onBack }: { quoteId: string; onBack: () => void 
         </div>
       </div>
 
+      {/* Bandeau verrouillé si !draft */}
+      {!isDraft && (
+        <div className="flex items-start gap-2 p-3 border border-amber-400/30 bg-amber-400/10 text-[11px] text-amber-300">
+          <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            Ce devis n&apos;est plus en brouillon (statut <span className="font-mono font-bold">{VLM_QUOTE_STATUS_LABEL[quote.status]}</span>).
+            Les lignes sont verrouillées. Seules les transitions de statut autorisées restent disponibles.
+          </span>
+        </div>
+      )}
+
       {/* Client */}
       <div className="card-sharp-high p-4">
         <p className="text-[10px] uppercase text-text-muted mb-1">Client</p>
@@ -495,27 +633,35 @@ function QuoteDetail({ quoteId, onBack }: { quoteId: string; onBack: () => void 
         <div className="p-2 text-right font-mono font-bold text-amber-300 bg-amber-400/10">{fmtMoney(quote.totalTtc, quote.currency)}</div>
       </div>
 
-      {/* Statut workflow */}
+      {/* Section Historique — Bloc 7J */}
+      <QuoteEventsSection quoteId={quote.id} />
+
+      {/* Statut workflow — Bloc 7J : seules les transitions autorisées sont cliquables */}
       <div className="border-t border-border-subtle pt-4 flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase text-text-muted">Statut actuel</p>
           <div className="mt-1"><QuoteBadge status={quote.status} /></div>
         </div>
         <div className="flex items-center gap-1 flex-wrap">
-          {VLM_QUOTE_STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => updateStatus(s)}
-              disabled={s === quote.status}
-              className={`px-2 py-1 text-[10px] uppercase border ${
-                s === quote.status
-                  ? "border-amber-400/50 text-amber-300 bg-amber-400/20 cursor-default"
-                  : "border-border-subtle text-text-muted hover:text-text-primary hover:border-accent-primary/30"
-              }`}
-            >
-              {VLM_QUOTE_STATUS_LABEL[s]}
-            </button>
-          ))}
+          {(() => {
+            const allowed = ALLOWED_TRANSITIONS[quote.status] || [];
+            if (allowed.length === 0) {
+              return (
+                <span className="text-[10px] text-text-muted italic">
+                  statut terminal · aucune transition possible
+                </span>
+              );
+            }
+            return allowed.map((s) => (
+              <button
+                key={s}
+                onClick={() => updateStatus(s)}
+                className="px-2 py-1 text-[10px] uppercase border border-amber-400/30 text-amber-300 bg-amber-400/10 hover:bg-amber-400/20"
+              >
+                → {VLM_QUOTE_STATUS_LABEL[s]}
+              </button>
+            ));
+          })()}
         </div>
       </div>
     </section>

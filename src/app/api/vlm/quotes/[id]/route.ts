@@ -2,8 +2,13 @@
 
 import { adminQuery } from "@/lib/admin-db";
 import { requireVlmAccess } from "@/lib/vlm-access";
-import { getVlmQuote, getVlmQuoteRow, mapQuote } from "@/lib/vlm-quote-data";
+import { getVlmQuote, getVlmQuoteRow } from "@/lib/vlm-quote-data";
 import { VLM_QUOTE_STATUSES, type VlmQuoteStatus } from "@/lib/vlm-quote-types";
+import {
+  isAllowedTransition,
+  isQuoteEditable,
+  logVlmQuoteEvent,
+} from "@/lib/vlm-quote-events";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -70,12 +75,52 @@ export async function PATCH(
     return Response.json({ error: "devis introuvable" }, { status: 404, headers: NO_STORE });
   }
 
+  // Bloc 7J — verrouillage workflow
+  const currentStatus = existing.status as VlmQuoteStatus;
+  const requestedStatus =
+    "status" in body && typeof body.status === "string"
+      ? (body.status as VlmQuoteStatus)
+      : null;
+
+  // Si status demandé : valider la transition
+  if (requestedStatus !== null) {
+    if (!VLM_QUOTE_STATUSES.includes(requestedStatus)) {
+      return Response.json(
+        { error: `status invalide (allowed: ${VLM_QUOTE_STATUSES.join(", ")})` },
+        { status: 400, headers: NO_STORE }
+      );
+    }
+    if (!isAllowedTransition(currentStatus, requestedStatus)) {
+      return Response.json(
+        {
+          error: `transition de statut interdite : ${currentStatus} → ${requestedStatus}`,
+        },
+        { status: 409, headers: NO_STORE }
+      );
+    }
+  }
+
+  // Si on tente de modifier d'autres champs que status alors que !draft : refus
+  const nonStatusKeysInBody = Object.keys(body).filter(
+    (k) => k !== "status" && k in FIELD_MAP
+  );
+  if (nonStatusKeysInBody.length > 0 && !isQuoteEditable(currentStatus)) {
+    return Response.json(
+      {
+        error: `devis verrouillé (status=${currentStatus}) — seules les transitions de statut sont autorisées`,
+      },
+      { status: 409, headers: NO_STORE }
+    );
+  }
+
   const sets: string[] = [];
   const args: unknown[] = [];
   function pushSet(col: string, val: unknown) {
     args.push(val);
     sets.push(`${col} = $${args.length}`);
   }
+  const beforeSnapshot: Record<string, unknown> = {};
+  const afterSnapshot: Record<string, unknown> = {};
 
   for (const [k, dbCol] of Object.entries(FIELD_MAP)) {
     if (!(k in body)) continue;
@@ -83,34 +128,36 @@ export async function PATCH(
     if (v === undefined) continue;
 
     if (k === "status") {
-      if (typeof v !== "string" || !VLM_QUOTE_STATUSES.includes(v as VlmQuoteStatus))
-        return Response.json(
-          { error: `status invalide (allowed: ${VLM_QUOTE_STATUSES.join(", ")})` },
-          { status: 400, headers: NO_STORE }
-        );
       pushSet(dbCol, v);
+      beforeSnapshot.status = currentStatus;
+      afterSnapshot.status = v;
       continue;
     }
     if (k === "validUntil") {
       if (v === null || v === "") {
         sets.push(`${dbCol} = NULL`);
+        afterSnapshot.validUntil = null;
         continue;
       }
       if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v))
         return Response.json({ error: "validUntil doit etre YYYY-MM-DD ou null" }, { status: 400, headers: NO_STORE });
       pushSet(dbCol, v);
+      afterSnapshot.validUntil = v;
       continue;
     }
     if (k === "clientName" || k === "title") {
       if (typeof v !== "string" || !v.trim())
         return Response.json({ error: `${k} doit etre une chaine non vide` }, { status: 400, headers: NO_STORE });
       pushSet(dbCol, v.trim());
+      afterSnapshot[k] = v.trim();
       continue;
     }
     if (v === null) {
       sets.push(`${dbCol} = NULL`);
+      afterSnapshot[k] = null;
     } else {
       pushSet(dbCol, String(v));
+      afterSnapshot[k] = String(v);
     }
   }
 
@@ -128,6 +175,32 @@ export async function PATCH(
       `UPDATE core.vlm_quotes SET ${sets.join(", ")} WHERE id = $${args.length}`,
       args
     );
+
+    // Audit : status_changed prioritaire, sinon quote_updated
+    const eventType =
+      requestedStatus !== null && requestedStatus !== currentStatus
+        ? "quote_status_changed"
+        : "quote_updated";
+    await logVlmQuoteEvent({
+      tenantId: existing.tenant_id,
+      quoteId: id,
+      actorEmail: auth.email,
+      eventType,
+      before: beforeSnapshot,
+      after: afterSnapshot,
+    });
+
+    // Si on passe à 'cancelled', on log aussi quote_cancelled (audit clair)
+    if (requestedStatus === "cancelled" && currentStatus !== "cancelled") {
+      await logVlmQuoteEvent({
+        tenantId: existing.tenant_id,
+        quoteId: id,
+        actorEmail: auth.email,
+        eventType: "quote_cancelled",
+        before: { status: currentStatus },
+      });
+    }
+
     const updated = await getVlmQuote(id);
     return Response.json({ item: updated }, { headers: NO_STORE });
   } catch (e) {

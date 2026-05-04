@@ -3,6 +3,8 @@
 import { adminQuery } from "@/lib/admin-db";
 import { requireVlmAccess } from "@/lib/vlm-access";
 import { getVlmQuoteRow, getVlmQuoteLineRow, mapLine, LINE_COLS } from "@/lib/vlm-quote-data";
+import { isQuoteEditable, logVlmQuoteEvent } from "@/lib/vlm-quote-events";
+import type { VlmQuoteStatus } from "@/lib/vlm-quote-types";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -34,6 +36,16 @@ export async function PATCH(
   if (!quote) return Response.json({ error: "devis introuvable" }, { status: 404, headers: NO_STORE });
   const line = await getVlmQuoteLineRow(quoteId, lineId);
   if (!line) return Response.json({ error: "ligne introuvable" }, { status: 404, headers: NO_STORE });
+
+  // Bloc 7J — verrouillage : modification ligne autorisée seulement si draft
+  if (!isQuoteEditable(quote.status as VlmQuoteStatus)) {
+    return Response.json(
+      {
+        error: `devis verrouillé (status=${quote.status}) — modification de ligne refusée`,
+      },
+      { status: 409, headers: NO_STORE }
+    );
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -94,6 +106,19 @@ export async function PATCH(
       `SELECT ${LINE_COLS} FROM core.vlm_quote_lines l WHERE l.id = $1`,
       [lineId]
     );
+    await logVlmQuoteEvent({
+      tenantId: quote.tenant_id,
+      quoteId,
+      actorEmail: auth.email,
+      eventType: "line_updated",
+      before: {
+        lineId,
+        label: line.label,
+        quantity: parseFloat(line.quantity) || 0,
+        unitPriceHt: parseFloat(line.unit_price_ht) || 0,
+      },
+      after: { lineId, fieldsChanged: Object.keys(body).filter((k) => k in FIELD_MAP) },
+    });
     return Response.json({ item: mapLine(rows[0]) }, { headers: NO_STORE });
   } catch (e) {
     return Response.json(
@@ -129,6 +154,18 @@ export async function DELETE(
 
   try {
     await adminQuery("DELETE FROM core.vlm_quote_lines WHERE id = $1", [lineId]);
+    await logVlmQuoteEvent({
+      tenantId: quote.tenant_id,
+      quoteId,
+      actorEmail: auth.email,
+      eventType: "line_deleted",
+      before: {
+        lineId,
+        label: line.label,
+        quantity: parseFloat(line.quantity) || 0,
+        unitPriceHt: parseFloat(line.unit_price_ht) || 0,
+      },
+    });
     return Response.json({ ok: true }, { headers: NO_STORE });
   } catch (e) {
     return Response.json(

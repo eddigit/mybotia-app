@@ -3,6 +3,8 @@
 import { adminQuery } from "@/lib/admin-db";
 import { requireVlmAccess } from "@/lib/vlm-access";
 import { getVlmQuoteRow, mapLine, LINE_COLS } from "@/lib/vlm-quote-data";
+import { isQuoteEditable, logVlmQuoteEvent } from "@/lib/vlm-quote-events";
+import type { VlmQuoteStatus } from "@/lib/vlm-quote-types";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -77,6 +79,16 @@ export async function POST(
     return Response.json({ error: "devis introuvable" }, { status: 404, headers: NO_STORE });
   }
 
+  // Bloc 7J — verrouillage workflow : ajout de ligne autorisé seulement si draft
+  if (!isQuoteEditable(quote.status as VlmQuoteStatus)) {
+    return Response.json(
+      {
+        error: `devis verrouillé (status=${quote.status}) — ajout de ligne refusé`,
+      },
+      { status: 409, headers: NO_STORE }
+    );
+  }
+
   try {
     const inserted = await adminQuery<{ r_id: string }>(
       `INSERT INTO core.vlm_quote_lines
@@ -102,6 +114,19 @@ export async function POST(
       `SELECT ${LINE_COLS} FROM core.vlm_quote_lines l WHERE l.id = $1`,
       [newId]
     );
+    await logVlmQuoteEvent({
+      tenantId: quote.tenant_id,
+      quoteId,
+      actorEmail: auth.email,
+      eventType: "line_added",
+      after: {
+        lineId: newId,
+        label: d.label,
+        quantity: d.quantity,
+        unitPriceHt: d.unitPriceHt,
+        vatRate: d.vatRate,
+      },
+    });
     return Response.json({ item: mapLine(rows[0]) }, { status: 201, headers: NO_STORE });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur DB";

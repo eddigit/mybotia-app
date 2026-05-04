@@ -5,6 +5,7 @@ import { requireVlmAccess, VLM_SLUG } from "@/lib/vlm-access";
 import { generateVlmQuoteRef } from "@/lib/vlm-quote-ref";
 import { listVlmQuotes, getVlmQuote } from "@/lib/vlm-quote-data";
 import { VLM_QUOTE_STATUSES, type VlmQuoteStatus } from "@/lib/vlm-quote-types";
+import { logVlmQuoteEvent } from "@/lib/vlm-quote-events";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -131,7 +132,21 @@ export async function POST(request: Request) {
         d.terms,
       ]
     );
-    const quote = await getVlmQuote(inserted[0].r_id);
+    const quoteId = inserted[0].r_id;
+    const quote = await getVlmQuote(quoteId);
+    await logVlmQuoteEvent({
+      tenantId,
+      quoteId,
+      actorEmail: auth.email,
+      eventType: "quote_created",
+      after: {
+        ref,
+        title: d.title,
+        clientName: d.clientName,
+        status: d.status,
+        dealId: d.dealId,
+      },
+    });
     return Response.json({ item: quote }, { status: 201, headers: NO_STORE });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur DB";

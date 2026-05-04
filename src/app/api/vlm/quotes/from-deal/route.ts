@@ -7,6 +7,7 @@ import { adminQuery } from "@/lib/admin-db";
 import { requireVlmAccess, VLM_SLUG } from "@/lib/vlm-access";
 import { generateVlmQuoteRef } from "@/lib/vlm-quote-ref";
 import { getVlmQuote } from "@/lib/vlm-quote-data";
+import { logVlmQuoteEvent } from "@/lib/vlm-quote-events";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -186,6 +187,19 @@ export async function POST(request: Request) {
     }
 
     const quote = await getVlmQuote(quoteId);
+    await logVlmQuoteEvent({
+      tenantId: deal.tenant_id,
+      quoteId,
+      actorEmail: auth.email,
+      eventType: "quote_created_from_deal",
+      after: {
+        ref,
+        dealId: deal.id,
+        dealRef: deal.ref,
+        mode,
+        linesCount: lines.length,
+      },
+    });
     return Response.json(
       { item: quote, mode, fromDealRef: deal.ref || null },
       { status: 201, headers: NO_STORE }

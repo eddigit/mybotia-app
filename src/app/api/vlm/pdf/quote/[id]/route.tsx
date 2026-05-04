@@ -5,6 +5,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { requireVlmAccess } from "@/lib/vlm-access";
 import { getVlmQuote } from "@/lib/vlm-quote-data";
 import { VlmQuoteDocument } from "@/lib/pdf/vlm/VlmQuoteDocument";
+import { logVlmQuoteEvent } from "@/lib/vlm-quote-events";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -50,6 +51,15 @@ export async function GET(
       { status: 502, headers: NO_STORE }
     );
   }
+
+  // Audit best-effort (n'impacte jamais la réponse PDF)
+  await logVlmQuoteEvent({
+    tenantId: quote.tenantId,
+    quoteId: quote.id,
+    actorEmail: auth.email,
+    eventType: "pdf_downloaded",
+    after: { ref: quote.ref, status: quote.status },
+  });
 
   const filename = `devis-${quote.ref.replace(/[^a-zA-Z0-9-]/g, "_")}.pdf`;
   return new Response(pdfBuffer as unknown as BodyInit, {
