@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   LayoutDashboard,
   RefreshCw,
+  FileDown,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 
@@ -311,6 +312,7 @@ function ContainersTab() {
             <th className="text-right py-2 px-2">Marge</th>
             <th className="text-right py-2 px-2">Taux</th>
             <th className="text-center py-2 px-2">Statut</th>
+            <th className="text-right py-2 px-2"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border-subtle">
@@ -334,6 +336,18 @@ function ContainersTab() {
               </td>
               <td className="py-2 px-2 text-center">
                 <StatusChip value={d.status} />
+              </td>
+              <td className="py-2 px-2 text-right">
+                <a
+                  href={`/api/vlm/pdf/packing-list/${d.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Ouvrir la packing list PDF dans un nouvel onglet"
+                  className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-amber-400/30 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
+                >
+                  <FileDown className="w-3 h-3" />
+                  Packing list
+                </a>
               </td>
             </tr>
           ))}

@@ -11,6 +11,7 @@
     "prebuild": "node scripts/generate-build-info.js"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
     "@ricky0123/vad-web": "^0.0.30",
     "@types/pg": "^8.20.0",
     "class-variance-authority": "^0.7.1",
