@@ -15,6 +15,7 @@ import {
   Link2,
   Lock,
   History,
+  Copy,
 } from "lucide-react";
 import {
   type VlmQuote,
@@ -102,6 +103,7 @@ export function QuotesTab({ openQuoteId, onConsumed }: Props) {
           setSelectedId(null);
           load();
         }}
+        onNavigate={(id) => setSelectedId(id)}
       />
     );
   }
@@ -410,11 +412,20 @@ function CreateQuoteForm({
   );
 }
 
-function QuoteDetail({ quoteId, onBack }: { quoteId: string; onBack: () => void }) {
+function QuoteDetail({
+  quoteId,
+  onBack,
+  onNavigate,
+}: {
+  quoteId: string;
+  onBack: () => void;
+  onNavigate: (newQuoteId: string) => void;
+}) {
   const [quote, setQuote] = useState<VlmQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddLine, setShowAddLine] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   function load() {
     setLoading(true);
@@ -460,6 +471,22 @@ function QuoteDetail({ quoteId, onBack }: { quoteId: string; onBack: () => void 
     }
   }
 
+  // Bloc 7K — duplication
+  async function handleDuplicate() {
+    setDuplicating(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/vlm/quotes/${quoteId}/duplicate`, { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      onNavigate(j.item.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   if (loading) {
     return (
       <section className="card-sharp p-6 flex items-center justify-center">
@@ -491,6 +518,16 @@ function QuoteDetail({ quoteId, onBack }: { quoteId: string; onBack: () => void 
           <ArrowLeft className="w-3 h-3" /> retour aux devis
         </button>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDuplicate}
+            disabled={duplicating}
+            title="Créer une variante en draft à partir de ce devis"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20 disabled:opacity-40 disabled:cursor-wait"
+          >
+            {duplicating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
+            {duplicating ? "Duplication…" : "Dupliquer"}
+          </button>
           <a
             href={`/api/vlm/pdf/quote/${quote.id}`}
             target="_blank"
