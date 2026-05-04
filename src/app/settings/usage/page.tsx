@@ -8,12 +8,11 @@ import {
   Coins,
   Loader2,
   AlertCircle,
-  CheckCircle2,
-  Clock,
   Info,
   RefreshCw,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
+import { UsageBillingCard } from "@/components/billing/UsageBillingCard";
 
 interface Summary {
   tenant: string;
@@ -104,7 +103,7 @@ export default function MyUsagePage() {
     <div className="p-8 min-h-screen space-y-6">
       <ModuleHeader
         icon={Coins}
-        title="Mon usage tokens"
+        title="Consommation IA"
         subtitle={`${summary.displayName || summary.tenant} · ${summary.monthIso}`}
         actions={
           <button
@@ -116,6 +115,16 @@ export default function MyUsagePage() {
           </button>
         }
       />
+
+      {/* UB-6 — lecture commerciale euro-first prioritaire */}
+      <UsageBillingCard />
+
+      {/* Détail technique / historique — déclassé sous la carte commerciale */}
+      <div className="pt-2">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-text-muted font-headline mb-4">
+          Détail technique / historique
+        </h2>
+      </div>
 
       {/* Bandeau si pas instrumenté */}
       {!summary.hasUsage && (
@@ -197,7 +206,6 @@ export default function MyUsagePage() {
                 <tr>
                   <th className="text-left py-2 px-2">Date</th>
                   <th className="text-left py-2 px-2">Agent</th>
-                  <th className="text-left py-2 px-2">Modèle</th>
                   <th className="text-right py-2 px-2">Input</th>
                   <th className="text-right py-2 px-2">Output</th>
                   <th className="text-right py-2 px-2">Total</th>
@@ -210,7 +218,6 @@ export default function MyUsagePage() {
                   <tr key={i} className="hover:bg-surface-2/40">
                     <td className="py-2 px-2 font-mono text-text-primary">{r.date}</td>
                     <td className="py-2 px-2 text-text-secondary">{r.agentSlug}</td>
-                    <td className="py-2 px-2 text-text-muted text-[10px]">{r.provider}/{r.model}</td>
                     <td className="py-2 px-2 text-right font-mono">{fmtTk(r.tokensInput)}</td>
                     <td className="py-2 px-2 text-right font-mono">{fmtTk(r.tokensOutput)}</td>
                     <td className="py-2 px-2 text-right font-mono text-text-primary">{fmtTk(r.tokensTotal)}</td>
