@@ -28,6 +28,7 @@ import { CatalogSection } from "@/components/admin/CatalogSection";
 import { StockSection } from "@/components/admin/StockSection";
 import { DeliveriesSection } from "@/components/admin/DeliveriesSection";
 import { TransportSection } from "@/components/admin/TransportSection";
+import { VlmPanel } from "@/components/admin/VlmPanel";
 
 const FEATURE_LABELS: Record<FeatureKey, string> = {
   crm: "CRM",
@@ -342,6 +343,13 @@ export default function AdminTenantDetailPage() {
       <TransportSection
         tenantSlug={tenant.slug}
         enabled={tenant.architectureConfig?.standardModules?.transport === true}
+        currency={(tenant.businessModel?.currency as string) || "EUR"}
+      />
+
+      {/* Bloc 7D — VL Medical custom vertical (rendu uniquement si slug === 'vlmedical') */}
+      <VlmPanel
+        tenantSlug={tenant.slug}
+        enabled={tenant.architectureConfig?.verticalModules?.medicalDistribution === true}
         currency={(tenant.businessModel?.currency as string) || "EUR"}
       />
 
