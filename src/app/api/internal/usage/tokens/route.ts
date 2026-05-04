@@ -36,9 +36,30 @@ interface UsagePayload {
   estimatedCost?: number | null;
   source?: string; // default 'bridge'
   requestCount?: number; // default 1
+  // UB-10
+  serviceTier?: string | null;
+  clientCostEstimated?: number | null;
 }
 
-function validate(body: unknown): { ok: true; data: Required<Omit<UsagePayload, "estimatedCost" | "usageDate">> & { estimatedCost: number | null; usageDate: string } } | { ok: false; error: string } {
+const SERVICE_TIERS_ALLOWED = new Set(["standard", "premium", "background", "system"]);
+
+interface ValidatedUsage {
+  tenantSlug: string;
+  agentSlug: string;
+  provider: string;
+  model: string;
+  usageDate: string;
+  tokensInput: number;
+  tokensOutput: number;
+  tokensTotal: number;
+  estimatedCost: number | null;
+  source: string;
+  requestCount: number;
+  serviceTier: string | null;
+  clientCostEstimated: number | null;
+}
+
+function validate(body: unknown): { ok: true; data: ValidatedUsage } | { ok: false; error: string } {
   if (!body || typeof body !== "object") return { ok: false, error: "body invalide" };
   const b = body as Record<string, unknown>;
   if (typeof b.tenantSlug !== "string" || !b.tenantSlug) return { ok: false, error: "tenantSlug requis" };
@@ -74,9 +95,24 @@ function validate(body: unknown): { ok: true; data: Required<Omit<UsagePayload, 
 
   const source = typeof b.source === "string" && b.source ? b.source : "bridge";
 
-  let usageDate = typeof b.usageDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.usageDate)
+  const usageDate = typeof b.usageDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.usageDate)
     ? b.usageDate
     : todayUtc();
+
+  // UB-10 : serviceTier — whitelist soft (valeur inconnue → NULL, pas d'erreur).
+  let serviceTier: string | null = null;
+  if (typeof b.serviceTier === "string" && b.serviceTier) {
+    const v = b.serviceTier.toLowerCase().trim();
+    if (SERVICE_TIERS_ALLOWED.has(v)) serviceTier = v;
+  }
+
+  // UB-10 : clientCostEstimated — explicite si fourni, sinon NULL et calculé côté DB lookup.
+  let clientCostEstimated: number | null = null;
+  if (b.clientCostEstimated !== undefined && b.clientCostEstimated !== null) {
+    const c = Number(b.clientCostEstimated);
+    if (!Number.isFinite(c) || c < 0) return { ok: false, error: "clientCostEstimated >= 0 ou null" };
+    clientCostEstimated = c;
+  }
 
   return {
     ok: true,
@@ -92,6 +128,8 @@ function validate(body: unknown): { ok: true; data: Required<Omit<UsagePayload, 
       estimatedCost,
       source,
       requestCount: Math.floor(requestCount),
+      serviceTier,
+      clientCostEstimated,
     },
   };
 }
@@ -133,26 +171,47 @@ export async function POST(request: Request) {
   if (!v.ok) return Response.json({ error: v.error }, { status: 400, headers: NO_STORE });
   const d = v.data;
 
-  // 4. Résolution tenant_id
+  // 4. Résolution tenant_id + markup (UB-10)
   try {
-    const t = await adminQuery<{ id: string }>(
-      "SELECT id FROM core.tenant WHERE slug = $1",
+    const t = await adminQuery<{ id: string; markup: string | null }>(
+      `SELECT t.id,
+              (SELECT s.ai_markup_rate
+                 FROM core.subscriptions s
+                WHERE s.tenant_id = t.id
+                  AND s.category = 'ai_collaborator'
+                  AND s.status   = 'active'
+                LIMIT 1) AS markup
+         FROM core.tenant t
+        WHERE t.slug = $1`,
       [d.tenantSlug]
     );
     if (!t[0]) {
       return Response.json({ error: "tenant_unknown" }, { status: 400, headers: NO_STORE });
     }
     const tenantId = t[0].id;
+    const tenantMarkup = t[0].markup === null ? 1.2 : Number(t[0].markup);
+
+    // UB-10 : si le caller n'a pas calculé clientCostEstimated, on le déduit
+    // de estimatedCost × markup tenant (fallback 1.20). Sinon on utilise la
+    // valeur explicite reçue (priorité au caller).
+    const clientCost: number | null =
+      d.clientCostEstimated !== null
+        ? d.clientCostEstimated
+        : d.estimatedCost === null
+        ? null
+        : Math.round(d.estimatedCost * tenantMarkup * 1_000_000) / 1_000_000;
 
     // 5. UPSERT idempotent journalier
     // Cumul tokens, cost (avec règle null), request_count.
-    // estimated_cost : si les deux NULL → reste NULL ; sinon somme COALESCE(0).
+    // estimated_cost et client_cost_estimated : si les deux NULL → reste NULL ; sinon somme COALESCE(0).
+    // service_tier : COALESCE — on garde la valeur précédente si la nouvelle est NULL.
     await adminQuery(
       `INSERT INTO core.token_usage
          (tenant_id, agent_slug, provider, model, usage_date,
           tokens_input, tokens_output, tokens_total,
-          estimated_cost, source, request_count)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          estimated_cost, source, request_count,
+          service_tier, client_cost_estimated)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (tenant_id, agent_slug, provider, model, usage_date, source)
        DO UPDATE SET
          tokens_input  = core.token_usage.tokens_input  + EXCLUDED.tokens_input,
@@ -162,7 +221,12 @@ export async function POST(request: Request) {
            WHEN core.token_usage.estimated_cost IS NULL AND EXCLUDED.estimated_cost IS NULL THEN NULL
            ELSE COALESCE(core.token_usage.estimated_cost, 0) + COALESCE(EXCLUDED.estimated_cost, 0)
          END,
-         request_count = core.token_usage.request_count + EXCLUDED.request_count`,
+         request_count = core.token_usage.request_count + EXCLUDED.request_count,
+         service_tier  = COALESCE(EXCLUDED.service_tier, core.token_usage.service_tier),
+         client_cost_estimated = CASE
+           WHEN core.token_usage.client_cost_estimated IS NULL AND EXCLUDED.client_cost_estimated IS NULL THEN NULL
+           ELSE COALESCE(core.token_usage.client_cost_estimated, 0) + COALESCE(EXCLUDED.client_cost_estimated, 0)
+         END`,
       [
         tenantId,
         d.agentSlug,
@@ -175,11 +239,21 @@ export async function POST(request: Request) {
         d.estimatedCost,
         d.source,
         d.requestCount,
+        d.serviceTier,
+        clientCost,
       ]
     );
 
     return Response.json(
-      { ok: true, tenant: d.tenantSlug, date: d.usageDate, source: d.source },
+      {
+        ok: true,
+        tenant: d.tenantSlug,
+        date: d.usageDate,
+        source: d.source,
+        serviceTier: d.serviceTier,
+        clientCostEstimated: clientCost,
+        markupApplied: d.clientCostEstimated !== null ? null : tenantMarkup,
+      },
       { status: 200, headers: NO_STORE }
     );
   } catch (e) {
