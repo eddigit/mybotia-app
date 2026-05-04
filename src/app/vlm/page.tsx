@@ -49,6 +49,26 @@ interface Summary {
     expired: number;
     compliant: number;
   };
+  quotes: {
+    total: number;
+    draft: number;
+    sent: number;
+    accepted: number;
+    refused: number;
+    cancelled: number;
+    acceptedTotalHt: number;
+    acceptedTotalTtc: number;
+    pendingTotalHt: number;
+    pendingTotalTtc: number;
+    conversionRate: number | null;
+    latestQuote: {
+      ref: string;
+      clientName: string;
+      totalTtc: number;
+      status: string;
+      createdAt: string;
+    } | null;
+  };
   expiryAlerts: Array<{
     stockItemId: string;
     label: string;
@@ -239,6 +259,14 @@ export default function VlmPage() {
 }
 
 function OverviewSection({ summary }: { summary: Summary }) {
+  const c = summary.deals.currency;
+  const q = summary.quotes;
+  const fmtPct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(0)} %`);
+  const fmtDateShort = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  };
   return (
     <section className="card-sharp p-6 space-y-6">
       <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
@@ -246,11 +274,11 @@ function OverviewSection({ summary }: { summary: Summary }) {
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Detail label="Containers (total / actifs)" value={`${summary.deals.count} / ${summary.deals.activeCount}`} />
-        <Detail label="Coûts cumulés" value={fmtMoney(summary.deals.totalCost, summary.deals.currency)} />
-        <Detail label="Ventes cumulées" value={fmtMoney(summary.deals.totalSale, summary.deals.currency)} />
+        <Detail label="Coûts cumulés" value={fmtMoney(summary.deals.totalCost, c)} />
+        <Detail label="Ventes cumulées" value={fmtMoney(summary.deals.totalSale, c)} />
         <Detail
           label="Marge brute"
-          value={fmtMoney(summary.deals.grossMargin, summary.deals.currency)}
+          value={fmtMoney(summary.deals.grossMargin, c)}
           tone={summary.deals.grossMargin >= 0 ? "good" : "warn"}
         />
         <Detail
@@ -265,6 +293,60 @@ function OverviewSection({ summary }: { summary: Summary }) {
           value={fmtNum(summary.regulatory.count)}
           sub={`conformes : ${summary.regulatory.compliant} · à configurer : ${summary.regulatory.toConfigure} · expirés : ${summary.regulatory.expired}`}
         />
+      </div>
+
+      {/* Bloc 7N — Section Devis commerciaux */}
+      <div className="border-t border-border-subtle pt-6">
+        <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline mb-3">
+          Devis commerciaux
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <Detail label="Total devis" value={fmtNum(q.total)} />
+          <Detail
+            label="Brouillons"
+            value={fmtNum(q.draft)}
+            tone={q.draft > 0 ? "neutral" : "neutral"}
+          />
+          <Detail
+            label="Envoyés / en attente"
+            value={fmtNum(q.sent)}
+            tone={q.sent > 0 ? "good" : "neutral"}
+          />
+          <Detail
+            label="Acceptés"
+            value={fmtNum(q.accepted)}
+            tone={q.accepted > 0 ? "good" : "neutral"}
+          />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <Detail
+            label="Montant accepté TTC"
+            value={fmtMoney(q.acceptedTotalTtc, c)}
+            sub={`HT ${fmtMoney(q.acceptedTotalHt, c)}`}
+            tone={q.acceptedTotalTtc > 0 ? "good" : "neutral"}
+          />
+          <Detail
+            label="Montant en attente TTC"
+            value={fmtMoney(q.pendingTotalTtc, c)}
+            sub={`HT ${fmtMoney(q.pendingTotalHt, c)}`}
+            tone={q.pendingTotalTtc > 0 ? "neutral" : "neutral"}
+          />
+          <Detail
+            label="Taux conversion"
+            value={fmtPct(q.conversionRate)}
+            sub={`accepté / (accepté + refusé) · refusés : ${q.refused} · annulés : ${q.cancelled}`}
+            tone={q.conversionRate !== null && q.conversionRate >= 0.5 ? "good" : q.conversionRate !== null && q.conversionRate < 0.3 ? "warn" : "neutral"}
+          />
+          <Detail
+            label="Dernier devis"
+            value={q.latestQuote ? q.latestQuote.ref : "—"}
+            sub={
+              q.latestQuote
+                ? `${q.latestQuote.clientName} · ${fmtMoney(q.latestQuote.totalTtc, c)} · ${fmtDateShort(q.latestQuote.createdAt)}`
+                : "Aucun devis"
+            }
+          />
+        </div>
       </div>
     </section>
   );

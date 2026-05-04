@@ -136,6 +136,65 @@ export async function GET() {
     );
     const r = regAgg[0];
 
+    // Bloc 7N — KPI devis VLM (counts par status + montants accepted/sent + conversion)
+    const quotesAgg = await adminQuery<{
+      total: string;
+      draft: string;
+      sent: string;
+      accepted: string;
+      refused: string;
+      cancelled: string;
+      accepted_total_ht: string | null;
+      accepted_total_ttc: string | null;
+      pending_total_ht: string | null;
+      pending_total_ttc: string | null;
+    }>(
+      `SELECT
+         COUNT(*)::text AS total,
+         COUNT(*) FILTER (WHERE status = 'draft')::text     AS draft,
+         COUNT(*) FILTER (WHERE status = 'sent')::text      AS sent,
+         COUNT(*) FILTER (WHERE status = 'accepted')::text  AS accepted,
+         COUNT(*) FILTER (WHERE status = 'refused')::text   AS refused,
+         COUNT(*) FILTER (WHERE status = 'cancelled')::text AS cancelled,
+         SUM(total_ht)  FILTER (WHERE status = 'accepted')::text AS accepted_total_ht,
+         SUM(total_ttc) FILTER (WHERE status = 'accepted')::text AS accepted_total_ttc,
+         SUM(total_ht)  FILTER (WHERE status = 'sent')::text     AS pending_total_ht,
+         SUM(total_ttc) FILTER (WHERE status = 'sent')::text     AS pending_total_ttc
+       FROM core.vlm_quotes WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    const q = quotesAgg[0];
+
+    const accepted = parseInt(q.accepted, 10) || 0;
+    const refused = parseInt(q.refused, 10) || 0;
+    const conversionDenom = accepted + refused;
+    const conversionRate = conversionDenom > 0 ? accepted / conversionDenom : null;
+
+    const latestQuoteRows = await adminQuery<{
+      ref: string;
+      client_name: string;
+      total_ttc: string;
+      status: string;
+      created_at: string;
+    }>(
+      `SELECT ref, client_name, total_ttc, status,
+              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at
+         FROM core.vlm_quotes
+        WHERE tenant_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [tenantId]
+    );
+    const latestQuote = latestQuoteRows[0]
+      ? {
+          ref: latestQuoteRows[0].ref,
+          clientName: latestQuoteRows[0].client_name,
+          totalTtc: num(latestQuoteRows[0].total_ttc),
+          status: latestQuoteRows[0].status,
+          createdAt: latestQuoteRows[0].created_at,
+        }
+      : null;
+
     return Response.json(
       {
         generatedAt: new Date().toISOString(),
@@ -164,6 +223,20 @@ export async function GET() {
           toConfigure: parseInt(r.to_configure, 10) || 0,
           expired: parseInt(r.expired, 10) || 0,
           compliant: parseInt(r.compliant, 10) || 0,
+        },
+        quotes: {
+          total: parseInt(q.total, 10) || 0,
+          draft: parseInt(q.draft, 10) || 0,
+          sent: parseInt(q.sent, 10) || 0,
+          accepted,
+          refused,
+          cancelled: parseInt(q.cancelled, 10) || 0,
+          acceptedTotalHt: num(q.accepted_total_ht),
+          acceptedTotalTtc: num(q.accepted_total_ttc),
+          pendingTotalHt: num(q.pending_total_ht),
+          pendingTotalTtc: num(q.pending_total_ttc),
+          conversionRate,
+          latestQuote,
         },
         expiryAlerts: expiryAlerts.map((a) => ({
           stockItemId: a.stock_item_id,
