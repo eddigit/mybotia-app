@@ -300,7 +300,12 @@ export async function PUT(
         };
       }
 
+      // UB-9bis : on aligne aussi label et monthly_amount (champs historiques NOT NULL)
+      // sur business_plan_label et ai_budget_monthly_eur pour éviter le drift entre la
+      // sub legacy et la conf business V3.
       const fields = [
+        ["label", d.business_plan_label],
+        ["monthly_amount", d.ai_budget_monthly_eur],
         ["business_plan_code", d.business_plan_code],
         ["business_plan_label", d.business_plan_label],
         ["ai_budget_mode", d.ai_budget_mode],
