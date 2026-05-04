@@ -25,6 +25,9 @@ import {
 import { SubscriptionsSection } from "@/components/admin/SubscriptionsSection";
 import { ArchitectureSection } from "@/components/admin/ArchitectureSection";
 import { CatalogSection } from "@/components/admin/CatalogSection";
+import { StockSection } from "@/components/admin/StockSection";
+import { DeliveriesSection } from "@/components/admin/DeliveriesSection";
+import { TransportSection } from "@/components/admin/TransportSection";
 
 const FEATURE_LABELS: Record<FeatureKey, string> = {
   crm: "CRM",
@@ -319,6 +322,26 @@ export default function AdminTenantDetailPage() {
       {/* Bloc 6D — section abonnements (lecture/édition DB core.subscriptions) */}
       <SubscriptionsSection
         tenantSlug={tenant.slug}
+        currency={(tenant.businessModel?.currency as string) || "EUR"}
+      />
+
+      {/* Bloc 7C — Stock / inventaire */}
+      <StockSection
+        tenantSlug={tenant.slug}
+        enabled={tenant.architectureConfig?.standardModules?.stock === true}
+      />
+
+      {/* Bloc 7C — Livraisons */}
+      <DeliveriesSection
+        tenantSlug={tenant.slug}
+        enabled={tenant.architectureConfig?.standardModules?.delivery === true}
+        currency={(tenant.businessModel?.currency as string) || "EUR"}
+      />
+
+      {/* Bloc 7C — Transport (étapes) */}
+      <TransportSection
+        tenantSlug={tenant.slug}
+        enabled={tenant.architectureConfig?.standardModules?.transport === true}
         currency={(tenant.businessModel?.currency as string) || "EUR"}
       />
 
