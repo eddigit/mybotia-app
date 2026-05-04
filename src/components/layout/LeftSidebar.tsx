@@ -187,6 +187,20 @@ export function LeftSidebar({
             {!collapsed && <span className="truncate">Admin tenants</span>}
           </Link>
           <Link
+            href="/admin/billing"
+            className={cn(
+              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
+              collapsed ? "justify-center px-2" : "pl-4",
+              pathname.startsWith("/admin/billing")
+                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
+                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
+            )}
+            title="Billing IA — admin global"
+          >
+            <Wallet className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Billing IA</span>}
+          </Link>
+          <Link
             href="/admin/usage/tokens"
             className={cn(
               "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
@@ -195,7 +209,7 @@ export function LeftSidebar({
                 ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
                 : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
             )}
-            title="Usage tokens — admin global"
+            title="Usage tokens — détail technique"
           >
             <Coins className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span className="truncate">Usage tokens</span>}
