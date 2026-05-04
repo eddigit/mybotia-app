@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { useCockpitFeatures } from "@/hooks/use-api";
-import { Shield, Coins } from "lucide-react";
+import { Shield, Coins, Stethoscope } from "lucide-react";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
@@ -67,6 +67,11 @@ export function LeftSidebar({
   const { data: cockpitFeatures } = useCockpitFeatures();
   const features = cockpitFeatures?.features ?? {};
   const isSuperadmin = cockpitFeatures?.isSuperadmin ?? false;
+  // Bloc 7E — entrée VL Medical visible UNIQUEMENT quand le cockpit courant
+  // est vlmedical. Le superadmin sur app.mybotia.com ne voit pas l'entrée :
+  // il accède au vertical via /admin/tenants/vlmedical ou via le hostname
+  // vlmedical.mybotia.com. Doctrine : hostname → tenant → modules visibles.
+  const showVlmEntry = cockpitFeatures?.tenant === "vlmedical";
   // Pendant le chargement, on laisse passer (cockpitFeatures=null) pour ne pas
   // faire scintiller la sidebar. Une fois chargé, on filtre.
   const filteredNav = navItems.filter((item) => {
@@ -143,6 +148,26 @@ export function LeftSidebar({
           );
         })}
       </nav>
+
+      {/* Bloc 7E — entrée VL Medical visible uniquement quand cockpit === vlmedical */}
+      {showVlmEntry && (
+        <div className="px-3 py-2 border-t border-border-subtle">
+          <Link
+            href="/vlm"
+            className={cn(
+              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
+              collapsed ? "justify-center px-2" : "pl-4",
+              pathname.startsWith("/vlm")
+                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
+                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
+            )}
+            title="VL Medical — vertical import/export"
+          >
+            <Stethoscope className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">VL Medical</span>}
+          </Link>
+        </div>
+      )}
 
       {/* Bottom nav — admin tools (superadmin + features.adminTools) */}
       {isSuperadmin && features.adminTools === true && (
