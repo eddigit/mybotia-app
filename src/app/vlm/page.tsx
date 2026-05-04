@@ -83,8 +83,8 @@ export default function VlmPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
-  // Bloc 7H — passage du dealId pré-rempli vers l'onglet Devis (création depuis deal)
-  const [pendingDealForQuote, setPendingDealForQuote] = useState<string | null>(null);
+  // Bloc 7I — basculer vers l'onglet Devis et ouvrir le devis créé en détail
+  const [pendingOpenQuoteId, setPendingOpenQuoteId] = useState<string | null>(null);
 
   function loadSummary() {
     setLoading(true);
@@ -219,8 +219,8 @@ export default function VlmPage() {
       {tab === "overview" && <OverviewSection summary={summary} />}
       {tab === "containers" && (
         <ContainersTab
-          onCreateQuote={(dealId) => {
-            setPendingDealForQuote(dealId);
+          onQuoteCreated={(quoteId) => {
+            setPendingOpenQuoteId(quoteId);
             setTab("quotes");
           }}
         />
@@ -230,8 +230,8 @@ export default function VlmPage() {
       {tab === "regulatory" && <RegulatoryTab />}
       {tab === "quotes" && (
         <QuotesTab
-          preselectedDealId={pendingDealForQuote}
-          onConsumed={() => setPendingDealForQuote(null)}
+          openQuoteId={pendingOpenQuoteId}
+          onConsumed={() => setPendingOpenQuoteId(null)}
         />
       )}
     </div>
@@ -294,10 +294,11 @@ interface ContainerItem {
   margin: { totalCost: number; grossMargin: number | null; marginRate: number | null };
 }
 
-function ContainersTab({ onCreateQuote }: { onCreateQuote: (dealId: string) => void }) {
+function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) => void }) {
   const [items, setItems] = useState<ContainerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [creatingQuoteForId, setCreatingQuoteForId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -311,6 +312,25 @@ function ContainersTab({ onCreateQuote }: { onCreateQuote: (dealId: string) => v
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  async function createQuoteFromDeal(dealId: string) {
+    setCreatingQuoteForId(dealId);
+    setError(null);
+    try {
+      const r = await fetch("/api/vlm/quotes/from-deal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dealId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      onQuoteCreated(j.item.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setCreatingQuoteForId(null);
+    }
+  }
 
   if (loading) return <SectionLoader />;
   if (error) return <SectionError msg={error} />;
@@ -367,12 +387,17 @@ function ContainersTab({ onCreateQuote }: { onCreateQuote: (dealId: string) => v
                   </a>
                   <button
                     type="button"
-                    onClick={() => onCreateQuote(d.id)}
-                    title="Créer un devis VL Medical à partir de ce deal"
-                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
+                    onClick={() => createQuoteFromDeal(d.id)}
+                    disabled={creatingQuoteForId !== null}
+                    title="Générer un devis VL Medical pré-rempli depuis ce deal"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20 disabled:opacity-40 disabled:cursor-wait"
                   >
-                    <FileText className="w-3 h-3" />
-                    Devis
+                    {creatingQuoteForId === d.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <FileText className="w-3 h-3" />
+                    )}
+                    {creatingQuoteForId === d.id ? "Création…" : "Créer devis"}
                   </button>
                 </div>
               </td>

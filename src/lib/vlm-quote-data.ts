@@ -13,6 +13,7 @@ interface QuoteRow {
   tenant_id: string;
   tenant_slug: string;
   deal_id: string | null;
+  deal_ref: string | null;
   ref: string;
   client_name: string;
   client_email: string | null;
@@ -50,13 +51,18 @@ interface LineRow {
 }
 
 const QUOTE_COLS = `q.id, q.tenant_id, t.slug AS tenant_slug,
-  q.deal_id, q.ref, q.client_name, q.client_email, q.client_address,
+  q.deal_id, cd.ref AS deal_ref,
+  q.ref, q.client_name, q.client_email, q.client_address,
   q.title, q.status, q.currency,
   to_char(q.valid_until, 'YYYY-MM-DD') AS valid_until,
   q.notes, q.terms,
   q.total_ht, q.total_vat, q.total_ttc,
   to_char(q.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
   to_char(q.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at`;
+
+const QUOTE_FROM = `core.vlm_quotes q
+  JOIN core.tenant t ON t.id = q.tenant_id
+  LEFT JOIN core.vlm_container_deals cd ON cd.id = q.deal_id`;
 
 const LINE_COLS = `l.id, l.tenant_id, l.quote_id, l.catalog_item_id,
   l.label, l.description, l.quantity, l.unit,
@@ -75,6 +81,7 @@ export function mapQuote(r: QuoteRow): VlmQuote {
     tenantId: r.tenant_id,
     tenantSlug: r.tenant_slug,
     dealId: r.deal_id,
+    dealRef: r.deal_ref,
     ref: r.ref,
     clientName: r.client_name,
     clientEmail: r.client_email,
@@ -117,8 +124,7 @@ export function mapLine(r: LineRow): VlmQuoteLine {
 export async function listVlmQuotes(): Promise<VlmQuote[]> {
   const rows = await adminQuery<QuoteRow>(
     `SELECT ${QUOTE_COLS}
-       FROM core.vlm_quotes q
-       JOIN core.tenant t ON t.id = q.tenant_id
+       FROM ${QUOTE_FROM}
       WHERE t.slug = $1
       ORDER BY q.created_at DESC`,
     [VLM_SLUG]
@@ -129,8 +135,7 @@ export async function listVlmQuotes(): Promise<VlmQuote[]> {
 export async function getVlmQuote(id: string): Promise<VlmQuote | null> {
   const rows = await adminQuery<QuoteRow>(
     `SELECT ${QUOTE_COLS}
-       FROM core.vlm_quotes q
-       JOIN core.tenant t ON t.id = q.tenant_id
+       FROM ${QUOTE_FROM}
       WHERE t.slug = $1 AND q.id = $2`,
     [VLM_SLUG, id]
   );
@@ -149,8 +154,7 @@ export async function getVlmQuote(id: string): Promise<VlmQuote | null> {
 export async function getVlmQuoteRow(id: string): Promise<QuoteRow | null> {
   const rows = await adminQuery<QuoteRow>(
     `SELECT ${QUOTE_COLS}
-       FROM core.vlm_quotes q
-       JOIN core.tenant t ON t.id = q.tenant_id
+       FROM ${QUOTE_FROM}
       WHERE t.slug = $1 AND q.id = $2`,
     [VLM_SLUG, id]
   );

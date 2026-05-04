@@ -12,6 +12,7 @@ import {
   Save,
   Trash2,
   X,
+  Link2,
 } from "lucide-react";
 import {
   type VlmQuote,
@@ -32,16 +33,26 @@ function fmtDate(iso: string | null | undefined): string {
 }
 
 interface Props {
-  preselectedDealId?: string | null;
+  /** Bloc 7I — devis créé depuis un deal, à ouvrir en détail dès l'arrivée sur l'onglet */
+  openQuoteId?: string | null;
   onConsumed?: () => void;
 }
 
-export function QuotesTab({ preselectedDealId, onConsumed }: Props) {
+export function QuotesTab({ openQuoteId, onConsumed }: Props) {
   const [items, setItems] = useState<VlmQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(!!preselectedDealId);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(openQuoteId || null);
+
+  // Quand le parent demande d'ouvrir un devis (via openQuoteId), on le sélectionne
+  useEffect(() => {
+    if (openQuoteId && openQuoteId !== selectedId) {
+      setSelectedId(openQuoteId);
+      onConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openQuoteId]);
 
   function load() {
     setLoading(true);
@@ -96,14 +107,9 @@ export function QuotesTab({ preselectedDealId, onConsumed }: Props) {
 
       {showCreate && (
         <CreateQuoteForm
-          preselectedDealId={preselectedDealId}
-          onCancel={() => {
-            setShowCreate(false);
-            onConsumed?.();
-          }}
+          onCancel={() => setShowCreate(false)}
           onCreated={(q) => {
             setShowCreate(false);
-            onConsumed?.();
             setSelectedId(q.id);
             load();
           }}
@@ -138,7 +144,10 @@ export function QuotesTab({ preselectedDealId, onConsumed }: Props) {
                   className="hover:bg-surface-2/40 cursor-pointer"
                   onClick={() => setSelectedId(q.id)}
                 >
-                  <td className="py-2 px-2 font-mono text-amber-300 font-bold">{q.ref}</td>
+                  <td className="py-2 px-2">
+                    <span className="font-mono text-amber-300 font-bold">{q.ref}</span>
+                    {q.dealId && <DealLinkChip dealRef={q.dealRef} />}
+                  </td>
                   <td className="py-2 px-2">
                     <div className="text-text-primary">{q.title}</div>
                     <div className="text-text-muted text-[10px]">{q.clientName}</div>
@@ -173,12 +182,22 @@ function QuoteBadge({ status }: { status: VlmQuoteStatus }) {
   );
 }
 
+function DealLinkChip({ dealRef }: { dealRef: string | null | undefined }) {
+  return (
+    <span
+      className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold uppercase border border-accent-primary/30 bg-accent-primary/10 text-accent-glow align-middle"
+      title="Devis lié à un deal container"
+    >
+      <Link2 className="w-2.5 h-2.5" />
+      {dealRef ? `deal ${dealRef}` : "lié au deal"}
+    </span>
+  );
+}
+
 function CreateQuoteForm({
-  preselectedDealId,
   onCancel,
   onCreated,
 }: {
-  preselectedDealId?: string | null;
   onCancel: () => void;
   onCreated: (q: VlmQuote) => void;
 }) {
@@ -199,7 +218,6 @@ function CreateQuoteForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dealId: preselectedDealId || null,
           clientName: clientName.trim(),
           clientEmail: clientEmail.trim() || null,
           clientAddress: clientAddress.trim() || null,
@@ -221,9 +239,7 @@ function CreateQuoteForm({
   return (
     <div className="border border-amber-400/30 bg-amber-400/5 p-4 mb-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase text-amber-300">
-          Nouveau devis VLM{preselectedDealId ? " (depuis deal)" : ""}
-        </h3>
+        <h3 className="text-[11px] font-bold uppercase text-amber-300">Nouveau devis VLM</h3>
         <button onClick={onCancel} className="text-text-muted hover:text-text-primary">
           <X className="w-4 h-4" />
         </button>
@@ -369,9 +385,10 @@ function QuoteDetail({ quoteId, onBack }: { quoteId: string; onBack: () => void 
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-base font-mono font-bold text-amber-300">{quote.ref}</span>
             <QuoteBadge status={quote.status} />
+            {quote.dealId && <DealLinkChip dealRef={quote.dealRef} />}
           </div>
           <h1 className="text-lg text-text-primary">{quote.title}</h1>
           <p className="text-[11px] text-text-muted mt-1">

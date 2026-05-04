@@ -41,6 +41,7 @@ export interface VlmQuote {
   tenantId: string;
   tenantSlug?: string;
   dealId: string | null;
+  dealRef?: string | null;
   ref: string;
   clientName: string;
   clientEmail: string | null;
