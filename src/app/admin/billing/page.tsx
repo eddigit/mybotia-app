@@ -5,6 +5,7 @@
 // Doctrine : EUR uniquement. Aucun provider/model/Sonnet/Opus/Claude/Anthropic/GPT/Kimi.
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Wallet,
   Loader2,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   Zap,
   TrendingUp,
+  Settings,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 
@@ -245,6 +247,7 @@ export default function AdminBillingPage() {
                   <th className="text-right py-2 px-2">Recharges</th>
                   <th className="text-left py-2 px-2">État</th>
                   <th className="text-left py-2 px-2">Tiers</th>
+                  <th className="text-right py-2 px-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -297,6 +300,16 @@ export default function AdminBillingPage() {
                     </td>
                     <td className="py-2 px-2">
                       <TierChips tiers={it.service_tiers} />
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      <Link
+                        href={`/admin/billing/configure/${it.tenant_slug}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-accent-glow hover:border-accent-primary/40"
+                        title={`Configurer ${it.tenant_label}`}
+                      >
+                        <Settings className="w-3 h-3" />
+                        Configurer
+                      </Link>
                     </td>
                   </tr>
                 ))}
