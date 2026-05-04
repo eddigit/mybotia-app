@@ -1,9 +1,7 @@
 "use client";
 
 // Bloc 7E — Page métier VL Medical (cockpit Max).
-// 5 onglets internes : Résumé / Containers / Stock / Livraisons / Réglementation.
-// Lecture seule pour MVP.
-// Accès : superadmin OR session.tenantSlug === 'vlmedical' (vérifié côté API).
+// Bloc 7H — onglet Devis ajouté.
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -18,8 +16,10 @@ import {
   LayoutDashboard,
   RefreshCw,
   FileDown,
+  FileText,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
+import { QuotesTab } from "@/components/vlm/QuotesTab";
 
 interface Summary {
   generatedAt: string;
@@ -58,7 +58,7 @@ interface Summary {
   }>;
 }
 
-type TabKey = "overview" | "containers" | "stock" | "deliveries" | "regulatory";
+type TabKey = "overview" | "containers" | "stock" | "deliveries" | "regulatory" | "quotes";
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof LayoutDashboard }> = [
   { key: "overview", label: "Résumé", icon: LayoutDashboard },
@@ -66,6 +66,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: typeof LayoutDashboard }> 
   { key: "stock", label: "Stock médical", icon: Package },
   { key: "deliveries", label: "Livraisons", icon: Truck },
   { key: "regulatory", label: "Réglementation", icon: ShieldCheck },
+  { key: "quotes", label: "Devis", icon: FileText },
 ];
 
 function fmtMoney(n: number | null, currency: string): string {
@@ -82,6 +83,8 @@ export default function VlmPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
+  // Bloc 7H — passage du dealId pré-rempli vers l'onglet Devis (création depuis deal)
+  const [pendingDealForQuote, setPendingDealForQuote] = useState<string | null>(null);
 
   function loadSummary() {
     setLoading(true);
@@ -214,10 +217,23 @@ export default function VlmPage() {
       </div>
 
       {tab === "overview" && <OverviewSection summary={summary} />}
-      {tab === "containers" && <ContainersTab />}
+      {tab === "containers" && (
+        <ContainersTab
+          onCreateQuote={(dealId) => {
+            setPendingDealForQuote(dealId);
+            setTab("quotes");
+          }}
+        />
+      )}
       {tab === "stock" && <StockTab />}
       {tab === "deliveries" && <DeliveriesTab />}
       {tab === "regulatory" && <RegulatoryTab />}
+      {tab === "quotes" && (
+        <QuotesTab
+          preselectedDealId={pendingDealForQuote}
+          onConsumed={() => setPendingDealForQuote(null)}
+        />
+      )}
     </div>
   );
 }
@@ -278,7 +294,7 @@ interface ContainerItem {
   margin: { totalCost: number; grossMargin: number | null; marginRate: number | null };
 }
 
-function ContainersTab() {
+function ContainersTab({ onCreateQuote }: { onCreateQuote: (dealId: string) => void }) {
   const [items, setItems] = useState<ContainerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -338,16 +354,27 @@ function ContainersTab() {
                 <StatusChip value={d.status} />
               </td>
               <td className="py-2 px-2 text-right">
-                <a
-                  href={`/api/vlm/pdf/packing-list/${d.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Ouvrir la packing list PDF dans un nouvel onglet"
-                  className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-amber-400/30 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
-                >
-                  <FileDown className="w-3 h-3" />
-                  Packing list
-                </a>
+                <div className="inline-flex items-center gap-1">
+                  <a
+                    href={`/api/vlm/pdf/packing-list/${d.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Ouvrir la packing list PDF dans un nouvel onglet"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-amber-400/30 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
+                  >
+                    <FileDown className="w-3 h-3" />
+                    Packing list
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onCreateQuote(d.id)}
+                    title="Créer un devis VL Medical à partir de ce deal"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
+                  >
+                    <FileText className="w-3 h-3" />
+                    Devis
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
