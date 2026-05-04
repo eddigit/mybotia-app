@@ -105,6 +105,8 @@ export default function VlmPage() {
   const [tab, setTab] = useState<TabKey>("overview");
   // Bloc 7I — basculer vers l'onglet Devis et ouvrir le devis créé en détail
   const [pendingOpenQuoteId, setPendingOpenQuoteId] = useState<string | null>(null);
+  // Bloc 7Q — filtre actif sur l'onglet Devis (dealId d'origine)
+  const [quoteDealFilterId, setQuoteDealFilterId] = useState<string | null>(null);
 
   function loadSummary() {
     setLoading(true);
@@ -239,8 +241,9 @@ export default function VlmPage() {
       {tab === "overview" && <OverviewSection summary={summary} />}
       {tab === "containers" && (
         <ContainersTab
-          onQuoteCreated={(quoteId) => {
+          onOpenQuote={(quoteId, dealId) => {
             setPendingOpenQuoteId(quoteId);
+            setQuoteDealFilterId(dealId ?? null);
             setTab("quotes");
           }}
         />
@@ -252,6 +255,8 @@ export default function VlmPage() {
         <QuotesTab
           openQuoteId={pendingOpenQuoteId}
           onConsumed={() => setPendingOpenQuoteId(null)}
+          filterByDealId={quoteDealFilterId}
+          onClearDealFilter={() => setQuoteDealFilterId(null)}
         />
       )}
     </div>
@@ -389,7 +394,11 @@ interface ContainerItem {
   };
 }
 
-function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) => void }) {
+function ContainersTab({
+  onOpenQuote,
+}: {
+  onOpenQuote: (quoteId: string, dealId?: string) => void;
+}) {
   const [items, setItems] = useState<ContainerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -419,7 +428,8 @@ function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) =
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
-      onQuoteCreated(j.item.id);
+      // Bloc 7Q : la création depuis deal active aussi le filtre par deal
+      onOpenQuote(j.item.id, dealId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur");
     } finally {
@@ -470,7 +480,10 @@ function ContainersTab({ onQuoteCreated }: { onQuoteCreated: (quoteId: string) =
                 <StatusChip value={d.status} />
               </td>
               <td className="py-2 px-2 text-[10px] min-w-[180px]">
-                <DealQuotesCell deal={d} onOpenQuote={onQuoteCreated} />
+                <DealQuotesCell
+                  deal={d}
+                  onOpenQuote={(quoteId) => onOpenQuote(quoteId, d.id)}
+                />
               </td>
               <td className="py-2 px-2 text-right">
                 <div className="inline-flex items-center gap-1">

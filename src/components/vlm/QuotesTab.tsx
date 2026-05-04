@@ -61,14 +61,35 @@ interface Props {
   /** Bloc 7I — devis créé depuis un deal, à ouvrir en détail dès l'arrivée sur l'onglet */
   openQuoteId?: string | null;
   onConsumed?: () => void;
+  /** Bloc 7Q — filtre actif sur la liste : ne montrer que les devis d'un deal */
+  filterByDealId?: string | null;
+  onClearDealFilter?: () => void;
 }
 
-export function QuotesTab({ openQuoteId, onConsumed }: Props) {
+export function QuotesTab({
+  openQuoteId,
+  onConsumed,
+  filterByDealId,
+  onClearDealFilter,
+}: Props) {
   const [items, setItems] = useState<VlmQuote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(openQuoteId || null);
+
+  // Bloc 7Q — items filtrés côté client
+  const filteredItems = useMemo(() => {
+    if (!filterByDealId) return items;
+    return items.filter((q) => q.dealId === filterByDealId);
+  }, [items, filterByDealId]);
+
+  // Récupérer le ref du deal filtré (depuis le 1er devis matched, sinon vide)
+  const filterDealRef = useMemo(() => {
+    if (!filterByDealId) return null;
+    const matched = items.find((q) => q.dealId === filterByDealId);
+    return matched?.dealRef ?? null;
+  }, [items, filterByDealId]);
 
   // Quand le parent demande d'ouvrir un devis (via openQuoteId), on le sélectionne
   useEffect(() => {
@@ -131,6 +152,25 @@ export function QuotesTab({ openQuoteId, onConsumed }: Props) {
         </div>
       )}
 
+      {/* Bloc 7Q — bandeau filtre actif */}
+      {filterByDealId && (
+        <div className="flex items-center justify-between gap-2 p-3 mb-4 border border-accent-primary/30 bg-accent-primary/10 text-[11px] text-accent-glow">
+          <div className="flex items-start gap-2">
+            <Link2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              Filtre actif : devis liés{filterDealRef ? ` au deal ${filterDealRef}` : " à ce deal"}.
+              {filteredItems.length === 0 && " Aucun devis ne correspond."}
+            </span>
+          </div>
+          <button
+            onClick={() => onClearDealFilter?.()}
+            className="px-2 py-1 text-[10px] uppercase border border-accent-primary/30 hover:bg-accent-primary/20"
+          >
+            Retirer le filtre
+          </button>
+        </div>
+      )}
+
       {showCreate && (
         <CreateQuoteForm
           onCancel={() => setShowCreate(false)}
@@ -146,9 +186,11 @@ export function QuotesTab({ openQuoteId, onConsumed }: Props) {
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-4 h-4 animate-spin text-text-muted" />
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <p className="text-xs text-text-muted italic text-center py-4">
-          Aucun devis VLM.
+          {filterByDealId
+            ? "Aucun devis lié à ce deal."
+            : "Aucun devis VLM."}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -164,7 +206,7 @@ export function QuotesTab({ openQuoteId, onConsumed }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle">
-              {items.map((q) => (
+              {filteredItems.map((q) => (
                 <tr
                   key={q.id}
                   className="hover:bg-surface-2/40 cursor-pointer"
