@@ -1,8 +1,19 @@
 import { cookies } from "next/headers";
 
-// Retourne toujours 200 pour éviter d'inonder la console d'erreurs 401 "normales"
-// quand l'utilisateur n'est simplement pas connecté. Le front utilise le champ
-// `authenticated` pour discriminer (auth-context.tsx).
+/**
+ * GET /api/auth/me
+ *
+ * Sémantique HTTP (CL3) :
+ *  - 200 + authenticated:true  → JWT présent, valide, non expiré.
+ *  - 200 + authenticated:false → utilisateur non connecté (no_token).
+ *  - 401                       → token présent mais expiré ou invalide.
+ *    Permet au wrapper apiFetch côté client de tenter un refresh
+ *    transparent puis retry, sans considérer "non connecté".
+ *
+ * Note : on ne vérifie pas la signature ici (juste exp), parce que la
+ * route sert à hydrater l'UI. Les endpoints qui dépendent de l'identité
+ * réelle (server-side) passent par getSession() avec jwt.verify.
+ */
 export async function GET() {
   const cookieStore = await cookies();
   const token = cookieStore.get("mybotia_access")?.value;
@@ -14,7 +25,10 @@ export async function GET() {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) {
-      return Response.json({ authenticated: false, reason: "invalid_token" });
+      return Response.json(
+        { authenticated: false, reason: "invalid_token" },
+        { status: 401 },
+      );
     }
 
     const payload = JSON.parse(
@@ -22,7 +36,10 @@ export async function GET() {
     );
 
     if (payload.exp && payload.exp * 1000 < Date.now()) {
-      return Response.json({ authenticated: false, reason: "expired" });
+      return Response.json(
+        { authenticated: false, reason: "expired" },
+        { status: 401 },
+      );
     }
 
     return Response.json({
@@ -37,6 +54,9 @@ export async function GET() {
       is_superadmin: payload.is_superadmin,
     });
   } catch {
-    return Response.json({ authenticated: false, reason: "decode_error" });
+    return Response.json(
+      { authenticated: false, reason: "decode_error" },
+      { status: 401 },
+    );
   }
 }

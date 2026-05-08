@@ -3,6 +3,8 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+import { apiFetchOptional } from "@/lib/api-client";
+
 interface AuthUser {
   user_id: string;
   email: string;
@@ -36,9 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Check session on mount
+  // Check session on mount.
+  // CL3 : apiFetchOptional tente un refresh silencieux si /me renvoie 401
+  // (token expiré). Pas de redirect login forcé — l'utilisateur peut être
+  // légitimement non connecté.
   useEffect(() => {
-    fetch("/api/auth/me")
+    apiFetchOptional("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
         if (data && data.authenticated) {
@@ -68,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoginData(data);
 
       // Fetch /me to get decoded claims
-      const meRes = await fetch("/api/auth/me");
+      const meRes = await apiFetchOptional("/api/auth/me");
       if (meRes.ok) {
         const meData = await meRes.json();
         if (meData && meData.authenticated) {
