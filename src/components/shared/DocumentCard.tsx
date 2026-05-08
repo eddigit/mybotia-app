@@ -191,7 +191,7 @@ function DocumentActionButton({
       <button
         disabled
         className={`${baseBtn} text-amber-300 bg-amber-400/10 border border-amber-400/30 cursor-wait`}
-        title="Generation du PDF cote Dolibarr..."
+        title="Génération du PDF en cours..."
       >
         <Loader2 className="w-3 h-3 animate-spin" />
         Generation

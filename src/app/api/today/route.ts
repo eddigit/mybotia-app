@@ -1,9 +1,6 @@
 // Bloc 5G — /api/today verrouillé sur le cockpit hostname.
-//   app.mybotia.com/today      → tenant=mybotia
-//   vlmedical.mybotia.com/today → tenant=vlmedical (futur)
-//   etc.
-//
-// Plus de fallback FORCED_TENANT hardcodé. Le hostname est l'unique source.
+// V1.1.B Phase 3A anti-hybride silencieux : si crm_provider=mybotia_business,
+// /today agrège exclusivement les données business.
 
 import {
   getThirdParties,
@@ -21,8 +18,39 @@ import {
 } from "@/lib/mappers";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
 import { getCockpitFeatures } from "@/lib/tenant-features";
+import {
+  getCrmProvider,
+  CrmRouterError,
+  crmRouterErrorResponse,
+} from "@/lib/crm-router";
+import { businessGetJson, BusinessClientError } from "@/lib/business-client";
+import {
+  type BusinessClient,
+  type BusinessProject,
+  type BusinessTask,
+} from "@/lib/business-mappers";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
+
+type BusinessQuoteRow = {
+  id: string;
+  reference: string;
+  clientId: string;
+  status: string;
+  totalTtc: string | number;
+  issuedAt: string | null;
+  createdAt: string;
+};
+type BusinessInvoiceRow = BusinessQuoteRow;
+
+function safeNumber(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = parseFloat(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  return 0;
+}
 
 export async function GET(request: Request) {
   try {
@@ -32,6 +60,106 @@ export async function GET(request: Request) {
     }
     const { tenant, slug: tenantSlug } = cockpit;
 
+    const provider = await getCrmProvider(tenantSlug);
+
+    // V1.1.B Phase 3A — branche business-first
+    if (provider.kind === "mybotia_business") {
+      const claims = {
+        tenantId: provider.tenantId,
+        tenantSlug,
+        scopes: ["crm:read"] as const,
+      };
+      const [bizClients, bizProjects, bizTasks, bizQuotes, bizInvoices] = await Promise.all([
+        businessGetJson<BusinessClient[]>("/api/v1/clients", claims),
+        businessGetJson<BusinessProject[]>("/api/v1/projects", claims),
+        businessGetJson<BusinessTask[]>("/api/v1/tasks", claims),
+        businessGetJson<BusinessQuoteRow[]>("/api/v1/quotes", claims).catch(() => []),
+        businessGetJson<BusinessInvoiceRow[]>("/api/v1/invoices", claims).catch(() => []),
+      ]);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const projectById: Record<string, BusinessProject> = {};
+      for (const p of bizProjects) projectById[p.id] = p;
+      const clientNameById: Record<string, string> = {};
+      for (const c of bizClients) clientNameById[c.id] = c.name;
+
+      const tasks = bizTasks.map((t) => {
+        const proj = projectById[t.projectId];
+        const progress = t.status === "done" ? 100 : t.status === "in_progress" ? 50 : 0;
+        return {
+          id: t.id,
+          title: t.title,
+          description: t.description ?? undefined,
+          status: (t.status === "cancelled" ? "todo" : t.status) as string,
+          priority: (t.priority === "urgent" ? "high" : (t.priority ?? "low")) as string,
+          progress,
+          projectId: t.projectId,
+          projectName: proj?.name ?? "",
+          projectRef: "",
+          tenantSlug,
+          dueDate: t.dueDate ?? undefined,
+          overdue: !!(t.dueDate && t.dueDate < today && t.status !== "done"),
+          createdAt: t.createdAt,
+        };
+      });
+
+      return Response.json(
+        {
+          tenant: tenantSlug,
+          tasks,
+          deals: [], // business V1 n'a pas de pipeline opp_status
+          proposals: bizQuotes.map((q) => ({
+            id: q.id,
+            ref: q.reference,
+            total: safeNumber(q.totalTtc),
+            status: q.status,
+            date: q.issuedAt ?? q.createdAt?.slice(0, 10) ?? "",
+            expiryDate: "",
+            clientId: q.clientId,
+            clientName: clientNameById[q.clientId],
+            tenantSlug,
+          })),
+          invoices: bizInvoices.map((inv) => ({
+            id: inv.id,
+            ref: inv.reference,
+            total: safeNumber(inv.totalTtc),
+            status:
+              inv.status === "paid"
+                ? "paid"
+                : inv.status === "draft"
+                  ? "draft"
+                  : "sent",
+            date: inv.issuedAt ?? inv.createdAt?.slice(0, 10) ?? "",
+            clientId: inv.clientId,
+            clientName: clientNameById[inv.clientId],
+            tenantSlug,
+          })),
+          activities: [],
+          source: "mybotia_business",
+          partial: true,
+          missingFeatures: ["deals_pipeline", "activities_events"],
+        },
+        { headers: NO_STORE },
+      );
+    }
+
+    if (provider.kind === "external") {
+      return Response.json(
+        {
+          error: "crm_provider_not_configured",
+          tenant: tenantSlug,
+          tasks: [],
+          deals: [],
+          proposals: [],
+          invoices: [],
+          activities: [],
+          partial: true,
+        },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    // dolibarr (legacy) — flow inchangé
     // Bloc 6B — soft feature gate : /today reste accessible, sections filtrées.
     const { features } = await getCockpitFeatures(request);
     const fCrm = features.crm === true;

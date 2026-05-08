@@ -107,7 +107,7 @@ export function ChatActionBar({
       label: "Préparer une tâche brouillon",
       icon: ListTodo,
       kind: "prompt",
-      prompt: `Prépare un BROUILLON de tâche pour le client "${clientContext.name}" (ID ${clientContext.id}) : titre, description courte, priorité suggérée, échéance si pertinente. Ne crée RIEN dans Dolibarr — affiche juste le brouillon en attendant mon GO explicite.`,
+      prompt: `Prépare un BROUILLON de tâche pour le client "${clientContext.name}" (ID ${clientContext.id}) : titre, description courte, priorité suggérée, échéance si pertinente. Ne crée RIEN dans le CRM — affiche juste le brouillon en attendant mon GO explicite.`,
       title: `${agentLabel} prépare un brouillon, validation Gilles requise avant création`,
     });
   }

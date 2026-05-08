@@ -26,10 +26,14 @@ import {
   CrmRouterError,
   crmRouterErrorResponse,
 } from "@/lib/crm-router";
-import { businessSendJson, BusinessClientError } from "@/lib/business-client";
+import { businessGetJson, businessSendJson, BusinessClientError } from "@/lib/business-client";
 import {
   mapInputProjectFromUi,
+  mapBusinessProjectToCockpit,
   isEmptyInput,
+  type BusinessProject,
+  type BusinessClient,
+  type BusinessTask,
 } from "@/lib/business-mappers";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
@@ -98,7 +102,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    if (!id || !/^\d+$/.test(id)) {
+    if (!id) {
       return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
 
@@ -108,6 +112,97 @@ export async function GET(
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+    }
+
+    const provider = await getCrmProvider(cockpit.slug);
+
+    if (provider.kind === "external") {
+      return Response.json(
+        { error: "crm_provider_not_configured", tenant: cockpit.slug },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    // V1.1.B Phase 3A — branche business : id UUID, fiche projet via business
+    if (provider.kind === "mybotia_business") {
+      const claims = {
+        tenantId: provider.tenantId,
+        tenantSlug: cockpit.slug,
+        scopes: ["crm:read"] as const,
+      };
+      const idEnc = encodeURIComponent(id);
+      const [bizProject, bizQuotes, bizInvoices, bizTasks] = await Promise.all([
+        businessGetJson<BusinessProject>(`/api/v1/projects/${idEnc}`, claims),
+        businessGetJson<{ id: string; reference: string; status: string; totalTtc: string | number; issuedAt: string | null; createdAt: string }[]>(
+          `/api/v1/quotes?project_id=${idEnc}`,
+          claims,
+        ).catch(() => []),
+        businessGetJson<{ id: string; reference: string; status: string; totalTtc: string | number; issuedAt: string | null; createdAt: string }[]>(
+          `/api/v1/invoices?project_id=${idEnc}`,
+          claims,
+        ).catch(() => []),
+        businessGetJson<BusinessTask[]>(`/api/v1/tasks?project_id=${idEnc}`, claims).catch(() => []),
+      ]);
+
+      // Récupérer le client lié pour clientName
+      let clientName: string | undefined;
+      try {
+        const cli = await businessGetJson<BusinessClient>(
+          `/api/v1/clients/${encodeURIComponent(bizProject.clientId)}`,
+          claims,
+        );
+        clientName = cli.name;
+      } catch {
+        clientName = undefined;
+      }
+
+      const project = mapBusinessProjectToCockpit(bizProject, 0, clientName, cockpit.slug);
+      project.tasksTotal = bizTasks.length;
+      project.tasksDone = bizTasks.filter((t) => t.status === "done").length;
+
+      // Bloc 5E-SAFE : suppression autorisée si pas de devis ni facture
+      const deleteBlockedReason =
+        bizQuotes.length > 0
+          ? `${bizQuotes.length} devis lié(s) — suppression interdite. Archive le projet ou supprime les devis d'abord.`
+          : bizInvoices.length > 0
+            ? `${bizInvoices.length} facture(s) liée(s) — suppression interdite (intégrité comptable).`
+            : null;
+
+      return Response.json(
+        {
+          project,
+          description: bizProject.description || "",
+          note_public: "",
+          note_private: "",
+          opp_status: null,
+          proposals: bizQuotes.map((q) => ({
+            id: q.id,
+            ref: q.reference,
+            total: typeof q.totalTtc === "number" ? q.totalTtc : parseFloat(q.totalTtc || "0"),
+            status: q.status,
+            date: q.issuedAt ?? q.createdAt?.slice(0, 10) ?? "",
+          })),
+          invoices: bizInvoices.map((inv) => ({
+            id: inv.id,
+            ref: inv.reference,
+            total: typeof inv.totalTtc === "number" ? inv.totalTtc : parseFloat(inv.totalTtc || "0"),
+            status: inv.status,
+            paye: inv.status === "paid" ? "1" : "0",
+            date: inv.issuedAt ?? inv.createdAt?.slice(0, 10) ?? "",
+          })),
+          deleteAllowed: deleteBlockedReason === null,
+          deleteBlockedReason,
+          isTestProject: false,
+          tenantSlug: cockpit.slug,
+          source: "mybotia_business",
+        },
+        { headers: NO_STORE },
+      );
+    }
+
+    // dolibarr (legacy) — flow inchangé, id numérique obligatoire
+    if (!/^\d+$/.test(id)) {
+      return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
     const tenantCfg = cockpit.tenant;
 
@@ -152,12 +247,20 @@ export async function GET(
         // Supprimer sur les projets non-test (vs juste désactivé).
         isTestProject: isTestProject(dp),
         tenantSlug: cockpit.slug,
+        source: "dolibarr",
       },
       { headers: NO_STORE }
     );
   } catch (e) {
+    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof BusinessClientError) {
+      return Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+    }
     return Response.json(
-      { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
+      { error: e instanceof Error ? e.message : "Erreur CRM" },
       { status: 502, headers: NO_STORE }
     );
   }

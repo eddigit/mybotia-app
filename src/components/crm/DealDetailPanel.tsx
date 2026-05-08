@@ -198,7 +198,7 @@ export function DealDetailPanel({
 
   async function handleArchive() {
     if (!deal.projectId) return;
-    if (!confirm(`Archiver le projet "${deal.title}" ?\n\nLe projet sera marqué clôturé côté Dolibarr (status=2). Action réversible.`)) return;
+    if (!confirm(`Archiver le projet "${deal.title}" ?\n\nLe projet sera marqué clôturé. Action réversible.`)) return;
     setArchiving(true);
     setError(null);
     setSuccess(null);
@@ -547,7 +547,7 @@ export function DealDetailPanel({
                 onClick={handleArchive}
                 disabled={archiving || saving || deleting || !deal.tenantSlug || !deal.projectId}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-tight border text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Marquer le projet clôturé (status=2 Dolibarr). Réversible."
+                title="Marquer le projet clôturé. Réversible."
               >
                 {archiving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
                 Archiver

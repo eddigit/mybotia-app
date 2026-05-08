@@ -210,13 +210,13 @@ export default function FinancePage() {
       {/* Bandeau sources */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <SourceChip
-          label="Source Dolibarr"
+          label="Données commerciales"
           status={data.sources.dolibarr}
           okLabel="ok"
           ko="error"
         />
         <SourceChip
-          label="Source mybotia_core"
+          label="Données activité"
           status={data.sources.core}
           okLabel="ok"
           ko="error"
@@ -234,9 +234,10 @@ export default function FinancePage() {
         <div className="flex items-start gap-2 p-3 border border-amber-400/30 bg-amber-400/10 text-[11px] text-amber-300">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
-            Source Dolibarr indisponible — les KPI commerciaux affichent{" "}
+            Données commerciales temporairement indisponibles — les KPI liés
+            (CA, devis, factures) sont marqués{" "}
             <span className="font-mono">erreur</span>. Le reste du cockpit
-            n&apos;est pas affecté.
+            reste fiable.
           </span>
         </div>
       )}

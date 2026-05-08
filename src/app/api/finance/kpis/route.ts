@@ -24,6 +24,8 @@ import { requireFeature } from "@/lib/tenant-features";
 import { getCockpitFeatures } from "@/lib/tenant-features";
 import { getTokenUsageSummary } from "@/lib/token-usage";
 import type { TenantBusinessModel } from "@/lib/tenant-admin-config";
+import { getCrmProvider } from "@/lib/crm-router";
+import { businessGetJson } from "@/lib/business-client";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -116,51 +118,118 @@ export async function GET(request: Request) {
     /* coreOk déjà géré au-dessus */
   }
 
-  // 3. Lire Dolibarr du tenant courant
+  // 3. Lire CRM du tenant courant.
+  // V1.1.B Phase 3A : si crm_provider=mybotia_business → utiliser business.
+  // Sinon (Dolibarr legacy) → flow inchangé.
   let dolibarrStatus: KpiPayload["sources"]["dolibarr"] = "ok";
-  let thirdparties: Awaited<ReturnType<typeof getThirdParties>> = [];
-  let projects: Awaited<ReturnType<typeof getProjects>> = [];
-  let proposals: Awaited<ReturnType<typeof getProposals>> = [];
-  let invoices: Awaited<ReturnType<typeof getInvoices>> = [];
+  let activeClients = 0;
+  let activeProjects = 0;
+  type FinanceRow = {
+    total_ttc: string | null;
+    paye?: string;
+    status?: string;
+    date_lim_reglement?: string | number | null;
+    statut?: string;
+  };
+  let propSigned: FinanceRow[] = [];
+  let propPipeline: FinanceRow[] = [];
+  let propDraft: FinanceRow[] = [];
+  let invPaid: FinanceRow[] = [];
+  let invSent: FinanceRow[] = [];
+  let invDraft: FinanceRow[] = [];
+  let invLate: FinanceRow[] = [];
+  let proposalsCount = 0;
+  let invoicesCount = 0;
+
   try {
-    [thirdparties, projects, proposals, invoices] = await Promise.all([
-      getThirdParties(500, tenant),
-      getProjects(500, tenant),
-      getProposals(500, tenant),
-      getInvoices(500, tenant),
-    ]);
+    const provider = await getCrmProvider(tenantSlug);
+
+    if (provider.kind === "mybotia_business") {
+      const claims = {
+        tenantId: provider.tenantId,
+        tenantSlug,
+        scopes: ["crm:read"] as const,
+      };
+      const [bizDash, bizQuotes, bizInvoices] = await Promise.all([
+        businessGetJson<{
+          kpis: {
+            clients_active: number;
+            projects_active: number;
+          };
+        }>("/api/v1/dashboard", claims),
+        businessGetJson<
+          Array<{ status: string; totalTtc: string | number }>
+        >("/api/v1/quotes", claims).catch(() => []),
+        businessGetJson<
+          Array<{ status: string; totalTtc: string | number }>
+        >("/api/v1/invoices", claims).catch(() => []),
+      ]);
+
+      activeClients = bizDash.kpis.clients_active;
+      activeProjects = bizDash.kpis.projects_active;
+
+      const toLegacy = (
+        arr: Array<{ status: string; totalTtc: string | number }>,
+        wanted: string[],
+      ): Array<{ total_ttc: string | null }> =>
+        arr
+          .filter((x) => wanted.includes(x.status))
+          .map((x) => ({ total_ttc: String(x.totalTtc ?? "0") }));
+
+      // Statuts business quotes : draft | sent | accepted | refused
+      propSigned = toLegacy(bizQuotes, ["accepted"]);
+      propPipeline = toLegacy(bizQuotes, ["sent"]);
+      propDraft = toLegacy(bizQuotes, ["draft"]);
+
+      // Statuts business invoices : draft | sent | paid | overdue
+      invPaid = toLegacy(bizInvoices, ["paid"]);
+      invSent = toLegacy(bizInvoices, ["sent", "overdue"]);
+      invDraft = toLegacy(bizInvoices, ["draft"]);
+      invLate = toLegacy(bizInvoices, ["overdue"]);
+      proposalsCount = bizQuotes.length;
+      invoicesCount = bizInvoices.length;
+    } else if (provider.kind === "external") {
+      dolibarrStatus = "skipped";
+    } else {
+      // dolibarr (legacy) — flow inchangé
+      const [thirdparties, projects, proposals, invoices] = await Promise.all([
+        getThirdParties(500, tenant),
+        getProjects(500, tenant),
+        getProposals(500, tenant),
+        getInvoices(500, tenant),
+      ]);
+
+      const propByStatus = (st: string) => proposals.filter((p) => p.statut === st);
+      propSigned = [...propByStatus("2"), ...propByStatus("4")];
+      propPipeline = propByStatus("1");
+      propDraft = propByStatus("0");
+
+      const today = new Date().toISOString().slice(0, 10);
+      invPaid = invoices.filter((i) => i.paye === "1");
+      invSent = invoices.filter((i) => i.paye !== "1" && i.status !== "0");
+      invDraft = invoices.filter((i) => i.status === "0");
+      invLate = invSent.filter((i) => {
+        const dueRaw = i.date_lim_reglement;
+        if (!dueRaw) return false;
+        const due = new Date(
+          typeof dueRaw === "number" ? dueRaw * 1000 : dueRaw,
+        )
+          .toISOString()
+          .slice(0, 10);
+        return due < today;
+      });
+
+      activeClients = thirdparties.filter((t) => t.status !== "0").length;
+      activeProjects = projects.filter((p) => p.status === "1").length;
+      proposalsCount = proposals.length;
+      invoicesCount = invoices.length;
+    }
   } catch {
     dolibarrStatus = "error";
   }
 
-  // 4. Calculs réels (uniquement si Dolibarr OK)
   const sumNum = (arr: Array<{ total_ttc: string | null }>) =>
     arr.reduce((s, x) => s + parseFloat(x.total_ttc || "0"), 0);
-
-  // Proposals (devis) — statuts Dolibarr :
-  //   0=draft, 1=validated/envoyé, 2=signed, 3=refused, 4=billed
-  const propByStatus = (st: string) => proposals.filter((p) => p.statut === st);
-  const propSigned = [...propByStatus("2"), ...propByStatus("4")];
-  const propPipeline = propByStatus("1");
-  const propDraft = propByStatus("0");
-
-  // Invoices :
-  //   paye='1' = encaissé ; status=0 = draft ; date_lim_reglement passée + !paye = retard
-  const today = new Date().toISOString().slice(0, 10);
-  const invPaid = invoices.filter((i) => i.paye === "1");
-  const invSent = invoices.filter((i) => i.paye !== "1" && i.status !== "0");
-  const invDraft = invoices.filter((i) => i.status === "0");
-  const invLate = invSent.filter((i) => {
-    const dueRaw = i.date_lim_reglement;
-    if (!dueRaw) return false;
-    const due = new Date(typeof dueRaw === "number" ? dueRaw * 1000 : dueRaw)
-      .toISOString()
-      .slice(0, 10);
-    return due < today;
-  });
-
-  const activeClients = thirdparties.filter((t) => t.status !== "0").length;
-  const activeProjects = projects.filter((p) => p.status === "1").length;
 
   // 5. Construire les sections
   const sections: KpiSection[] = [];
@@ -470,14 +539,14 @@ export async function GET(request: Request) {
       k(
         "proposals-total",
         "Devis (tous statuts)",
-        dolibarrStatus === "ok" ? proposals.length : null,
+        dolibarrStatus === "ok" ? proposalsCount : null,
         dolibarrStatus === "ok" ? "ready" : "error",
         "count"
       ),
       k(
         "invoices-total",
         "Factures (tous statuts)",
-        dolibarrStatus === "ok" ? invoices.length : null,
+        dolibarrStatus === "ok" ? invoicesCount : null,
         dolibarrStatus === "ok" ? "ready" : "error",
         "count"
       ),

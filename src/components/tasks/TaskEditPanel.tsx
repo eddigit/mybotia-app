@@ -124,7 +124,7 @@ export function TaskEditPanel({
 
   async function handleDelete() {
     if (!task) return;
-    if (!confirm(`Supprimer définitivement la tâche "${task.title}" ?\n\nAction irréversible côté Dolibarr.`)) return;
+    if (!confirm(`Supprimer définitivement la tâche "${task.title}" ?\n\nAction irréversible.`)) return;
     setDeleting(true);
     setError(null);
     try {
