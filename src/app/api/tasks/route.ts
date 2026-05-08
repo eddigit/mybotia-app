@@ -31,6 +31,8 @@ import {
 } from "@/lib/business-client";
 import {
   mapBusinessTaskToCockpit,
+  mapInputTaskFromUi,
+  isEmptyInput,
   type BusinessTask,
   type BusinessProject,
 } from "@/lib/business-mappers";
@@ -282,14 +284,23 @@ export async function POST(request: Request) {
     }
 
     if (provider.kind === "mybotia_business") {
-      // V1.1.B Phase 2 — task créée dans business via service token.
-      // Contrat business : { projectId, title, ... }. On accepte les deux shapes.
+      // V1.1.B Phase 2 A2 — mapping minimal Dolibarr→business via helper.
+      const input = mapInputTaskFromUi(body);
+      if (!input.title || !input.projectId) {
+        return Response.json(
+          {
+            error: "missing_required_fields",
+            required: ["title (or label)", "projectId (or fk_project as UUID)"],
+          },
+          { status: 400, headers: NO_STORE },
+        );
+      }
       const businessBody = {
-        projectId: body.projectId ?? body.fk_project,
-        title: body.title ?? body.label,
-        description: body.description || null,
-        status: body.status || "todo",
-        dueDate: body.dueDate || body.date_end || null,
+        projectId: input.projectId,
+        title: input.title,
+        description: input.description ?? null,
+        status: input.status ?? "todo",
+        dueDate: input.dueDate ?? null,
       };
       const created = await businessSendJson<{ id: string; title: string; status: string }>(
         "POST",

@@ -27,6 +27,10 @@ import {
   crmRouterErrorResponse,
 } from "@/lib/crm-router";
 import { businessSendJson, BusinessClientError } from "@/lib/business-client";
+import {
+  mapInputProjectFromUi,
+  isEmptyInput,
+} from "@/lib/business-mappers";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -179,16 +183,26 @@ export async function PATCH(
 
     const provider = await getCrmProvider(cockpit.slug);
 
-    // V1.1.B Phase 2 — branche business : id au format UUID, body au shape business.
+    // V1.1.B Phase 2 A2 — branche business avec mapping Dolibarr→business.
     if (provider.kind === "mybotia_business") {
       const rawBody = (await request.json().catch(() => null)) as Record<string, unknown> | null;
       if (!rawBody || typeof rawBody !== "object") {
         return Response.json({ error: "body json invalide" }, { status: 400, headers: NO_STORE });
       }
+      const input = mapInputProjectFromUi(rawBody);
+      if (isEmptyInput(input as Record<string, unknown>)) {
+        return Response.json(
+          {
+            error: "no_supported_fields",
+            hint: "supported business fields: name, description, clientId, dueDate, status",
+          },
+          { status: 400, headers: NO_STORE },
+        );
+      }
       const updated = await businessSendJson<{ id: string; name: string; status: string }>(
         "PUT",
         `/api/v1/projects/${encodeURIComponent(id)}`,
-        rawBody,
+        input,
         {
           tenantId: provider.tenantId,
           tenantSlug: cockpit.slug,

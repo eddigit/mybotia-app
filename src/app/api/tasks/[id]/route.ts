@@ -11,6 +11,10 @@ import {
   crmRouterErrorResponse,
 } from "@/lib/crm-router";
 import { businessSendJson, BusinessClientError } from "@/lib/business-client";
+import {
+  mapInputTaskFromUi,
+  isEmptyInput,
+} from "@/lib/business-mappers";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -46,18 +50,28 @@ export async function PATCH(
     const rawBody = (await request.json().catch(() => null)) as Record<string, unknown> | null;
 
     if (provider.kind === "mybotia_business") {
-      // V1.1.B Phase 2 — branche business : id UUID, body shape business.
-      // Si seul `status` est fourni → PATCH partiel ; sinon PUT complet.
+      // V1.1.B Phase 2 A2 — branche business avec mapping Dolibarr→business.
       if (!rawBody || typeof rawBody !== "object") {
         return Response.json({ error: "body json invalide" }, { status: 400, headers: NO_STORE });
       }
+      const input = mapInputTaskFromUi(rawBody);
+      if (isEmptyInput(input as Record<string, unknown>)) {
+        return Response.json(
+          {
+            error: "no_supported_fields",
+            hint: "supported business fields: title, description, projectId, dueDate, status",
+          },
+          { status: 400, headers: NO_STORE },
+        );
+      }
+      // Si seul `status` est fourni → PATCH partiel business ; sinon PUT complet.
       const onlyStatus =
-        Object.keys(rawBody).length === 1 && typeof rawBody.status === "string";
+        Object.keys(input).length === 1 && typeof input.status === "string";
       const method = onlyStatus ? "PATCH" : "PUT";
       const updated = await businessSendJson<{ id: string; status: string }>(
         method,
         `/api/v1/tasks/${encodeURIComponent(id)}`,
-        rawBody,
+        input,
         {
           tenantId: provider.tenantId,
           tenantSlug: cockpit.slug,
@@ -65,7 +79,7 @@ export async function PATCH(
         },
       );
       return Response.json(
-        { ok: true, id: updated.id, tenant_slug: cockpit.slug, applied: Object.keys(rawBody) },
+        { ok: true, id: updated.id, tenant_slug: cockpit.slug, applied: Object.keys(input) },
         { headers: NO_STORE },
       );
     }

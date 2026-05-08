@@ -149,3 +149,160 @@ export function mapBusinessTaskToCockpit(
     createdAt: t.createdAt,
   };
 }
+
+// =============================================================================
+// V1.1.B Phase 2 A2 — Inverse mapping : UI cockpit (shape Dolibarr legacy)
+// → shape business pour POST/PATCH.
+//
+// Doctrine : on accepte les deux shapes (business-first + Dolibarr-legacy) côté
+// route Platform, on filtre vers le shape business uniquement, on ignore
+// silencieusement les champs Dolibarr non mappables (opp_*, note_public, ref,
+// priority…). Si le résultat est vide, le caller doit retourner 400
+// `no_supported_fields` pour ne pas faire un PATCH sans effet.
+// =============================================================================
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(v: unknown): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
+}
+
+function asNonEmptyString(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t.length > 0 ? t : undefined;
+}
+
+/**
+ * Convertit un dueDate venant de l'UI vers ISO `YYYY-MM-DD` accepté par
+ * business. Accepte epoch (s, ms), ISO, "YYYY-MM-DD". Retourne `undefined`
+ * si non parseable (=> on ignore le champ, pas d'erreur).
+ */
+function asBusinessDate(v: unknown): string | undefined {
+  if (v === null) return null as unknown as string;
+  if (v === undefined) return undefined;
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v; // <1e12 ⇒ secondes
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+  }
+  if (typeof v === "string") {
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    if (/^\d+$/.test(v)) {
+      const n = parseInt(v, 10);
+      const ms = n < 1e12 ? n * 1000 : n;
+      const d = new Date(ms);
+      return Number.isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+    }
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+  }
+  return undefined;
+}
+
+const PROJECT_STATUS_DOLIBARR_TO_BUSINESS: Record<string, BusinessProject["status"]> = {
+  "0": "paused", // brouillon
+  "1": "active",
+  "2": "done",
+};
+
+function asBusinessProjectStatus(v: unknown): BusinessProject["status"] | undefined {
+  if (typeof v !== "string") return undefined;
+  if (["active", "paused", "done", "cancelled"].includes(v)) {
+    return v as BusinessProject["status"];
+  }
+  return PROJECT_STATUS_DOLIBARR_TO_BUSINESS[v];
+}
+
+function asBusinessTaskStatus(v: unknown): BusinessTask["status"] | undefined {
+  if (typeof v !== "string") return undefined;
+  if (["todo", "in_progress", "done", "cancelled"].includes(v)) {
+    return v as BusinessTask["status"];
+  }
+  return undefined;
+}
+
+export type BusinessProjectInput = {
+  name?: string;
+  description?: string | null;
+  clientId?: string;
+  dueDate?: string | null;
+  status?: BusinessProject["status"];
+};
+
+export type BusinessTaskInput = {
+  title?: string;
+  description?: string | null;
+  projectId?: string;
+  dueDate?: string | null;
+  status?: BusinessTask["status"];
+};
+
+/**
+ * Filtre/convertit un body Platform (shape Dolibarr ou business-first) vers
+ * un payload business clients/contracts. Champs ignorés silencieusement :
+ * `opp_*`, `note_public`, `note_private`, `ref`, `name_alias`, `town`,
+ * `priority`, `progress`, `date_start`, etc.
+ */
+export function mapInputProjectFromUi(body: unknown): BusinessProjectInput {
+  const out: BusinessProjectInput = {};
+  if (!body || typeof body !== "object") return out;
+  const b = body as Record<string, unknown>;
+
+  const name = asNonEmptyString(b.name) ?? asNonEmptyString(b.title);
+  if (name) out.name = name;
+
+  if (b.description !== undefined) {
+    if (typeof b.description === "string") out.description = b.description;
+    else if (b.description === null) out.description = null;
+  }
+
+  const clientCandidate = b.clientId ?? b.socid;
+  if (isUuid(clientCandidate)) out.clientId = clientCandidate;
+
+  const due = b.dueDate !== undefined ? b.dueDate : b.date_end;
+  if (due !== undefined) {
+    const mapped = asBusinessDate(due);
+    if (mapped !== undefined) out.dueDate = mapped;
+  }
+
+  const status = asBusinessProjectStatus(b.status);
+  if (status) out.status = status;
+
+  return out;
+}
+
+export function mapInputTaskFromUi(body: unknown): BusinessTaskInput {
+  const out: BusinessTaskInput = {};
+  if (!body || typeof body !== "object") return out;
+  const b = body as Record<string, unknown>;
+
+  const title = asNonEmptyString(b.title) ?? asNonEmptyString(b.label);
+  if (title) out.title = title;
+
+  if (b.description !== undefined) {
+    if (typeof b.description === "string") out.description = b.description;
+    else if (b.description === null) out.description = null;
+  }
+
+  const projectCandidate = b.projectId ?? b.fk_project;
+  if (isUuid(projectCandidate)) out.projectId = projectCandidate;
+
+  const due = b.dueDate !== undefined ? b.dueDate : b.date_end;
+  if (due !== undefined) {
+    const mapped = asBusinessDate(due);
+    if (mapped !== undefined) out.dueDate = mapped;
+  }
+
+  const status = asBusinessTaskStatus(b.status);
+  if (status) out.status = status;
+
+  return out;
+}
+
+export function isEmptyInput(input: Record<string, unknown>): boolean {
+  for (const k in input) {
+    if (input[k] !== undefined) return false;
+  }
+  return true;
+}

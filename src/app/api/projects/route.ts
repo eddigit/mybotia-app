@@ -28,6 +28,8 @@ import {
 } from "@/lib/business-client";
 import {
   mapBusinessProjectToCockpit,
+  mapInputProjectFromUi,
+  isEmptyInput,
   type BusinessProject,
   type BusinessClient,
 } from "@/lib/business-mappers";
@@ -175,15 +177,23 @@ export async function POST(request: Request) {
     }
 
     if (provider.kind === "mybotia_business") {
-      // V1.1.B Phase 2 — projet créé directement dans mybotia_business via
-      // service token. Le contrat business attend { clientId, name, ... },
-      // pas le shape Dolibarr (ref/title/socid/...). On accepte les deux.
+      // V1.1.B Phase 2 A2 — mapping minimal Dolibarr→business via helper.
+      const input = mapInputProjectFromUi(body);
+      if (!input.name || !input.clientId) {
+        return Response.json(
+          {
+            error: "missing_required_fields",
+            required: ["name (or title)", "clientId (or socid as UUID)"],
+          },
+          { status: 400, headers: NO_STORE },
+        );
+      }
       const businessBody = {
-        clientId: body.clientId ?? body.socid,
-        name: body.name ?? body.title,
-        description: body.description || null,
-        status: body.status || "active",
-        dueDate: body.dueDate || body.date_end || null,
+        clientId: input.clientId,
+        name: input.name,
+        description: input.description ?? null,
+        status: input.status ?? "active",
+        dueDate: input.dueDate ?? null,
       };
       const created = await businessSendJson<{ id: string; clientId: string; name: string }>(
         "POST",
