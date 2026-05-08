@@ -70,6 +70,13 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const todayOnly = url.searchParams.get("today") === "1";
     const mineOnly = url.searchParams.get("mine") === "1";
+    // V1.1.C — filter projectId server-side (avant : ignoré → tout le tenant
+    // remontait, le drill-down filtrait côté client). On valide format UUID
+    // pour ne pas envoyer n'importe quoi à business.
+    const projectIdRaw = url.searchParams.get("projectId");
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const projectIdFilter =
+      projectIdRaw && UUID_RE.test(projectIdRaw) ? projectIdRaw : null;
 
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
@@ -109,8 +116,13 @@ export async function GET(request: Request) {
         tenantSlug,
         scopes: ["crm:read"] as const,
       };
+      // V1.1.C — propager filtre projectId au business (lit `project_id`
+      // côté GET /api/v1/tasks).
+      const tasksPath = projectIdFilter
+        ? `/api/v1/tasks?project_id=${encodeURIComponent(projectIdFilter)}`
+        : "/api/v1/tasks";
       const [tasksBz, projectsBz] = await Promise.all([
-        businessGetJson<BusinessTask[]>("/api/v1/tasks", claims),
+        businessGetJson<BusinessTask[]>(tasksPath, claims),
         businessGetJson<BusinessProject[]>("/api/v1/projects", claims),
       ]);
       const projectNameById: Record<string, string> = {};
@@ -158,7 +170,12 @@ export async function GET(request: Request) {
     ]);
 
     type Task = (typeof tasksRaw)[number];
-    let filteredTasks: Task[] = tasksRaw;
+    // V1.1.C — filter projectId server-side aussi côté legacy Dolibarr.
+    // Le filtre client-side existait déjà sur la page mais on garde la
+    // sémantique d'API cohérente entre les 2 providers.
+    let filteredTasks: Task[] = projectIdFilter
+      ? tasksRaw.filter((t) => String(t.fk_project) === projectIdFilter)
+      : tasksRaw;
     if (mineOnly && session.email) {
       const u = await getUserByEmail(session.email, tenant).catch(() => null);
       if (!u?.id) {
