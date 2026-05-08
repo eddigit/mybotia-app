@@ -293,6 +293,286 @@ export async function getThirdPartiesByCategory(categoryId: number, tenant?: Ten
   catch { return []; }
 }
 
+// --- Commercial document details (proposal / invoice / credit_note) ---
+// Détail unifié lecture seule pour la page /documents/[type]/[id].
+// Côté MCP : tool dolibarr_get_commercial_document_details (sse-server.py).
+
+export type CommercialDocumentType = "proposal" | "invoice" | "credit_note";
+
+export interface CommercialDocumentLine {
+  id: string;
+  description: string;
+  qty: string | null;
+  unit: string | null;
+  unitPriceHT: string | null;
+  discountPercent: string | null;
+  tvaTx: string | null;
+  totalHT: string | null;
+  totalTVA: string | null;
+  totalTTC: string | null;
+  productLabel: string;
+}
+
+export interface CommercialDocumentPayment {
+  id: string;
+  date: string | number | null;
+  amount: string | number | null;
+  type: string;
+  ref: string;
+}
+
+export interface CommercialDocumentLink {
+  id: string;
+  ref: string;
+  totalHT: string | null;
+  type?: string;
+}
+
+export interface CommercialDocumentDetails {
+  documentType: CommercialDocumentType;
+  id: string;
+  ref: string;
+  client: { id: string; name: string; nameAlias: string; town: string; zip: string; email: string } | null;
+  project: { id: string; ref: string; title: string } | null;
+  date: number | string | null;
+  dueDate: number | string | null;
+  statusBusiness: string;
+  statusPayment: "paid" | "unpaid" | null;
+  totalHT: string | null;
+  totalTVA: string | null;
+  totalTTC: string | null;
+  tvaDetail: { rate: string; baseHT: number; tva: number }[];
+  remainToPay: number | null;
+  pdfAvailable: boolean;
+  pdfPath: string;
+  lines: CommercialDocumentLine[];
+  payments: CommercialDocumentPayment[];
+  linked: {
+    sourceProposal: CommercialDocumentLink | null;
+    sourceInvoice: CommercialDocumentLink | null;
+    invoices: CommercialDocumentLink[];
+    creditNotes: CommercialDocumentLink[];
+  };
+  notePublic: string;
+  invoiceType?: string;
+}
+
+const PROPOSAL_STATUS_LABELS: Record<string, string> = {
+  "0": "draft", "1": "validated", "2": "signed", "3": "refused", "4": "billed",
+};
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  "0": "draft", "1": "unpaid", "2": "paid", "3": "abandoned",
+};
+const INVOICE_TYPE_LABELS: Record<string, string> = {
+  "0": "standard", "1": "replacement", "2": "credit_note",
+  "3": "deposit", "4": "proforma", "5": "situation",
+};
+
+interface RawDolibarrLine {
+  id?: string; rowid?: string; desc?: string; description?: string;
+  qty?: string; fk_unit?: string | null; subprice?: string;
+  remise_percent?: string; tva_tx?: string;
+  total_ht?: string; total_tva?: string; total_ttc?: string;
+  product_label?: string; label?: string;
+}
+interface RawDolibarrInvoiceOrProposal {
+  id?: string; ref?: string; socid?: string; type?: string;
+  statut?: string; status?: string; paye?: string;
+  total_ht?: string; total_tva?: string; total_ttc?: string;
+  date?: number | string | null; datec?: number | string | null;
+  date_lim_reglement?: number | string | null; fin_validite?: number | string | null;
+  fk_project?: string | null; last_main_doc?: string | null;
+  remaintopay?: string | number | null;
+  note_public?: string;
+  lines?: RawDolibarrLine[];
+  linkedObjectsIds?: Record<string, string[]> | null;
+  fk_facture_source?: string | null;
+}
+
+async function fetchProposalRaw(id: string, tenant?: TenantConfig): Promise<RawDolibarrInvoiceOrProposal> {
+  return dolibarrFetch<RawDolibarrInvoiceOrProposal>(`proposals/${id}`, tenant);
+}
+async function fetchInvoiceRaw(id: string, tenant?: TenantConfig): Promise<RawDolibarrInvoiceOrProposal> {
+  return dolibarrFetch<RawDolibarrInvoiceOrProposal>(`invoices/${id}`, tenant);
+}
+async function fetchInvoicePayments(id: string, tenant?: TenantConfig): Promise<RawDolibarrInvoiceOrProposal[]> {
+  try { return await dolibarrFetch<RawDolibarrInvoiceOrProposal[]>(`invoices/${id}/payments`, tenant); }
+  catch { return []; }
+}
+
+export async function getCommercialDocumentDetails(
+  documentType: CommercialDocumentType,
+  id: string,
+  tenant?: TenantConfig,
+): Promise<CommercialDocumentDetails> {
+  const isInvoiceFamily = documentType === "invoice" || documentType === "credit_note";
+
+  const doc = isInvoiceFamily ? await fetchInvoiceRaw(id, tenant) : await fetchProposalRaw(id, tenant);
+  if (!doc?.id) throw new Error(`${documentType} id=${id} introuvable`);
+
+  if (isInvoiceFamily) {
+    const t = String(doc.type ?? "0");
+    if (documentType === "credit_note" && t !== "2") {
+      throw new Error(`Document id=${id} n'est pas un avoir (type Dolibarr=${t})`);
+    }
+    if (documentType === "invoice" && t === "2") {
+      throw new Error(`Document id=${id} est un avoir, utiliser type 'credit_note'`);
+    }
+  }
+
+  const [tp, project] = await Promise.all([
+    doc.socid
+      ? getThirdParty(doc.socid, tenant).catch(() => null)
+      : Promise.resolve(null),
+    doc.fk_project && String(doc.fk_project) !== "0"
+      ? getProject(String(doc.fk_project), tenant).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  const client = tp
+    ? {
+        id: String(tp.id),
+        name: tp.name || "",
+        nameAlias: tp.name_alias || "",
+        town: tp.town || "",
+        zip: tp.zip || "",
+        email: tp.email || "",
+      }
+    : null;
+  const projectOut = project
+    ? { id: String(project.id), ref: project.ref || "", title: project.title || "" }
+    : null;
+
+  const rawStatus = String(doc.statut ?? doc.status ?? "");
+  let statusBusiness: string;
+  let statusPayment: "paid" | "unpaid" | null;
+  if (documentType === "proposal") {
+    statusBusiness = PROPOSAL_STATUS_LABELS[rawStatus] || rawStatus;
+    statusPayment = null;
+  } else {
+    statusBusiness = INVOICE_STATUS_LABELS[rawStatus] || rawStatus;
+    statusPayment = String(doc.paye ?? "0") === "1" ? "paid" : "unpaid";
+  }
+
+  const lines: CommercialDocumentLine[] = (doc.lines || []).map((ln) => ({
+    id: String(ln.id || ln.rowid || ""),
+    description: (ln.desc || ln.description || "").slice(0, 1500),
+    qty: ln.qty ?? null,
+    unit: ln.fk_unit ?? null,
+    unitPriceHT: ln.subprice ?? null,
+    discountPercent: ln.remise_percent ?? null,
+    tvaTx: ln.tva_tx ?? null,
+    totalHT: ln.total_ht ?? null,
+    totalTVA: ln.total_tva ?? null,
+    totalTTC: ln.total_ttc ?? null,
+    productLabel: ln.product_label || ln.label || "",
+  }));
+
+  const tvaByRate: Record<string, { rate: string; baseHT: number; tva: number }> = {};
+  for (const ln of doc.lines || []) {
+    const rate = String(ln.tva_tx ?? "0");
+    const ht = parseFloat(ln.total_ht ?? "0");
+    const tva = parseFloat(ln.total_tva ?? "0");
+    if (Number.isNaN(ht) || Number.isNaN(tva)) continue;
+    const slot = tvaByRate[rate] ?? (tvaByRate[rate] = { rate, baseHT: 0, tva: 0 });
+    slot.baseHT += ht;
+    slot.tva += tva;
+  }
+  const tvaDetail = Object.values(tvaByRate).map((v) => ({
+    rate: v.rate,
+    baseHT: Math.round(v.baseHT * 100) / 100,
+    tva: Math.round(v.tva * 100) / 100,
+  }));
+
+  const payments: CommercialDocumentPayment[] = isInvoiceFamily
+    ? (await fetchInvoicePayments(id, tenant)).map((p) => ({
+        id: String((p as unknown as { id?: string }).id || ""),
+        date: (p as unknown as { date?: string | number; datepaye?: string | number }).date
+          ?? (p as unknown as { datepaye?: string | number }).datepaye ?? null,
+        amount: (p as unknown as { amount?: string | number }).amount ?? null,
+        type: String((p as unknown as { type?: string; type_label?: string }).type
+          || (p as unknown as { type_label?: string }).type_label || ""),
+        ref: String((p as unknown as { ref?: string; num_payment?: string }).ref
+          || (p as unknown as { num_payment?: string }).num_payment || ""),
+      }))
+    : [];
+
+  const linked: CommercialDocumentDetails["linked"] = {
+    sourceProposal: null, sourceInvoice: null, invoices: [], creditNotes: [],
+  };
+  const linkedIds = doc.linkedObjectsIds || {};
+  if (linkedIds && typeof linkedIds === "object") {
+    for (const [key, ids] of Object.entries(linkedIds)) {
+      if (!Array.isArray(ids)) continue;
+      if (key === "propal" && isInvoiceFamily) {
+        for (const pid of ids) {
+          const p = await fetchProposalRaw(String(pid), tenant).catch(() => null);
+          if (p?.id) {
+            linked.sourceProposal = { id: String(p.id), ref: p.ref || "", totalHT: p.total_ht ?? null };
+            break;
+          }
+        }
+      }
+      if (key === "facture") {
+        for (const iid of ids) {
+          if (String(iid) === String(id)) continue;
+          const inv = await fetchInvoiceRaw(String(iid), tenant).catch(() => null);
+          if (!inv?.id) continue;
+          const t = String(inv.type ?? "0");
+          const link: CommercialDocumentLink = {
+            id: String(inv.id), ref: inv.ref || "",
+            totalHT: inv.total_ht ?? null,
+            type: INVOICE_TYPE_LABELS[t] || t,
+          };
+          if (t === "2") linked.creditNotes.push(link);
+          else linked.invoices.push(link);
+        }
+      }
+    }
+  }
+  if (documentType === "credit_note" && doc.fk_facture_source) {
+    const src = await fetchInvoiceRaw(String(doc.fk_facture_source), tenant).catch(() => null);
+    if (src?.id) {
+      linked.sourceInvoice = { id: String(src.id), ref: src.ref || "", totalHT: src.total_ht ?? null };
+    }
+  }
+
+  let remainToPay: number | null = null;
+  if (isInvoiceFamily) {
+    const r = parseFloat(String(doc.remaintopay ?? ""));
+    remainToPay = Number.isNaN(r) ? null : r;
+  }
+
+  const lastDoc = doc.last_main_doc || "";
+
+  const out: CommercialDocumentDetails = {
+    documentType,
+    id: String(doc.id),
+    ref: doc.ref || "",
+    client,
+    project: projectOut,
+    date: doc.date ?? doc.datec ?? null,
+    dueDate: doc.date_lim_reglement ?? doc.fin_validite ?? null,
+    statusBusiness,
+    statusPayment,
+    totalHT: doc.total_ht ?? null,
+    totalTVA: doc.total_tva ?? null,
+    totalTTC: doc.total_ttc ?? null,
+    tvaDetail,
+    remainToPay,
+    pdfAvailable: Boolean(lastDoc),
+    pdfPath: lastDoc,
+    lines,
+    payments,
+    linked,
+    notePublic: (doc.note_public || "").slice(0, 2000),
+  };
+  if (isInvoiceFamily) {
+    out.invoiceType = INVOICE_TYPE_LABELS[String(doc.type ?? "0")] || String(doc.type ?? "0");
+  }
+  return out;
+}
+
 // --- Tasks ---
 export interface DolibarrTask {
   id: string;
