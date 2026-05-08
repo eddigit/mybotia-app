@@ -93,10 +93,12 @@ export async function GET(request: Request) {
         mapBusinessProjectToCockpit(p, i, clientNameById[p.clientId], tenantSlug),
       );
     } else {
-      // dolibarr (legacy)
+      // dolibarr (legacy). V1.1.B Phase 1.1.D : pas de .catch(() => []).
+      // Une panne Dolibarr → 502 explicite + log crm_route avec error_code,
+      // plutôt qu'une vue silencieusement vide.
       const [tps, projects] = await Promise.all([
-        getThirdParties(100, tenant).catch(() => []),
-        getProjects(100, tenant).catch(() => []),
+        getThirdParties(100, tenant),
+        getProjects(100, tenant),
       ]);
       const clientNameById: Record<string, string> = {};
       for (const t of tps) clientNameById[t.id] = t.name_alias || t.name;

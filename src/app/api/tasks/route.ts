@@ -136,14 +136,19 @@ export async function GET(request: Request) {
       return response;
     }
 
-    // dolibarr (legacy) — flow inchangé
+    // dolibarr (legacy) — flow inchangé.
+    // V1.1.B Phase 1.1.D : pas de .catch(() => []) sur la liste principale.
+    // Une panne Dolibarr → 502 + log crm_route avec error_code, au lieu
+    // d'un "0 tâche" silencieux qui masque l'incident provider.
+    // Les enrichissements (`getUserByEmail`, `getTaskContacts`) gardent
+    // leur .catch(() => null/[]) car ils sont optionnels (assignment).
     const [tasksRaw, projects] = await Promise.all([
       getTasks(
         200,
         tenant,
         todayOnly ? { dueBeforeOrEqual: todayISO(), notDoneOnly: true } : {}
-      ).catch(() => []),
-      getProjects(200, tenant).catch(() => []),
+      ),
+      getProjects(200, tenant),
     ]);
 
     type Task = (typeof tasksRaw)[number];

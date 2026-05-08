@@ -85,8 +85,11 @@ export async function GET(request: Request) {
       });
       clients = list.map((c) => mapBusinessClientToCockpit(c, tenantSlug));
     } else {
-      // dolibarr (legacy)
-      const tps = await getThirdParties(100, tenant).catch(() => []);
+      // dolibarr (legacy). V1.1.B Phase 1.1.D : pas de .catch(() => []).
+      // Une panne Dolibarr → erreur explicite (502 via le try/catch
+      // route-level + log crm_route avec error_code), plutôt qu'un
+      // cockpit silencieusement vide.
+      const tps = await getThirdParties(100, tenant);
       clients = tps
         .filter((tp) => tp.status !== "0" || !tp.name.includes("TEST"))
         .map((tp) => ({ ...mapThirdPartyToClient(tp), tenantSlug }));
