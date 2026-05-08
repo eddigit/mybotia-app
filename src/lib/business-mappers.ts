@@ -297,6 +297,24 @@ export function mapInputTaskFromUi(body: unknown): BusinessTaskInput {
   const status = asBusinessTaskStatus(b.status);
   if (status) out.status = status;
 
+  // V1.1.B Phase 2 A4 — TaskEditPanel "Marquer comme terminé" envoie
+  // {progress: "100"} (héritage Dolibarr). On convertit en status si status
+  // absent. progress >= 100 → done, > 0 → in_progress, sinon todo.
+  if (out.status === undefined && b.progress !== undefined) {
+    const raw = b.progress;
+    const num =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string"
+          ? parseInt(raw, 10)
+          : NaN;
+    if (!Number.isNaN(num)) {
+      if (num >= 100) out.status = "done";
+      else if (num > 0) out.status = "in_progress";
+      else out.status = "todo";
+    }
+  }
+
   return out;
 }
 
