@@ -421,3 +421,115 @@ export async function PATCH(
     });
   }
 }
+
+// V1.1.B Phase 2 A5 — DELETE /api/clients/[id] via crm-router.
+// mybotia → DELETE business (CASCADE supprime projects, tasks, contacts,
+// quotes, invoices liés via FK ON DELETE CASCADE).
+// Tenants legacy → 501 (Dolibarr Platform n'expose pas deleteClient).
+const ROUTE_DELETE = "/api/clients/[id]";
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  let tenantId: string | null = null;
+  let tenantSlug = "?";
+  let providerKind: string | null = null;
+  let status = 200;
+  let errorCode: string | null = null;
+  let response: Response;
+
+  try {
+    const featureCheck = await requireFeature(request, "crm");
+    if (!featureCheck.ok) {
+      response = featureCheck.response;
+      status = response.status;
+      errorCode = "feature_disabled";
+      return response;
+    }
+
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      status = cockpit.status;
+      errorCode = "cockpit_refused";
+      response = Response.json(
+        { error: cockpit.error },
+        { status: cockpit.status, headers: NO_STORE },
+      );
+      return response;
+    }
+    tenantSlug = cockpit.slug;
+
+    const provider = await getCrmProvider(tenantSlug);
+    tenantId = provider.tenantId;
+    providerKind = provider.kind;
+
+    if (provider.kind !== "mybotia_business") {
+      status = 501;
+      errorCode =
+        provider.kind === "external"
+          ? "crm_provider_not_configured"
+          : "delete_not_supported_on_provider";
+      response = Response.json(
+        { error: errorCode, tenant: tenantSlug, provider: provider.kind },
+        { status, headers: NO_STORE },
+      );
+      return response;
+    }
+
+    const { id } = await params;
+    const out = await businessSendJson<{ id: string; deleted: boolean }>(
+      "DELETE",
+      `/api/v1/clients/${encodeURIComponent(id)}`,
+      undefined,
+      {
+        tenantId: provider.tenantId,
+        tenantSlug,
+        scopes: ["crm:read", "crm:write"],
+      },
+    );
+    response = Response.json(
+      { ok: true, id: out.id, tenant_slug: tenantSlug, deleted: out.deleted },
+      { headers: NO_STORE },
+    );
+    return response;
+  } catch (e) {
+    if (e instanceof CrmRouterError) {
+      status = e.status;
+      errorCode = e.code;
+      response = crmRouterErrorResponse(e);
+      return response;
+    }
+    if (e instanceof BusinessClientError) {
+      status = e.status;
+      errorCode = e.code;
+      response = Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+      return response;
+    }
+    status = 502;
+    errorCode = e instanceof Error ? e.name : "UnknownError";
+    response = Response.json(
+      { error: e instanceof Error ? e.message : "Erreur CRM" },
+      { status: 502, headers: NO_STORE },
+    );
+    return response;
+  } finally {
+    logCrmRoute({
+      evt: "crm_route",
+      request_id: requestId,
+      tenant_id: tenantId,
+      tenant_slug: tenantSlug,
+      route: ROUTE_DELETE,
+      crm_provider: providerKind,
+      source: providerKind,
+      status,
+      duration_ms: Date.now() - startedAt,
+      error_code: errorCode,
+    });
+  }
+}

@@ -64,6 +64,7 @@ export default function ClientDetailPage({
   const [showEditClient, setShowEditClient] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [deletingClient, setDeletingClient] = useState(false);
 
   // Etat PDF par document : key = `${modulepart}-${docId}`
   const [docStates, setDocStates] = useState<Record<string, DocState>>({});
@@ -374,6 +375,40 @@ export default function ClientDetailPage({
               Modifier
             </button>
             <button
+              onClick={async () => {
+                if (deletingClient) return;
+                const projectsCount = projects.length;
+                const cascadeWarn =
+                  projectsCount > 0
+                    ? `\n\nATTENTION : ce client a ${projectsCount} projet(s) lié(s). La suppression supprimera AUSSI les projets, leurs tâches, devis et factures (cascade). Cette action est irréversible.`
+                    : "\n\nCette action est irréversible.";
+                if (!confirm(`Supprimer définitivement "${client.company || client.name}" ?${cascadeWarn}`)) {
+                  return;
+                }
+                setDeletingClient(true);
+                try {
+                  const res = await fetch(`/api/clients/${encodeURIComponent(client.id)}`, {
+                    method: "DELETE",
+                  });
+                  if (!res.ok) {
+                    const j = await res.json().catch(() => ({}));
+                    alert(`Erreur suppression client : ${j?.error || res.status}`);
+                    return;
+                  }
+                  router.push("/crm");
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "Erreur réseau");
+                } finally {
+                  setDeletingClient(false);
+                }
+              }}
+              disabled={deletingClient}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-400/40 text-red-300 hover:text-red-200 text-[11px] font-bold uppercase tracking-tight transition-all whitespace-nowrap disabled:opacity-50"
+              title="Supprimer le client (cascade)"
+            >
+              {deletingClient ? "..." : "Supprimer"}
+            </button>
+            <button
               onClick={handleTalkToLea}
               className="inline-flex items-center gap-2 px-3 py-2 bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/30 text-accent-glow text-[11px] font-bold uppercase tracking-tight transition-all whitespace-nowrap"
               title="Ouvrir une conversation avec Léa contextualisée sur ce client"
@@ -520,7 +555,9 @@ export default function ClientDetailPage({
                         type="button"
                         onClick={async () => {
                           if (
-                            !confirm(`Supprimer définitivement le projet "${p.name}" ?`)
+                            !confirm(
+                              `Supprimer définitivement le projet "${p.name}" ?\n\nATTENTION : toutes les tâches liées à ce projet seront aussi supprimées (cascade). Les devis et factures liés perdront leur référence projet.\n\nCette action est irréversible.`,
+                            )
                           )
                             return;
                           setDeletingProjectId(p.id);
