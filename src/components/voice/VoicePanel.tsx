@@ -17,6 +17,15 @@ interface VoicePanelProps {
   agentName: string;
   voiceWsUrl: string;
   wakeWord: string;
+  // V1 garde-fou (Agent 4 — 2026-05-08) : contexte conversation actif. Tous
+  // optionnels — si absents, on affiche "Pas de client lié à cette conversation"
+  // plutôt que rien. Le serveur voice (server.js) consommera ces refs dans le
+  // message WS `start` quand il sera prêt à les lire.
+  conversationId?: string | null;
+  clientRef?: string | null;
+  projectRef?: string | null;
+  channel?: string | null;
+  onLinkClientClick?: () => void;
 }
 
 interface Transcript {
@@ -28,6 +37,11 @@ export function VoicePanel({
   agentName,
   voiceWsUrl,
   wakeWord,
+  conversationId = null,
+  clientRef = null,
+  projectRef = null,
+  channel = null,
+  onLinkClientClick,
 }: VoicePanelProps) {
   const [state, setState] = useState<VoiceState>("idle");
   const [mode, setMode] = useState<VoiceMode>("free");
@@ -269,7 +283,20 @@ export function VoicePanel({
       wsRef.current = ws;
 
       ws.onopen = async () => {
-        ws.send(JSON.stringify({ type: "start", mode, rate: 0 }));
+        // V1 garde-fou (Agent 4) : on transmet le contexte conv au server voice.
+        // Le serveur peut ignorer ces champs s'il ne les lit pas encore — ce
+        // patch est unilatéral côté UI, l'audit serveur reste à faire.
+        ws.send(
+          JSON.stringify({
+            type: "start",
+            mode,
+            rate: 0,
+            conversation_id: conversationId,
+            client_ref: clientRef,
+            project_ref: projectRef,
+            channel: channel,
+          })
+        );
         try {
           // Config VAD vad-web@0.0.30 (modèle Silero v5, paramètres en MS) :
           //   - Defaults lib v5 : pos=0.3, neg=0.25, redemption=1400ms, minSpeech=400ms, preSpeechPad=800ms
@@ -340,7 +367,18 @@ export function VoicePanel({
       }
       setState("idle");
     }
-  }, [voiceWsUrl, mode, bargeIn, handleAudioChunk, handleServerMessage, stopAll]);
+  }, [
+    voiceWsUrl,
+    mode,
+    bargeIn,
+    handleAudioChunk,
+    handleServerMessage,
+    stopAll,
+    conversationId,
+    clientRef,
+    projectRef,
+    channel,
+  ]);
 
   const stopConversation = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -382,12 +420,47 @@ export function VoicePanel({
     { id: "meeting", label: "Réunion", Icon: FileText },
   ];
 
+  // V1 garde-fou (Agent 4) — bandeau contexte honnête.
+  // Si une conv est active mais sans client/projet lié, on l'affiche au lieu
+  // de laisser l'utilisateur croire que Léa "sait de qui on parle".
+  const hasContext = !!(clientRef || projectRef);
+  const contextLabel = hasContext
+    ? [clientRef && `Client : ${clientRef}`, projectRef && `Projet : ${projectRef}`]
+        .filter(Boolean)
+        .join(" · ")
+    : conversationId
+      ? "Pas de client ni de projet lié à cette conversation"
+      : "Aucune conversation active — l'agent répondra sans contexte client";
+
   return (
     <div className="flex flex-col h-full px-6 pb-4 overflow-hidden">
+      {/* V1 — Contexte conversation honnête */}
+      <div
+        className={cn(
+          "mt-4 mb-2 px-3 py-2 rounded-sm border text-[11px] leading-snug",
+          hasContext
+            ? "bg-accent-primary/5 border-accent-primary/15 text-text-secondary"
+            : "bg-surface-2 border-border-subtle text-text-muted"
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate">{contextLabel}</span>
+          {!hasContext && onLinkClientClick && (
+            <button
+              type="button"
+              onClick={onLinkClientClick}
+              className="shrink-0 text-accent-glow hover:underline font-bold"
+            >
+              Lier un client
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Mode tabs */}
       <div
         className={cn(
-          "flex items-center gap-1 bg-surface-2 p-1 mt-4 mb-4 rounded-sm",
+          "flex items-center gap-1 bg-surface-2 p-1 mb-4 rounded-sm",
           isActive && "opacity-60 pointer-events-none"
         )}
       >

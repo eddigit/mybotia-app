@@ -12,6 +12,8 @@ import type { Agent } from "@/types";
 import { AgentAvatar } from "@/components/shared/AgentAvatar";
 import { VoicePanel } from "@/components/voice/VoicePanel";
 import { getVoiceConfig } from "@/lib/voice-config";
+import { useVoiceConvContext } from "@/contexts/voice-context";
+import { useRouter } from "next/navigation";
 
 // Phase 3B — Voice Panel honnête.
 // Avant : "{agent} est en ligne" + "Latence < 3s Stable" hardcoded.
@@ -52,6 +54,11 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
   const voiceConfig = activeAgent ? getVoiceConfig(activeAgent.id) : null;
   // Phase 3B — état réel du service voice (healthcheck best-effort).
   const [voiceHealth, setVoiceHealth] = useState<VoiceHealth>("unknown");
+  // V1 garde-fou Voice (Agent 4 — 2026-05-08) : contexte conv courant.
+  // Source = VoiceConvProvider posé dans AppShell, alimenté par les écrans
+  // (typiquement /conversations) qui exposent leur conv active.
+  const voiceConv = useVoiceConvContext();
+  const router = useRouter();
 
   useEffect(() => {
     if (!voiceConfig?.wsUrl) {
@@ -162,6 +169,11 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
             agentName={activeAgent.name}
             voiceWsUrl={voiceConfig.wsUrl}
             wakeWord={voiceConfig.wakeWord}
+            conversationId={voiceConv.conversationId}
+            clientRef={voiceConv.clientRef}
+            projectRef={voiceConv.projectRef}
+            channel={voiceConv.channel}
+            onLinkClientClick={() => router.push("/crm")}
           />
         ) : (
           <div className="p-6">

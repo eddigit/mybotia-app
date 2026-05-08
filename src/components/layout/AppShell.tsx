@@ -9,6 +9,7 @@ import { TopBar } from "./TopBar";
 import { ContextRail } from "./ContextRail";
 import { Footer } from "@/components/shared/Footer";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { VoiceConvProvider } from "@/contexts/voice-context";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -59,31 +60,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-surface-0">
-      {/* Left Sidebar */}
-      <LeftSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-
-      {/* Main area */}
-      <div className="flex flex-1 flex-col min-w-0">
-        <TopBar
-          railOpen={railOpen}
-          onToggleRail={() => setRailOpen(!railOpen)}
-          onOpenPalette={() => setPaletteOpen(true)}
+    <VoiceConvProvider>
+      <div className="flex h-screen w-screen overflow-hidden bg-surface-0">
+        {/* Left Sidebar */}
+        <LeftSidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-        <Footer />
+
+        {/* Main area */}
+        <div className="flex flex-1 flex-col min-w-0">
+          <TopBar
+            railOpen={railOpen}
+            onToggleRail={() => setRailOpen(!railOpen)}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
+          <Footer />
+        </div>
+
+        {/* Context Rail (right) */}
+        {railOpen && <ContextRail onClose={() => setRailOpen(false)} agents={agents} />}
+
+        {/* Bloc 4C — Global Command Palette (Cmd/Ctrl+K) */}
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       </div>
-
-      {/* Context Rail (right) */}
-      {railOpen && <ContextRail onClose={() => setRailOpen(false)} agents={agents} />}
-
-      {/* Bloc 4C — Global Command Palette (Cmd/Ctrl+K) */}
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-    </div>
+    </VoiceConvProvider>
   );
 }
