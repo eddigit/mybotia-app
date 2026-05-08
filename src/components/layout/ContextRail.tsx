@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Mic,
   MicOff,
@@ -13,6 +13,34 @@ import { AgentAvatar } from "@/components/shared/AgentAvatar";
 import { VoicePanel } from "@/components/voice/VoicePanel";
 import { getVoiceConfig } from "@/lib/voice-config";
 
+// Phase 3B — Voice Panel honnête.
+// Avant : "{agent} est en ligne" + "Latence < 3s Stable" hardcoded.
+// Après : on tente un healthcheck léger (HEAD wss→https) côté client. Si pas
+// de mesure réelle disponible → libellé neutre, pas d'affirmation factuelle.
+type VoiceHealth = "unknown" | "checking" | "available" | "unavailable";
+
+function wsToHttp(wsUrl: string): string {
+  return wsUrl.replace(/^ws:\/\//i, "http://").replace(/^wss:\/\//i, "https://");
+}
+
+async function probeVoiceHealth(wsUrl: string): Promise<VoiceHealth> {
+  try {
+    const base = new URL(wsToHttp(wsUrl));
+    base.pathname = "/health";
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const res = await fetch(base.toString(), {
+      method: "GET",
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    return res.ok ? "available" : "unavailable";
+  } catch {
+    return "unknown";
+  }
+}
+
 interface ContextRailProps {
   onClose: () => void;
   agents: Agent[];
@@ -22,6 +50,23 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const activeAgent = agents[0] ?? null;
   const voiceConfig = activeAgent ? getVoiceConfig(activeAgent.id) : null;
+  // Phase 3B — état réel du service voice (healthcheck best-effort).
+  const [voiceHealth, setVoiceHealth] = useState<VoiceHealth>("unknown");
+
+  useEffect(() => {
+    if (!voiceConfig?.wsUrl) {
+      setVoiceHealth("unknown");
+      return;
+    }
+    let cancelled = false;
+    setVoiceHealth("checking");
+    probeVoiceHealth(voiceConfig.wsUrl).then((h) => {
+      if (!cancelled) setVoiceHealth(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [voiceConfig?.wsUrl]);
 
   return (
     <aside className="w-[320px] h-full bg-surface-1/90 backdrop-blur-xl flex flex-col shrink-0 animate-slide-in-right shadow-[-20px_0_40px_rgba(99,102,241,0.03)]">
@@ -56,8 +101,21 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
               {/* Pulse ring */}
               <div className="absolute inset-0 rounded-full border border-accent-primary/20 animate-pulse-ring" />
             </div>
-            <h3 className="text-sm font-bold text-text-primary font-headline">{activeAgent.name} est en ligne</h3>
-            <p className="text-xs text-text-secondary mt-1 mb-3">{activeAgent.role}</p>
+            <h3 className="text-sm font-bold text-text-primary font-headline">
+              {activeAgent.name}
+            </h3>
+            <p className="text-xs text-text-secondary mt-1 mb-1">{activeAgent.role}</p>
+            <p className="text-[10px] text-text-muted mb-3 font-mono uppercase tracking-tight">
+              {voiceHealth === "available"
+                ? "Service vocal joignable"
+                : voiceHealth === "unavailable"
+                  ? "Service vocal indisponible"
+                  : voiceHealth === "checking"
+                    ? "Vérification du service vocal…"
+                    : voiceConfig
+                      ? "Service vocal — état non confirmé"
+                      : "Mode texte"}
+            </p>
           </>
         ) : (
           <p className="text-xs text-text-muted mb-3">Aucun agent disponible</p>
@@ -114,14 +172,15 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
         )}
       </div>
 
-      {/* Bottom latency indicator */}
+      {/* Bottom info — pas de chiffre de latence inventé. La latence dépend
+          de la connexion utilisateur ; on l'indique honnêtement. */}
       <div className="p-4 bg-surface-1/50">
-        <div className="flex items-center gap-4 p-3 border border-accent-primary/15 rounded-lg">
-          <Zap className="w-4 h-4 text-accent-glow" />
-          <div>
-            <div className="micro-label text-text-muted">Latence</div>
-            <div className="text-sm font-bold text-text-primary">
-              &lt; 3s <span className="text-emerald-400 text-xs">Stable</span>
+        <div className="flex items-center gap-3 p-3 border border-accent-primary/15 rounded-lg">
+          <Zap className="w-4 h-4 text-accent-glow shrink-0" />
+          <div className="min-w-0">
+            <div className="micro-label text-text-muted">Réseau</div>
+            <div className="text-[11px] text-text-secondary leading-snug">
+              La latence dépend de votre connexion.
             </div>
           </div>
         </div>

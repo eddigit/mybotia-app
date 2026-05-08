@@ -12,6 +12,11 @@ export function ProjectProgress({ projects }: { projects: Project[] }) {
           Tout voir <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
+      {projects.length === 0 && (
+        <p className="text-xs text-text-muted italic py-4 text-center">
+          Aucun projet actif. Créez-en un pour le voir apparaître ici.
+        </p>
+      )}
       <div className="space-y-4">
         {projects.slice(0, 5).map((project) => (
           <Link key={project.id} href={project.clientId ? `/crm/${project.clientId}` : "/tasks"} className="block group cursor-pointer">

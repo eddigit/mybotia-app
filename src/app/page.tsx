@@ -32,6 +32,14 @@ export default function HomePage() {
   const deals = dashboard?.deals ?? [];
   const projectsAll = dashboard?.projects ?? [];
   const activities = dashboard?.activities ?? [];
+  // Phase 3B — backend business V1 ne couvre pas encore tous les domaines.
+  // partial=true → on affiche "—" pour les KPI à 0 plutôt que "0" qui ment.
+  const dashboardPartial = dashboard?.partial === true;
+  const missingFeatures = dashboard?.missingFeatures ?? [];
+  const dealsMissing =
+    dashboardPartial && missingFeatures.includes("deals_pipeline");
+  const activitiesMissing =
+    dashboardPartial && missingFeatures.includes("activities_events");
 
   const criticalTasks = tasks.filter(
     (t) => t.priority === "critical" && t.status !== "done"
@@ -41,6 +49,10 @@ export default function HomePage() {
   const displayProjects = projectsAll
     .filter((p) => p.status === "active")
     .slice(0, 5);
+
+  // Helper local : si valeur vide ET backend partial → "—" (pas "0").
+  const honestStr = (n: number, missing: boolean): string =>
+    n === 0 && (dashboardPartial || missing) ? "—" : n.toString();
 
   if (loading) {
     return (
@@ -89,8 +101,9 @@ export default function HomePage() {
                 {clients.length} clients · MyBotIA
               </h3>
               <p className="text-text-secondary mb-6 max-w-md leading-relaxed">
-                {deals.length} opportunites en pipeline pour un total de{" "}
-                {pipelineTotal.toLocaleString("fr-FR")} EUR.
+                {dealsMissing
+                  ? "Pipeline d'opportunités à activer (module à venir)."
+                  : `${deals.length} opportunites en pipeline pour un total de ${pipelineTotal.toLocaleString("fr-FR")} EUR.`}
                 {criticalTasks.length > 0 &&
                   ` ${criticalTasks.length} tache(s) critique(s) en cours.`}
               </p>
@@ -143,7 +156,10 @@ export default function HomePage() {
               metric={{
                 id: "metric-clients",
                 label: "Clients actifs",
-                value: clients.filter((c) => c.status === "active").length.toString(),
+                value: honestStr(
+                  clients.filter((c) => c.status === "active").length,
+                  false,
+                ),
                 trend: "stable",
                 changeLabel: "MyBotIA",
               }}
@@ -154,9 +170,13 @@ export default function HomePage() {
               metric={{
                 id: "metric-pipeline",
                 label: "Pipeline",
-                value: `${pipelineTotal.toLocaleString("fr-FR")} EUR`,
+                value: dealsMissing
+                  ? "—"
+                  : `${pipelineTotal.toLocaleString("fr-FR")} EUR`,
                 trend: "up",
-                changeLabel: `${deals.length} opportunites`,
+                changeLabel: dealsMissing
+                  ? "module à venir"
+                  : `${deals.length} opportunites`,
               }}
             />
           </Link>
@@ -165,10 +185,17 @@ export default function HomePage() {
               metric={{
                 id: "metric-tasks-today",
                 label: "Tâches actives",
-                value: tasks.filter((t) => t.status !== "done").length.toString(),
+                value: honestStr(
+                  tasks.filter((t) => t.status !== "done").length,
+                  false,
+                ),
                 trend: criticalTasks.length > 0 ? "down" : "stable",
                 changeLabel:
-                  criticalTasks.length > 0 ? `${criticalTasks.length} critiques` : "à jour",
+                  criticalTasks.length > 0
+                    ? `${criticalTasks.length} critiques`
+                    : tasks.length === 0
+                      ? "aucune tâche"
+                      : "à jour",
               }}
             />
           </Link>
@@ -177,9 +204,10 @@ export default function HomePage() {
               metric={{
                 id: "metric-tasks-late",
                 label: "Retards",
-                value: tasks
-                  .filter((t) => t.overdue && t.status !== "done")
-                  .length.toString(),
+                value: honestStr(
+                  tasks.filter((t) => t.overdue && t.status !== "done").length,
+                  false,
+                ),
                 trend: "down",
                 changeLabel: "tâches en retard",
               }}
@@ -191,7 +219,10 @@ export default function HomePage() {
       {/* Two-column: Feed + Side stack */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <ActivityFeed activities={activities} />
+          <ActivityFeed
+            activities={activities}
+            missing={activitiesMissing}
+          />
         </div>
 
         <div className="space-y-5">

@@ -164,19 +164,36 @@ export default function TodayPage() {
     return out.slice(0, 8);
   }, [payload, today]);
 
+  // Phase 3B — empty states honnêtes : 0 → "—" + libellé adapté
+  // ("Aucun à suivre" plutôt que "0 à suivre").
+  const fmtCount = (n: number): string => (n === 0 ? "—" : n.toString());
+  const paymentsCount = invoicesToFollow.length + proposalsToFollow.length;
   const kpis = [
-    { label: "Aujourd'hui", value: todayTasks.length, hint: "tâches du jour", href: "#priorites" },
-    { label: "En retard", value: lateTasks.length, hint: "à reprendre", href: "#retards" },
+    {
+      label: "Aujourd'hui",
+      value: fmtCount(todayTasks.length),
+      hint: todayTasks.length === 0 ? "Aucune tâche du jour" : "tâches du jour",
+      href: "#priorites",
+    },
+    {
+      label: "En retard",
+      value: fmtCount(lateTasks.length),
+      hint: lateTasks.length === 0 ? "Aucun retard" : "à reprendre",
+      href: "#retards",
+    },
     {
       label: "Affaires",
-      value: activeDeals.length,
-      hint: `${formatCurrency(activeDeals.reduce((s, d) => s + d.value, 0))} pipeline`,
+      value: fmtCount(activeDeals.length),
+      hint:
+        activeDeals.length === 0
+          ? "Aucune en cours"
+          : `${formatCurrency(activeDeals.reduce((s, d) => s + d.value, 0))} pipeline`,
       href: "/pipeline",
     },
     {
       label: "Paiements",
-      value: invoicesToFollow.length + proposalsToFollow.length,
-      hint: "à suivre",
+      value: fmtCount(paymentsCount),
+      hint: paymentsCount === 0 ? "Aucun à suivre" : "à suivre",
       href: "#paiements",
     },
   ];

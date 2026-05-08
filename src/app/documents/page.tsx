@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   FileText,
   Download,
@@ -252,9 +253,12 @@ export default function DocumentsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-xs font-bold font-mono text-text-primary">
+                      <Link
+                        href={`/documents/${doc.type === "devis" ? "proposal" : "invoice"}/${doc.dolibarrId}`}
+                        className="text-xs font-bold font-mono text-accent-glow hover:underline"
+                      >
                         {doc.ref}
-                      </span>
+                      </Link>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="text-xs text-text-secondary">
@@ -313,9 +317,11 @@ export default function DocumentsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-5 py-8 text-center text-text-muted text-xs"
+                    className="px-5 py-10 text-center text-text-muted text-xs"
                   >
-                    Aucun document trouve.
+                    {documents.length === 0
+                      ? "Vos devis et factures apparaîtront ici une fois créés."
+                      : "Aucun document ne correspond au filtre courant."}
                   </td>
                 </tr>
               )}

@@ -21,7 +21,15 @@ const typeIcons: Record<string, typeof MessageSquare> = {
   system: Settings2,
 };
 
-export function ActivityFeed({ activities }: { activities: Activity[] }) {
+export function ActivityFeed({
+  activities,
+  missing = false,
+}: {
+  activities: Activity[];
+  /** Phase 3B — true si la source backend ne couvre pas encore le flux. */
+  missing?: boolean;
+}) {
+  const isEmpty = activities.length === 0;
   return (
     <div className="card-sharp p-8">
       <div className="flex items-center justify-between mb-8">
@@ -33,6 +41,14 @@ export function ActivityFeed({ activities }: { activities: Activity[] }) {
           <span className="micro-label text-text-muted">En direct</span>
         </div>
       </div>
+
+      {isEmpty && (
+        <p className="text-xs text-text-muted italic py-6 text-center">
+          {missing
+            ? "Le flux d'événements sera disponible prochainement."
+            : "Aucun événement récent."}
+        </p>
+      )}
 
       {/* Timeline */}
       <div className="timeline space-y-6">

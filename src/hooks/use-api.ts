@@ -191,6 +191,14 @@ export interface DashboardData {
   proposals: DashboardProposal[];
   invoices: DashboardInvoice[];
   activities: Activity[];
+  /** Bloc 3B — true si la source backend ne couvre pas encore tous les domaines
+   *  (ex: mybotia_business V1 sans pipeline/activities). Permet aux UI cockpit
+   *  d'afficher "—" plutôt que "0" pour ne pas mentir à l'utilisateur. */
+  partial?: boolean;
+  /** Domaines non encore couverts par la source business (ex: deals_pipeline). */
+  missingFeatures?: string[];
+  /** Source backend résolue (mybotia_business | dolibarr | external). */
+  source?: string;
 }
 
 export function useScopedDashboard() {
