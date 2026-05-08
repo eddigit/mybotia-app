@@ -89,6 +89,17 @@ export interface Task {
   projectName?: string;
   tags?: string[];
   createdAt: string;
+  // V1.1.B agence digitale (mybotia-business)
+  category?: string;
+  workflowStep?: string;
+  assignedTo?: string;
+  githubIssueUrl?: string;
+  githubPrUrl?: string;
+  vercelDeploymentUrl?: string;
+  whatsappThreadRef?: string;
+  doneAt?: string;
+  /** Nom du client (résolu via project.clientId pour vue agrégée). */
+  clientName?: string;
 }
 
 export interface Project {
@@ -108,6 +119,15 @@ export interface Project {
   clientName?: string;
   /** Bloc 5B-scope-global — tenant Dolibarr d'origine, pour filtrage cockpit. */
   tenantSlug?: string;
+  // V1.1.B agence digitale (mybotia-business)
+  projectType?: string;
+  priority?: string;
+  repoGithubUrl?: string;
+  vercelProjectUrl?: string;
+  productionUrl?: string;
+  stagingUrl?: string;
+  domain?: string;
+  nextAction?: string;
 }
 
 export type ClientStatus = 'active' | 'prospect' | 'churned' | 'onboarding';
@@ -132,6 +152,10 @@ export interface Client {
   isSupplier?: boolean;
   /** Bloc 5B-scope-global — tenant Dolibarr d'origine, pour filtrage cockpit. */
   tenantSlug?: string;
+  // V1.1.B agence digitale (mybotia-business)
+  clientType?: string;
+  priority?: string;
+  whatsappJid?: string;
 }
 
 export interface Deal {

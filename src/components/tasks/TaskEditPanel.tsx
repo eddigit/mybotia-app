@@ -59,8 +59,16 @@ export function TaskEditPanel({
   const [description, setDescription] = useState("");
   const [fkProject, setFkProject] = useState("");
   const [dueDate, setDueDate] = useState(""); // YYYY-MM-DD
-  const [priority, setPriority] = useState<"low" | "medium" | "high">("low");
+  const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [status, setStatus] = useState<"todo" | "in_progress" | "done">("todo");
+  // V1.1.B agence digitale
+  const [category, setCategory] = useState("");
+  const [workflowStep, setWorkflowStep] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [githubIssueUrl, setGithubIssueUrl] = useState("");
+  const [githubPrUrl, setGithubPrUrl] = useState("");
+  const [vercelDeploymentUrl, setVercelDeploymentUrl] = useState("");
+  const [whatsappThreadRef, setWhatsappThreadRef] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -72,8 +80,25 @@ export function TaskEditPanel({
     setDescription(task.description || "");
     setFkProject(task.projectId || "");
     setDueDate(task.dueDate || "");
-    setPriority((task.priority as "low" | "medium" | "high") || "low");
+    setPriority((task.priority as "low" | "medium" | "high" | "urgent") || "medium");
     setStatus((task.status as "todo" | "in_progress" | "done") || "todo");
+    // V1.1.B agence digitale
+    const t = task as TaskItem & {
+      category?: string;
+      workflowStep?: string;
+      assignedTo?: string;
+      githubIssueUrl?: string;
+      githubPrUrl?: string;
+      vercelDeploymentUrl?: string;
+      whatsappThreadRef?: string;
+    };
+    setCategory(t.category ?? "");
+    setWorkflowStep(t.workflowStep ?? "");
+    setAssignedTo(t.assignedTo ?? "");
+    setGithubIssueUrl(t.githubIssueUrl ?? "");
+    setGithubPrUrl(t.githubPrUrl ?? "");
+    setVercelDeploymentUrl(t.vercelDeploymentUrl ?? "");
+    setWhatsappThreadRef(t.whatsappThreadRef ?? "");
     setError(null);
   }, [task?.id]);
 
@@ -152,7 +177,9 @@ export function TaskEditPanel({
         label: label.trim(),
         description,
         fk_project: fkProject,
-        priority: PRIORITY_TO_DOLIBARR[priority],
+        // V1.1.B agence digitale : on envoie priority business directement
+        // (mapInputTaskFromUi accepte low/medium/high/urgent).
+        priority,
       };
       if (dueDate) {
         // Dolibarr accepte timestamp Unix (sec) — fin de journée locale.
@@ -162,6 +189,14 @@ export function TaskEditPanel({
       if (targetProgress !== null) {
         patch.progress = String(targetProgress);
       }
+      // V1.1.B agence digitale — champs additionnels (lus via state)
+      patch.assignedTo = assignedTo || null;
+      patch.category = category || null;
+      patch.workflowStep = workflowStep || null;
+      patch.githubIssueUrl = githubIssueUrl || null;
+      patch.githubPrUrl = githubPrUrl || null;
+      patch.vercelDeploymentUrl = vercelDeploymentUrl || null;
+      patch.whatsappThreadRef = whatsappThreadRef || null;
 
       const res = await fetch(`/api/tasks/${encodeURIComponent(task!.id)}${buildTenantQuery()}`, {
         method: "PATCH",
@@ -250,15 +285,74 @@ export function TaskEditPanel({
               <label className="block micro-label text-text-muted mb-1.5">Priorité</label>
               <select
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+                onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high" | "urgent")}
                 className="w-full bg-surface-2 border border-border-subtle text-sm py-2.5 px-3 text-text-primary focus:outline-none focus:border-accent-glow"
               >
                 <option value="low">{PRIORITY_LABEL.low}</option>
                 <option value="medium">{PRIORITY_LABEL.medium}</option>
                 <option value="high">{PRIORITY_LABEL.high}</option>
+                <option value="urgent">Urgent</option>
               </select>
             </div>
           </div>
+
+          {/* V1.1.B agence digitale */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block micro-label text-text-muted mb-1.5">Catégorie</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-surface-2 border border-border-subtle text-sm py-2.5 px-3 text-text-primary focus:outline-none focus:border-accent-glow">
+                <option value="">—</option>
+                <option value="dev">Dev</option>
+                <option value="design">Design</option>
+                <option value="contenu">Contenu</option>
+                <option value="client">Client</option>
+                <option value="admin">Admin</option>
+                <option value="devis">Devis</option>
+                <option value="facture">Facture</option>
+                <option value="déploiement">Déploiement</option>
+                <option value="bug">Bug</option>
+                <option value="ia">IA</option>
+              </select>
+            </div>
+            <div>
+              <label className="block micro-label text-text-muted mb-1.5">Étape</label>
+              <select value={workflowStep} onChange={(e) => setWorkflowStep(e.target.value)} className="w-full bg-surface-2 border border-border-subtle text-sm py-2.5 px-3 text-text-primary focus:outline-none focus:border-accent-glow">
+                <option value="">—</option>
+                <option value="brief">Brief</option>
+                <option value="devis">Devis</option>
+                <option value="acompte">Acompte</option>
+                <option value="architecture">Architecture</option>
+                <option value="maquette">Maquette</option>
+                <option value="dev">Dev</option>
+                <option value="recette">Recette</option>
+                <option value="déploiement">Déploiement</option>
+                <option value="livraison">Livraison</option>
+                <option value="maintenance">Maintenance</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block micro-label text-text-muted mb-1.5">Assigné à</label>
+            <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full bg-surface-2 border border-border-subtle text-sm py-2.5 px-3 text-text-primary focus:outline-none focus:border-accent-glow">
+              <option value="">—</option>
+              <option value="gilles">Gilles</option>
+              <option value="lea">Léa</option>
+              <option value="damien">Damien</option>
+              <option value="client">Client</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+
+          <details>
+            <summary className="cursor-pointer micro-label text-text-muted hover:text-text-primary">Liens externes (optionnel)</summary>
+            <div className="mt-2 space-y-2">
+              <input value={githubIssueUrl} onChange={(e) => setGithubIssueUrl(e.target.value)} placeholder="GitHub issue URL" className="w-full bg-surface-2 border border-border-subtle text-sm py-2 px-3 text-text-primary focus:outline-none focus:border-accent-glow" />
+              <input value={githubPrUrl} onChange={(e) => setGithubPrUrl(e.target.value)} placeholder="GitHub PR URL" className="w-full bg-surface-2 border border-border-subtle text-sm py-2 px-3 text-text-primary focus:outline-none focus:border-accent-glow" />
+              <input value={vercelDeploymentUrl} onChange={(e) => setVercelDeploymentUrl(e.target.value)} placeholder="Vercel deployment URL" className="w-full bg-surface-2 border border-border-subtle text-sm py-2 px-3 text-text-primary focus:outline-none focus:border-accent-glow" />
+              <input value={whatsappThreadRef} onChange={(e) => setWhatsappThreadRef(e.target.value)} placeholder="Réf WhatsApp (JID/msgId)" className="w-full bg-surface-2 border border-border-subtle text-sm py-2 px-3 text-text-primary focus:outline-none focus:border-accent-glow" />
+            </div>
+          </details>
 
           <div>
             <label className="block micro-label text-text-muted mb-1.5">Échéance</label>

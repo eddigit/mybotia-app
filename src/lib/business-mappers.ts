@@ -17,6 +17,10 @@ export type BusinessClient = {
   phone: string | null;
   status: "active" | "prospect" | "churned" | "supplier";
   notes: string | null;
+  // V1.1.B agence digitale
+  clientType?: string | null;
+  priority?: string | null;
+  whatsappJid?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,6 +33,15 @@ export type BusinessProject = {
   description: string | null;
   status: "active" | "paused" | "done" | "cancelled";
   dueDate: string | null;
+  // V1.1.B agence digitale
+  projectType?: string | null;
+  priority?: string | null;
+  repoGithubUrl?: string | null;
+  vercelProjectUrl?: string | null;
+  productionUrl?: string | null;
+  stagingUrl?: string | null;
+  domain?: string | null;
+  nextAction?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -41,6 +54,16 @@ export type BusinessTask = {
   description: string | null;
   status: "todo" | "in_progress" | "done" | "cancelled";
   dueDate: string | null;
+  // V1.1.B agence digitale
+  priority?: string | null;
+  assignedTo?: string | null;
+  category?: string | null;
+  workflowStep?: string | null;
+  githubIssueUrl?: string | null;
+  githubPrUrl?: string | null;
+  vercelDeploymentUrl?: string | null;
+  whatsappThreadRef?: string | null;
+  doneAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -107,6 +130,10 @@ export function mapBusinessClientToCockpit(
     notePublic: c.notes ?? undefined,
     isSupplier: c.status === "supplier",
     tenantSlug,
+    // V1.1.B agence digitale
+    clientType: c.clientType ?? undefined,
+    priority: c.priority ?? undefined,
+    whatsappJid: c.whatsappJid ?? undefined,
   };
 }
 
@@ -130,23 +157,53 @@ export function mapBusinessProjectToCockpit(
     clientId: p.clientId,
     clientName,
     tenantSlug,
+    // V1.1.B agence digitale
+    projectType: p.projectType ?? undefined,
+    priority: p.priority ?? undefined,
+    repoGithubUrl: p.repoGithubUrl ?? undefined,
+    vercelProjectUrl: p.vercelProjectUrl ?? undefined,
+    productionUrl: p.productionUrl ?? undefined,
+    stagingUrl: p.stagingUrl ?? undefined,
+    domain: p.domain ?? undefined,
+    nextAction: p.nextAction ?? undefined,
   };
 }
+
+const TASK_PRIORITY_BUSINESS_TO_COCKPIT: Record<string, "low" | "medium" | "high" | "critical"> = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  urgent: "critical",
+  critical: "critical",
+};
 
 export function mapBusinessTaskToCockpit(
   t: BusinessTask,
   projectName: string | undefined,
+  clientName?: string | undefined,
 ): Task {
+  const priorityMapped: "low" | "medium" | "high" | "critical" | undefined =
+    t.priority ? TASK_PRIORITY_BUSINESS_TO_COCKPIT[t.priority] : undefined;
   return {
     id: t.id,
     title: t.title,
     description: t.description ?? undefined,
     status: taskStatusToCockpit(t.status),
-    priority: "medium",
+    priority: priorityMapped ?? "medium",
     dueDate: t.dueDate ?? undefined,
     projectId: t.projectId,
     projectName,
+    clientName,
     createdAt: t.createdAt,
+    // V1.1.B agence digitale
+    category: t.category ?? undefined,
+    workflowStep: t.workflowStep ?? undefined,
+    assignedTo: t.assignedTo ?? undefined,
+    githubIssueUrl: t.githubIssueUrl ?? undefined,
+    githubPrUrl: t.githubPrUrl ?? undefined,
+    vercelDeploymentUrl: t.vercelDeploymentUrl ?? undefined,
+    whatsappThreadRef: t.whatsappThreadRef ?? undefined,
+    doneAt: t.doneAt ?? undefined,
   };
 }
 
@@ -228,6 +285,15 @@ export type BusinessProjectInput = {
   clientId?: string;
   dueDate?: string | null;
   status?: BusinessProject["status"];
+  // V1.1.B agence digitale
+  projectType?: string | null;
+  priority?: string | null;
+  repoGithubUrl?: string | null;
+  vercelProjectUrl?: string | null;
+  productionUrl?: string | null;
+  stagingUrl?: string | null;
+  domain?: string | null;
+  nextAction?: string | null;
 };
 
 export type BusinessTaskInput = {
@@ -236,6 +302,15 @@ export type BusinessTaskInput = {
   projectId?: string;
   dueDate?: string | null;
   status?: BusinessTask["status"];
+  // V1.1.B agence digitale
+  priority?: string | null;
+  assignedTo?: string | null;
+  category?: string | null;
+  workflowStep?: string | null;
+  githubIssueUrl?: string | null;
+  githubPrUrl?: string | null;
+  vercelDeploymentUrl?: string | null;
+  whatsappThreadRef?: string | null;
 };
 
 /**
@@ -268,6 +343,16 @@ export function mapInputProjectFromUi(body: unknown): BusinessProjectInput {
 
   const status = asBusinessProjectStatus(b.status);
   if (status) out.status = status;
+
+  // V1.1.B agence digitale — passthrough simple (champs string optionnels)
+  if (b.projectType !== undefined) out.projectType = (b.projectType as string) || null;
+  if (b.priority !== undefined && b.priority !== "") out.priority = String(b.priority);
+  if (b.repoGithubUrl !== undefined) out.repoGithubUrl = (b.repoGithubUrl as string) || null;
+  if (b.vercelProjectUrl !== undefined) out.vercelProjectUrl = (b.vercelProjectUrl as string) || null;
+  if (b.productionUrl !== undefined) out.productionUrl = (b.productionUrl as string) || null;
+  if (b.stagingUrl !== undefined) out.stagingUrl = (b.stagingUrl as string) || null;
+  if (b.domain !== undefined) out.domain = (b.domain as string) || null;
+  if (b.nextAction !== undefined) out.nextAction = (b.nextAction as string) || null;
 
   return out;
 }
@@ -314,6 +399,16 @@ export function mapInputTaskFromUi(body: unknown): BusinessTaskInput {
       else out.status = "todo";
     }
   }
+
+  // V1.1.B agence digitale — passthrough simple
+  if (b.priority !== undefined && b.priority !== "") out.priority = String(b.priority);
+  if (b.assignedTo !== undefined) out.assignedTo = (b.assignedTo as string) || null;
+  if (b.category !== undefined) out.category = (b.category as string) || null;
+  if (b.workflowStep !== undefined) out.workflowStep = (b.workflowStep as string) || null;
+  if (b.githubIssueUrl !== undefined) out.githubIssueUrl = (b.githubIssueUrl as string) || null;
+  if (b.githubPrUrl !== undefined) out.githubPrUrl = (b.githubPrUrl as string) || null;
+  if (b.vercelDeploymentUrl !== undefined) out.vercelDeploymentUrl = (b.vercelDeploymentUrl as string) || null;
+  if (b.whatsappThreadRef !== undefined) out.whatsappThreadRef = (b.whatsappThreadRef as string) || null;
 
   return out;
 }

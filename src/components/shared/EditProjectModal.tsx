@@ -61,6 +61,21 @@ export function EditProjectModal({
     body.status = statusBusiness;
     if (dueRaw) body.dueDate = dueRaw;
 
+    // V1.1.B agence digitale
+    const projectType = String(form.get("projectType") || "").trim();
+    if (projectType) body.projectType = projectType;
+    else body.projectType = null;
+
+    const priority = String(form.get("priority") || "").trim();
+    body.priority = priority || null;
+
+    body.repoGithubUrl = String(form.get("repoGithubUrl") || "").trim() || null;
+    body.vercelProjectUrl = String(form.get("vercelProjectUrl") || "").trim() || null;
+    body.productionUrl = String(form.get("productionUrl") || "").trim() || null;
+    body.stagingUrl = String(form.get("stagingUrl") || "").trim() || null;
+    body.domain = String(form.get("domain") || "").trim() || null;
+    body.nextAction = String(form.get("nextAction") || "").trim() || null;
+
     if (!titleVal) {
       setError("Le titre est requis.");
       setSaving(false);
@@ -131,6 +146,60 @@ export function EditProjectModal({
             />
           </FormField>
         </div>
+
+        {/* V1.1.B agence digitale */}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Type projet">
+            <select name="projectType" defaultValue={project.projectType ?? ""} className={selectClass}>
+              <option value="">—</option>
+              <option value="site_web">Site web</option>
+              <option value="app_web">App web</option>
+              <option value="collaborateur_ia">Collaborateur IA</option>
+              <option value="automatisation">Automatisation</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="audit">Audit</option>
+            </select>
+          </FormField>
+          <FormField label="Priorité">
+            <select name="priority" defaultValue={project.priority ?? ""} className={selectClass}>
+              <option value="">—</option>
+              <option value="normale">Normale</option>
+              <option value="haute">Haute</option>
+              <option value="vip">VIP</option>
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="Prochaine action">
+          <input
+            name="nextAction"
+            defaultValue={project.nextAction ?? ""}
+            placeholder="Ex: relancer client devis, déployer staging…"
+            className={inputClass}
+          />
+        </FormField>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Repo GitHub">
+            <input name="repoGithubUrl" defaultValue={project.repoGithubUrl ?? ""} placeholder="https://github.com/eddigit/..." className={inputClass} />
+          </FormField>
+          <FormField label="Projet Vercel">
+            <input name="vercelProjectUrl" defaultValue={project.vercelProjectUrl ?? ""} placeholder="https://vercel.com/..." className={inputClass} />
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="URL production">
+            <input name="productionUrl" defaultValue={project.productionUrl ?? ""} placeholder="https://exemple.com" className={inputClass} />
+          </FormField>
+          <FormField label="URL staging">
+            <input name="stagingUrl" defaultValue={project.stagingUrl ?? ""} placeholder="https://staging.exemple.com" className={inputClass} />
+          </FormField>
+        </div>
+
+        <FormField label="Domaine">
+          <input name="domain" defaultValue={project.domain ?? ""} placeholder="exemple.com" className={inputClass} />
+        </FormField>
 
         {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
 

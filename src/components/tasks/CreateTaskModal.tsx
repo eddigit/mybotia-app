@@ -69,7 +69,15 @@ export function CreateTaskModal({
           fk_project: form.get("fk_project"),
           description: form.get("description") || "",
           date_end: dueTs || "",
-          priority: form.get("priority") || "0",
+          // V1.1.B agence digitale — priority business (low/medium/high/urgent)
+          priority: String(form.get("priority_label") || "medium"),
+          assignedTo: String(form.get("assignedTo") || "") || null,
+          category: String(form.get("category") || "") || null,
+          workflowStep: String(form.get("workflowStep") || "") || null,
+          githubIssueUrl: String(form.get("githubIssueUrl") || "") || null,
+          githubPrUrl: String(form.get("githubPrUrl") || "") || null,
+          vercelDeploymentUrl: String(form.get("vercelDeploymentUrl") || "") || null,
+          whatsappThreadRef: String(form.get("whatsappThreadRef") || "") || null,
         }),
       });
       if (!res.ok) {
@@ -131,13 +139,78 @@ export function CreateTaskModal({
             <input name="date_end" type="date" className={inputClass} />
           </FormField>
           <FormField label="Priorité">
-            <select name="priority" className={selectClass} defaultValue="0">
-              <option value="0">Basse</option>
-              <option value="1">Moyenne</option>
-              <option value="2">Haute</option>
+            <select name="priority_label" className={selectClass} defaultValue="medium">
+              <option value="low">Basse</option>
+              <option value="medium">Moyenne</option>
+              <option value="high">Haute</option>
+              <option value="urgent">Urgent</option>
             </select>
           </FormField>
         </div>
+
+        {/* V1.1.B agence digitale */}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Catégorie">
+            <select name="category" className={selectClass} defaultValue="">
+              <option value="">—</option>
+              <option value="dev">Dev</option>
+              <option value="design">Design</option>
+              <option value="contenu">Contenu</option>
+              <option value="client">Client</option>
+              <option value="admin">Admin</option>
+              <option value="devis">Devis</option>
+              <option value="facture">Facture</option>
+              <option value="déploiement">Déploiement</option>
+              <option value="bug">Bug</option>
+              <option value="ia">IA</option>
+            </select>
+          </FormField>
+          <FormField label="Étape workflow">
+            <select name="workflowStep" className={selectClass} defaultValue="">
+              <option value="">—</option>
+              <option value="brief">Brief</option>
+              <option value="devis">Devis</option>
+              <option value="acompte">Acompte</option>
+              <option value="architecture">Architecture</option>
+              <option value="maquette">Maquette</option>
+              <option value="dev">Dev</option>
+              <option value="recette">Recette</option>
+              <option value="déploiement">Déploiement</option>
+              <option value="livraison">Livraison</option>
+              <option value="maintenance">Maintenance</option>
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="Assigné à">
+          <select name="assignedTo" className={selectClass} defaultValue="">
+            <option value="">—</option>
+            <option value="gilles">Gilles</option>
+            <option value="lea">Léa</option>
+            <option value="damien">Damien</option>
+            <option value="client">Client</option>
+            <option value="autre">Autre</option>
+          </select>
+        </FormField>
+
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer text-text-muted hover:text-text-primary">Liens externes (optionnel)</summary>
+          <div className="mt-2 grid grid-cols-1 gap-3">
+            <FormField label="GitHub issue">
+              <input name="githubIssueUrl" placeholder="https://github.com/.../issues/123" className={inputClass} />
+            </FormField>
+            <FormField label="GitHub PR">
+              <input name="githubPrUrl" placeholder="https://github.com/.../pull/456" className={inputClass} />
+            </FormField>
+            <FormField label="Vercel deployment">
+              <input name="vercelDeploymentUrl" placeholder="https://...-vercel.app" className={inputClass} />
+            </FormField>
+            <FormField label="Réf WhatsApp">
+              <input name="whatsappThreadRef" placeholder="JID ou ID message" className={inputClass} />
+            </FormField>
+          </div>
+        </details>
+
         {error && <p className="text-[11px] text-red-400 mt-2">{error}</p>}
         <div className="flex items-center justify-end gap-3 mt-6">
           <button type="button" onClick={onClose} className={btnSecondary}>

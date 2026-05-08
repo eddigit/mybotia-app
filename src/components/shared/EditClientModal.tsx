@@ -50,6 +50,10 @@ export function EditClientModal({
       phone: String(form.get("phone") || "").trim() || null,
       status: String(form.get("status") || "active"),
       notes: String(form.get("notes") || "").trim() || null,
+      // V1.1.B agence digitale
+      clientType: String(form.get("clientType") || "").trim() || null,
+      priority: String(form.get("priority") || "").trim() || null,
+      whatsappJid: String(form.get("whatsappJid") || "").trim() || null,
     };
     if (!body.name) {
       setError("Le nom est requis.");
@@ -125,6 +129,36 @@ export function EditClientModal({
             name="notes"
             rows={3}
             defaultValue={client.notePublic || ""}
+            className={inputClass}
+          />
+        </FormField>
+
+        {/* V1.1.B agence digitale */}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Type">
+            <select name="clientType" defaultValue={client.clientType ?? ""} className={selectClass}>
+              <option value="">—</option>
+              <option value="site_web">Site web</option>
+              <option value="ia">Collaborateur IA</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="autre">Autre</option>
+            </select>
+          </FormField>
+          <FormField label="Priorité">
+            <select name="priority" defaultValue={client.priority ?? ""} className={selectClass}>
+              <option value="">—</option>
+              <option value="normale">Normale</option>
+              <option value="haute">Haute</option>
+              <option value="vip">VIP</option>
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="WhatsApp (JID)">
+          <input
+            name="whatsappJid"
+            defaultValue={client.whatsappJid ?? ""}
+            placeholder="33612345678@s.whatsapp.net"
             className={inputClass}
           />
         </FormField>

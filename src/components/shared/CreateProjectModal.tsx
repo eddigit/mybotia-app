@@ -47,6 +47,15 @@ export function CreateProjectModal({
           date_start: form.get("date_start") || "",
           date_end: form.get("date_end") || "",
           budget_amount: form.get("budget_amount") || "",
+          // V1.1.B agence digitale
+          projectType: String(form.get("projectType") || "") || null,
+          priority: String(form.get("priority") || "") || null,
+          repoGithubUrl: String(form.get("repoGithubUrl") || "") || null,
+          vercelProjectUrl: String(form.get("vercelProjectUrl") || "") || null,
+          productionUrl: String(form.get("productionUrl") || "") || null,
+          stagingUrl: String(form.get("stagingUrl") || "") || null,
+          domain: String(form.get("domain") || "") || null,
+          nextAction: String(form.get("nextAction") || "") || null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -133,6 +142,55 @@ export function CreateProjectModal({
             className={inputClass}
             placeholder="0"
           />
+        </FormField>
+
+        {/* V1.1.B agence digitale */}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Type">
+            <select name="projectType" defaultValue="" className={selectClass}>
+              <option value="">—</option>
+              <option value="site_web">Site web</option>
+              <option value="app_web">App web</option>
+              <option value="collaborateur_ia">Collaborateur IA</option>
+              <option value="automatisation">Automatisation</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="audit">Audit</option>
+            </select>
+          </FormField>
+          <FormField label="Priorité">
+            <select name="priority" defaultValue="" className={selectClass}>
+              <option value="">—</option>
+              <option value="normale">Normale</option>
+              <option value="haute">Haute</option>
+              <option value="vip">VIP</option>
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="Prochaine action">
+          <input name="nextAction" placeholder="Ex: kickoff client" className={inputClass} />
+        </FormField>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Repo GitHub">
+            <input name="repoGithubUrl" placeholder="https://github.com/..." className={inputClass} />
+          </FormField>
+          <FormField label="Projet Vercel">
+            <input name="vercelProjectUrl" placeholder="https://vercel.com/..." className={inputClass} />
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="URL production">
+            <input name="productionUrl" placeholder="https://..." className={inputClass} />
+          </FormField>
+          <FormField label="URL staging">
+            <input name="stagingUrl" placeholder="https://staging..." className={inputClass} />
+          </FormField>
+        </div>
+
+        <FormField label="Domaine">
+          <input name="domain" placeholder="exemple.com" className={inputClass} />
         </FormField>
 
         {error && (
