@@ -4,6 +4,12 @@ const AUTH_URL = process.env.AUTH_URL!;
 const AUTH_HOST = process.env.AUTH_HOST || "";
 
 /**
+ * Domaine du cookie d'auth. .mybotia.com par défaut → cookie lisible
+ * cross-subdomain (app, crm, etc.). Override via env si besoin (dev local).
+ */
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || ".mybotia.com";
+
+/**
  * Fetch the auth service. When AUTH_URL is a direct IP (Vercel → VPS),
  * use undici Client with explicit HTTP/1.1 ALPN + SNI servername to
  * bypass Apache HTTP/2 421 misdirected-request.
@@ -51,9 +57,11 @@ export async function POST(request: Request) {
       return Response.json(data, { status });
     }
 
-    // Set access token as httpOnly cookie
+    // Set access token as httpOnly cookie cross-subdomain (.mybotia.com)
+    // pour que crm.mybotia.com et autres sous-domaines partagent la session.
     const cookieStore = await cookies();
     cookieStore.set("mybotia_access", data.access_token as string, {
+      domain: COOKIE_DOMAIN,
       httpOnly: true,
       secure: true,
       sameSite: "lax",

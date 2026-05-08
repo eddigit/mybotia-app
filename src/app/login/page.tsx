@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
@@ -9,7 +9,33 @@ import { Footer } from "@/components/shared/Footer";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
-export default function LoginPage() {
+/**
+ * Validation stricte du paramètre `next` pour éviter les open-redirects.
+ * - URL relative interne : doit commencer par "/" et pas par "//"
+ * - URL absolue : doit être HTTPS et pointer sur mybotia.com ou un sous-domaine
+ * Tout le reste retombe sur "/".
+ */
+function safeNextUrl(next: string | null | undefined): string {
+  if (!next) return "/";
+  // Path interne (ex "/clients") — refuser "//evil.com"
+  if (next.startsWith("/") && !next.startsWith("//")) {
+    return next;
+  }
+  // URL absolue — whitelist *.mybotia.com en HTTPS
+  try {
+    const url = new URL(next);
+    if (url.protocol !== "https:") return "/";
+    const host = url.hostname.toLowerCase();
+    if (host === "mybotia.com" || host.endsWith(".mybotia.com")) {
+      return url.toString();
+    }
+  } catch {
+    // URL invalide
+  }
+  return "/";
+}
+
+function LoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,6 +43,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextParam = searchParams.get("next");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,7 +54,15 @@ export default function LoginPage() {
     const result = await login(email, password);
 
     if (result.ok) {
-      router.push("/");
+      const dest = safeNextUrl(nextParam);
+      // Redirection externe (autre sous-domaine .mybotia.com) → window.location pour
+      // forcer le browser à recharger avec le cookie .mybotia.com tout neuf.
+      // Path interne → router.push pour navigation client-side classique.
+      if (dest.startsWith("http")) {
+        window.location.assign(dest);
+        return;
+      }
+      router.push(dest);
     } else {
       setError(result.error || "Identifiants incorrects");
     }
@@ -123,5 +159,13 @@ export default function LoginPage() {
         <Footer variant="login" />
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   );
 }
