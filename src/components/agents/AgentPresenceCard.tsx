@@ -70,23 +70,30 @@ export function AgentPresenceCard({ agent }: { agent: Agent }) {
       {/* Description */}
       <p className="text-xs text-text-secondary leading-relaxed mb-4 text-center">{agent.description}</p>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-surface-3/50">
-          <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <div>
-            <p className="text-sm font-headline font-extrabold text-text-primary">{agent.tasksCompleted}</p>
-            <p className="micro-label text-text-muted">Taches</p>
-          </div>
+      {/* Stats — V1 garde-fou Voice : on n'affiche que les valeurs réelles
+          fournies par l'API (live). Pas de chiffre mock par défaut. */}
+      {(typeof agent.tasksCompleted === "number" || agent.responseTime) && (
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {typeof agent.tasksCompleted === "number" && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-surface-3/50">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-sm font-headline font-extrabold text-text-primary">{agent.tasksCompleted}</p>
+                <p className="micro-label text-text-muted">Taches</p>
+              </div>
+            </div>
+          )}
+          {agent.responseTime && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-surface-3/50">
+              <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-headline font-extrabold text-text-primary">{agent.responseTime}</p>
+                <p className="micro-label text-text-muted">Reponse</p>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-surface-3/50">
-          <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-sm font-headline font-extrabold text-text-primary">{agent.responseTime}</p>
-            <p className="micro-label text-text-muted">Reponse</p>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Specialties */}
       <div className="mb-4">

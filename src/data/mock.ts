@@ -1,3 +1,12 @@
+// ⚠️ MOCK — non utilisé en prod.
+// Ce fichier contient des fixtures statiques (chiffres `tasksCompleted: 847`,
+// `responseTime: '< 3s'`, conversations factices, etc.) qui ont servi pendant
+// la phase de design. Aucune route ni aucun composant prod ne l'importe
+// (vérifié 2026-05-08). Conservé en référence visuelle uniquement.
+//
+// Si vous touchez à ce fichier : ne JAMAIS l'importer dans un composant rendu
+// à l'utilisateur. Toutes les données utilisateur doivent venir des APIs
+// (`/api/agents`, `/api/dashboard`, `/api/tasks`, ...).
 import type {
   Agent,
   Conversation,
@@ -10,6 +19,9 @@ import type {
   Metric,
   Insight,
 } from '@/types';
+
+/** Flag explicite : ces données sont mock et ne doivent pas atteindre la UI prod. */
+export const __MOCK__ = true as const;
 
 // ============================================
 // Agents IA

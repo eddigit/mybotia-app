@@ -139,7 +139,7 @@ export default function RaphaelInlineChat({ contextHint }: { contextHint?: strin
         </div>
         <div>
           <div className="text-sm font-medium text-slate-100">Raphaël</div>
-          <div className="text-xs text-slate-400">CMB Conseil · en ligne</div>
+          <div className="text-xs text-slate-400">CMB Conseil</div>
         </div>
       </header>
 

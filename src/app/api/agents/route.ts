@@ -9,6 +9,10 @@ const AGENT_META: Record<
   string,
   Omit<Agent, "id" | "status" | "lastActive">
 > = {
+  // V1 garde-fou Voice : retrait des chiffres `tasksCompleted` / `responseTime`
+  // mock (847, 523, 312, 689, 234, 45, 156, ...). Tant qu'on n'a pas de
+  // métrique réelle agent-par-agent, on n'invente plus rien côté API.
+  // Quand des stats live seront branchées, elles viendront via fetchLiveStatus().
   lea: {
     name: "Lea",
     role: "Assistante principale",
@@ -22,8 +26,6 @@ const AGENT_META: Record<
       "Orchestration",
       "Relation client",
     ],
-    tasksCompleted: 847,
-    responseTime: "< 3s",
   },
   julian: {
     name: "Julian",
@@ -33,8 +35,6 @@ const AGENT_META: Record<
     model: "Premium",
     channels: ["telegram"],
     specialties: ["Infrastructure", "Monitoring", "DevOps", "Debug"],
-    tasksCompleted: 523,
-    responseTime: "< 2s",
   },
   nina: {
     name: "Nina",
@@ -44,8 +44,6 @@ const AGENT_META: Record<
     model: "Standard",
     channels: ["whatsapp", "telegram"],
     specialties: ["Social Media", "Contenu", "Communication", "Branding"],
-    tasksCompleted: 312,
-    responseTime: "< 5s",
   },
   oscar: {
     name: "Oscar",
@@ -60,8 +58,6 @@ const AGENT_META: Record<
       "CRM",
       "Suivi commercial",
     ],
-    tasksCompleted: 689,
-    responseTime: "< 4s",
   },
   max: {
     name: "Max",
@@ -76,8 +72,6 @@ const AGENT_META: Record<
       "Administration",
       "Reglementation",
     ],
-    tasksCompleted: 234,
-    responseTime: "< 3s",
   },
   lucy: {
     name: "Lucy",
@@ -92,8 +86,6 @@ const AGENT_META: Record<
       "Gestion etablissements",
       "Reglementation",
     ],
-    tasksCompleted: 45,
-    responseTime: "< 5s",
   },
   bullsage: {
     name: "BullSage",
@@ -102,8 +94,6 @@ const AGENT_META: Record<
     model: "Standard",
     channels: ["telegram"],
     specialties: ["Finance", "Crypto", "Analyse marche", "Trading"],
-    tasksCompleted: 156,
-    responseTime: "< 3s",
   },
   raphael: {
     name: "Raphael",
@@ -118,8 +108,6 @@ const AGENT_META: Record<
       "Administration",
       "Relation client",
     ],
-    tasksCompleted: 0,
-    responseTime: "< 3s",
   },
   maria: {
     name: "Maria",
@@ -134,8 +122,6 @@ const AGENT_META: Record<
       "Devis",
       "Relation client",
     ],
-    tasksCompleted: 0,
-    responseTime: "< 3s",
   },
 };
 
