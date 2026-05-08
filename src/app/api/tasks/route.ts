@@ -1,5 +1,7 @@
 // Bloc 5G — /api/tasks verrouillé sur le cockpit hostname.
 // GET/POST/PUT : un cockpit = un tenant. Plus d'agrégation multi-tenant.
+//
+// V1.1.B Phase 1 : GET passe par crm-router. POST/PUT inchangés (Phase 2).
 
 import {
   getTasks,
@@ -13,6 +15,17 @@ import {
 import { getSession } from "@/lib/session";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
 import { requireFeature } from "@/lib/tenant-features";
+import {
+  getCrmProvider,
+  CrmRouterError,
+  crmRouterErrorResponse,
+} from "@/lib/crm-router";
+import { businessGetJson, BusinessClientError } from "@/lib/business-client";
+import {
+  mapBusinessTaskToCockpit,
+  type BusinessTask,
+  type BusinessProject,
+} from "@/lib/business-mappers";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -44,6 +57,54 @@ export async function GET(request: Request) {
       return Response.json({ error: "Non authentifie" }, { status: 401, headers: NO_STORE });
     }
 
+    const provider = await getCrmProvider(tenantSlug);
+
+    if (provider.kind === "external") {
+      return Response.json(
+        { error: "crm_provider_not_configured", tenant: tenantSlug },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    if (provider.kind === "mybotia_business") {
+      const claims = {
+        tenantId: provider.tenantId,
+        tenantSlug,
+        scopes: ["crm:read"] as const,
+      };
+      const [tasksBz, projectsBz] = await Promise.all([
+        businessGetJson<BusinessTask[]>("/api/v1/tasks", claims),
+        businessGetJson<BusinessProject[]>("/api/v1/projects", claims),
+      ]);
+      const projectNameById: Record<string, string> = {};
+      for (const p of projectsBz) projectNameById[p.id] = p.name;
+
+      const today = todayISO();
+      let mapped = tasksBz.map((t) => {
+        const base = mapBusinessTaskToCockpit(t, projectNameById[t.projectId]);
+        return {
+          ...base,
+          progress:
+            base.status === "done" ? 100 : base.status === "in_progress" ? 50 : 0,
+          projectRef: "",
+          tenantSlug,
+          overdue: base.dueDate ? base.dueDate < today && base.status !== "done" : false,
+        };
+      });
+      if (todayOnly) {
+        mapped = mapped.filter(
+          (t) =>
+            t.status !== "done" &&
+            t.dueDate !== undefined &&
+            t.dueDate <= todayISO(),
+        );
+      }
+      // mineOnly côté business V1 : pas de notion d'assignment user → on
+      // retourne tout pour le user courant (cockpit mybotia = Gilles).
+      return Response.json(mapped, { headers: NO_STORE });
+    }
+
+    // dolibarr (legacy) — flow inchangé
     const [tasksRaw, projects] = await Promise.all([
       getTasks(
         200,
@@ -117,8 +178,15 @@ export async function GET(request: Request) {
 
     return Response.json(tasks, { headers: NO_STORE });
   } catch (e) {
+    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof BusinessClientError) {
+      return Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+    }
     return Response.json(
-      { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
+      { error: e instanceof Error ? e.message : "Erreur CRM" },
       { status: 502, headers: NO_STORE }
     );
   }
