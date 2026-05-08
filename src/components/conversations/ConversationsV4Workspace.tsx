@@ -27,6 +27,7 @@ import {
   MessageApi,
 } from "@/lib/v4/client-api";
 import { useAuth } from "@/contexts/auth-context";
+import { useVoiceConvContext } from "@/contexts/voice-context";
 import { AgentAvatar } from "@/components/shared/AgentAvatar";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { UserAvatarV4 } from "./UserAvatarV4";
@@ -124,6 +125,27 @@ export function ConversationsV4Workspace() {
     const c = conversations.find((x) => x.id === activeConvId);
     if (c?.folderId) ensureFolderOpen(c.folderId);
   }, [activeConvId, conversations, ensureFolderOpen]);
+
+  // V1 garde-fou Voice (Agent 4 — 2026-05-08) : publier la conv active vers
+  // le VoiceConvProvider posé dans AppShell. ContextRail/VoicePanel lisent ça
+  // pour afficher le client/projet lié et le transmettre au server voice.
+  const { setVoiceConvContext } = useVoiceConvContext();
+  useEffect(() => {
+    if (!activeConv) {
+      setVoiceConvContext(null);
+      return;
+    }
+    setVoiceConvContext({
+      conversationId: activeConv.id,
+      clientRef: activeConv.clientRef,
+      projectRef: activeConv.projectRef,
+      channel: activeConv.channel,
+    });
+    // À l'unmount de la page, on clear pour ne pas laisser un contexte fantôme.
+    return () => {
+      setVoiceConvContext(null);
+    };
+  }, [activeConv, setVoiceConvContext]);
 
   useEffect(() => {
     if (!activeConvId) {
