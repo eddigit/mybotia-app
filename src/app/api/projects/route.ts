@@ -194,6 +194,15 @@ export async function POST(request: Request) {
         description: input.description ?? null,
         status: input.status ?? "active",
         dueDate: input.dueDate ?? null,
+        // V1.1.B agence digitale
+        projectType: input.projectType ?? null,
+        priority: input.priority ?? null,
+        repoGithubUrl: input.repoGithubUrl ?? null,
+        vercelProjectUrl: input.vercelProjectUrl ?? null,
+        productionUrl: input.productionUrl ?? null,
+        stagingUrl: input.stagingUrl ?? null,
+        domain: input.domain ?? null,
+        nextAction: input.nextAction ?? null,
       };
       const created = await businessSendJson<{ id: string; clientId: string; name: string }>(
         "POST",

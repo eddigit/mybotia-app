@@ -301,6 +301,15 @@ export async function POST(request: Request) {
         description: input.description ?? null,
         status: input.status ?? "todo",
         dueDate: input.dueDate ?? null,
+        // V1.1.B agence digitale
+        priority: input.priority ?? null,
+        assignedTo: input.assignedTo ?? null,
+        category: input.category ?? null,
+        workflowStep: input.workflowStep ?? null,
+        githubIssueUrl: input.githubIssueUrl ?? null,
+        githubPrUrl: input.githubPrUrl ?? null,
+        vercelDeploymentUrl: input.vercelDeploymentUrl ?? null,
+        whatsappThreadRef: input.whatsappThreadRef ?? null,
       };
       const created = await businessSendJson<{ id: string; title: string; status: string }>(
         "POST",
