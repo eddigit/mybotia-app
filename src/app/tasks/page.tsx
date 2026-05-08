@@ -4,8 +4,14 @@
 // Le serveur résout le tenant via Host (app.mybotia.com → mybotia,
 // vlmedical.mybotia.com → vlmedical, etc.). Aucun pill tenant côté UI,
 // aucun query forcé côté hook (useScopedTasks/useScopedProjects).
+//
+// V1.1.B Phase 3C — refonte filtres :
+// - Onglets projets (illisibles >5) → select projet recherchable
+// - Support param URL `?projectId={id}` (pré-sélection depuis fiche projet)
+// - Affichage explicite client + projet par tâche dans TaskPanel
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckSquare, Plus, FolderPlus } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { btnPrimary, btnSecondary } from "@/components/shared/FormModal";
@@ -25,7 +31,20 @@ export default function TasksPage() {
 
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useScopedTasks();
   const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useScopedProjects();
-  const [projectFilter, setProjectFilter] = useState<string>("all");
+
+  // V1.1.B Phase 3C — pré-sélection projet via URL (?projectId=xxx)
+  const searchParams = useSearchParams();
+  const initialProjectId = searchParams.get("projectId");
+  const [projectFilter, setProjectFilter] = useState<string>(initialProjectId || "all");
+
+  // Sync param URL → state si l'URL change (navigation interne)
+  useEffect(() => {
+    const fromUrl = searchParams.get("projectId");
+    if (fromUrl && fromUrl !== projectFilter) {
+      setProjectFilter(fromUrl);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -45,6 +64,20 @@ export default function TasksPage() {
     (p) => !p.tenantSlug || p.tenantSlug === TENANT_SLUG
   );
   const activeProjects = mybotiaProjects.filter((p) => p.status === "active");
+
+  // V1.1.B Phase 3C — pour le select : tous les projets non terminés,
+  // triés par priorité puis nom (VIP/haute en haut). Tri stable.
+  const sortedProjects = useMemo(() => {
+    const list = mybotiaProjects.filter((p) => p.status !== "completed");
+    return [...list].sort((a, b) => {
+      const pa = (a.priority || "").toLowerCase();
+      const pb = (b.priority || "").toLowerCase();
+      const wA = pa === "vip" ? 0 : pa === "haute" || pa === "high" ? 1 : 2;
+      const wB = pb === "vip" ? 0 : pb === "haute" || pb === "high" ? 1 : 2;
+      if (wA !== wB) return wA - wB;
+      return a.name.localeCompare(b.name);
+    });
+  }, [mybotiaProjects]);
 
   // V1.1.B agence digitale — filtres composés.
   // Cast pour accéder aux champs étendus (TaskItem ne les déclare pas encore).
@@ -123,34 +156,31 @@ export default function TasksPage() {
           }
         />
 
-        {/* Filtre projet */}
+        {/* V1.1.B Phase 3C — filtre projet en select (remplace onglets) */}
         <div className="flex items-center gap-3 mt-5">
           <span className="micro-label text-text-muted">Projet</span>
-          <div className="flex gap-1 bg-surface-1 p-1 rounded-sm overflow-x-auto">
-            <button
-              onClick={() => setProjectFilter("all")}
-              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all whitespace-nowrap ${
-                projectFilter === "all"
-                  ? "bg-accent-primary/10 text-accent-glow"
-                  : "text-text-muted hover:bg-surface-3/50"
-              }`}
-            >
-              Tous
-            </button>
-            {activeProjects.slice(0, 8).map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setProjectFilter(p.id)}
-                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight rounded-sm transition-all whitespace-nowrap ${
-                  projectFilter === p.id
-                    ? "bg-accent-primary/10 text-accent-glow"
-                    : "text-text-muted hover:bg-surface-3/50"
-                }`}
-              >
-                {p.name.length > 20 ? p.name.slice(0, 20) + "..." : p.name}
-              </button>
+          <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="bg-surface-2 border border-border-subtle px-2 py-1.5 text-[11px] text-text-primary min-w-[200px] focus:outline-none focus:border-accent-primary/40"
+          >
+            <option value="all">Tous les projets</option>
+            {sortedProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.clientName ? ` — ${p.clientName}` : ""}
+              </option>
             ))}
-          </div>
+          </select>
+          {projectFilter !== "all" && (
+            <button
+              type="button"
+              onClick={() => setProjectFilter("all")}
+              className="text-[10px] text-text-muted hover:text-text-primary underline"
+            >
+              Effacer
+            </button>
+          )}
         </div>
 
         {/* V1.1.B agence digitale — filtres composés */}
