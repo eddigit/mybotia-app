@@ -2,6 +2,9 @@
 // GET/POST/PUT : un cockpit = un tenant. Plus d'agrégation multi-tenant.
 //
 // V1.1.B Phase 1 : GET passe par crm-router. POST/PUT inchangés (Phase 2).
+// V1.1.B Phase 1.1.A : log JSON `crm_route` à chaque sortie GET.
+
+import crypto from "node:crypto";
 
 import {
   getTasks,
@@ -19,6 +22,7 @@ import {
   getCrmProvider,
   CrmRouterError,
   crmRouterErrorResponse,
+  logCrmRoute,
 } from "@/lib/crm-router";
 import { businessGetJson, BusinessClientError } from "@/lib/business-client";
 import {
@@ -28,6 +32,7 @@ import {
 } from "@/lib/business-mappers";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
+const ROUTE = "/api/tasks";
 
 function todayISO(): string {
   const d = new Date();
@@ -38,9 +43,23 @@ function todayISO(): string {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  let tenantId: string | null = null;
+  let tenantSlug = "?";
+  let providerKind: string | null = null;
+  let status = 200;
+  let errorCode: string | null = null;
+  let response: Response;
+
   try {
     const featureCheck = await requireFeature(request, "tasks");
-    if (!featureCheck.ok) return featureCheck.response;
+    if (!featureCheck.ok) {
+      response = featureCheck.response;
+      status = response.status;
+      errorCode = "feature_disabled";
+      return response;
+    }
 
     const url = new URL(request.url);
     const todayOnly = url.searchParams.get("today") === "1";
@@ -48,22 +67,34 @@ export async function GET(request: Request) {
 
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
-      return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+      status = cockpit.status;
+      errorCode = "cockpit_refused";
+      response = Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+      return response;
     }
-    const { tenant, slug: tenantSlug } = cockpit;
+    const { tenant, slug } = cockpit;
+    tenantSlug = slug;
 
     const session = await getSession();
     if (!session) {
-      return Response.json({ error: "Non authentifie" }, { status: 401, headers: NO_STORE });
+      status = 401;
+      errorCode = "no_session";
+      response = Response.json({ error: "Non authentifie" }, { status: 401, headers: NO_STORE });
+      return response;
     }
 
     const provider = await getCrmProvider(tenantSlug);
+    tenantId = provider.tenantId;
+    providerKind = provider.kind;
 
     if (provider.kind === "external") {
-      return Response.json(
-        { error: "crm_provider_not_configured", tenant: tenantSlug },
-        { status: 501, headers: NO_STORE },
+      status = 501;
+      errorCode = "crm_provider_not_configured";
+      response = Response.json(
+        { error: errorCode, tenant: tenantSlug },
+        { status, headers: NO_STORE },
       );
+      return response;
     }
 
     if (provider.kind === "mybotia_business") {
@@ -101,7 +132,8 @@ export async function GET(request: Request) {
       }
       // mineOnly côté business V1 : pas de notion d'assignment user → on
       // retourne tout pour le user courant (cockpit mybotia = Gilles).
-      return Response.json(mapped, { headers: NO_STORE });
+      response = Response.json(mapped, { headers: NO_STORE });
+      return response;
     }
 
     // dolibarr (legacy) — flow inchangé
@@ -176,19 +208,44 @@ export async function GET(request: Request) {
       };
     });
 
-    return Response.json(tasks, { headers: NO_STORE });
+    response = Response.json(tasks, { headers: NO_STORE });
+    return response;
   } catch (e) {
-    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof CrmRouterError) {
+      status = e.status;
+      errorCode = e.code;
+      response = crmRouterErrorResponse(e);
+      return response;
+    }
     if (e instanceof BusinessClientError) {
-      return Response.json(
+      status = e.status;
+      errorCode = e.code;
+      response = Response.json(
         { error: e.code, message: e.message },
         { status: e.status, headers: NO_STORE },
       );
+      return response;
     }
-    return Response.json(
+    status = 502;
+    errorCode = e instanceof Error ? e.name : "UnknownError";
+    response = Response.json(
       { error: e instanceof Error ? e.message : "Erreur CRM" },
       { status: 502, headers: NO_STORE }
     );
+    return response;
+  } finally {
+    logCrmRoute({
+      evt: "crm_route",
+      request_id: requestId,
+      tenant_id: tenantId,
+      tenant_slug: tenantSlug,
+      route: ROUTE,
+      crm_provider: providerKind,
+      source: providerKind,
+      status,
+      duration_ms: Date.now() - startedAt,
+      error_code: errorCode,
+    });
   }
 }
 

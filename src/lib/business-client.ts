@@ -81,6 +81,26 @@ type FetchOpts = {
   timeoutMs?: number;
 };
 
+/**
+ * Phase 1.1.A — log JSON structuré par appel HTTP business. Capté par
+ * `journalctl -u mybotia-app | grep business_call`. Aucune valeur sensible
+ * (token, cookie, body) — uniquement métadonnées techniques.
+ */
+type BusinessCallLog = {
+  evt: "business_call";
+  tenant_id: string;
+  tenant_slug: string;
+  path: string;
+  status: number;
+  duration_ms: number;
+  error_code: string | null;
+};
+
+function logBusinessCall(entry: BusinessCallLog): void {
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(entry));
+}
+
 async function fetchJson<T>(
   url: string,
   token: string,
@@ -142,13 +162,39 @@ export async function businessGetJson<T>(
   }
   const url = `${getBusinessUrl()}${path}`;
   const token = signServiceToken(claims);
-  const wrapper = await fetchJson<{ data: T }>(url, token, opts);
-  if (!wrapper || typeof wrapper !== "object" || !("data" in wrapper)) {
-    throw new BusinessClientError(
-      502,
-      "bad_response_shape",
-      "Réponse business sans champ `data`",
-    );
+  const startedAt = Date.now();
+  let status = 0;
+  let errorCode: string | null = null;
+  try {
+    const wrapper = await fetchJson<{ data: T }>(url, token, opts);
+    if (!wrapper || typeof wrapper !== "object" || !("data" in wrapper)) {
+      errorCode = "bad_response_shape";
+      throw new BusinessClientError(
+        502,
+        errorCode,
+        "Réponse business sans champ `data`",
+      );
+    }
+    status = 200;
+    return wrapper.data;
+  } catch (err) {
+    if (err instanceof BusinessClientError) {
+      status = err.status;
+      errorCode = errorCode ?? err.code;
+    } else {
+      status = 502;
+      errorCode = "unknown_error";
+    }
+    throw err;
+  } finally {
+    logBusinessCall({
+      evt: "business_call",
+      tenant_id: claims.tenantId,
+      tenant_slug: claims.tenantSlug,
+      path,
+      status,
+      duration_ms: Date.now() - startedAt,
+      error_code: errorCode,
+    });
   }
-  return wrapper.data;
 }

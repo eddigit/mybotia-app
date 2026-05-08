@@ -157,6 +157,29 @@ export function invalidateCrmProvider(slug?: string): void {
 }
 
 /**
+ * Phase 1.1.A — log JSON structuré pour chaque appel routé. Capté par
+ * `journalctl -u mybotia-app | grep crm_route`. Ne JAMAIS inclure : JWT,
+ * cookie, Authorization, secret, payload client. Metadata technique seul.
+ */
+export type CrmRouteLog = {
+  evt: "crm_route";
+  request_id: string;
+  tenant_id: string | null;
+  tenant_slug: string;
+  route: string;
+  crm_provider: string | null;
+  source: string | null;
+  status: number;
+  duration_ms: number;
+  error_code: string | null;
+};
+
+export function logCrmRoute(entry: CrmRouteLog): void {
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(entry));
+}
+
+/**
  * Helper Response : transforme `CrmRouterError` en réponse HTTP normalisée.
  * Les routes Next.js peuvent l'utiliser via `if (e instanceof CrmRouterError)`.
  */
