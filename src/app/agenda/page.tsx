@@ -24,7 +24,7 @@ export default function AgendaPage() {
         {
           title: "Rendez-vous",
           description:
-            "Tous les événements agenda Dolibarr (RDV physiques, appels, visio) tous tenants confondus.",
+            "Tous les événements agenda CRM (RDV physiques, appels, visio) tous tenants confondus.",
           icon: Calendar,
         },
         {
@@ -46,7 +46,7 @@ export default function AgendaPage() {
           icon: CalendarDays,
         },
       ]}
-      nextBlockNote="Cette page sera activée au Bloc 5E — vue calendrier connectée à Dolibarr agendaevents."
+      nextBlockNote="Cette page sera activée au Bloc 5E — vue calendrier connectée aux événements CRM."
     />
   );
 }

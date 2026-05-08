@@ -24,7 +24,7 @@ export default function PipelinePage() {
         {
           title: "Pipeline commercial",
           description:
-            "Kanban des opportunités en cours par étape. Source : Dolibarr (projets avec opp_amount > 0, mappés via opp_status).",
+            "Kanban des opportunités en cours par étape. Source : projets CRM avec montant d'opportunité défini.",
           icon: TrendingUp,
         },
         {
@@ -44,12 +44,12 @@ export default function PipelinePage() {
         {
           title: "Drag-and-drop",
           description:
-            "Déplacement d'une carte d'une colonne à l'autre déclenche une mise à jour Dolibarr (opp_status). Toast de confirmation et rollback UI en cas d'erreur API.",
+            "Déplacement d'une carte d'une colonne à l'autre déclenche une mise à jour de l'étape. Toast de confirmation et rollback UI en cas d'erreur API.",
           icon: Sparkles,
           note: "Arrive au Bloc 5C, après validation des cards cliquables",
         },
       ]}
-      nextBlockNote="Cette page sera activée progressivement : Bloc 5B (cards cliquables) puis Bloc 5C (drag-and-drop avec persistance Dolibarr)."
+      nextBlockNote="Cette page sera activée progressivement : Bloc 5B (cards cliquables) puis Bloc 5C (drag-and-drop avec persistance CRM)."
     />
   );
 }

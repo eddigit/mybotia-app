@@ -240,7 +240,7 @@ export default function ClientDetailPage({
         <button
           disabled
           className={`${baseBtn} text-amber-300 bg-amber-400/10 border border-amber-400/30 cursor-wait`}
-          title="Generation du PDF cote Dolibarr..."
+          title="Generation du PDF en cours..."
         >
           <Loader2 className="w-3 h-3 animate-spin" />
           Generation...
@@ -252,7 +252,7 @@ export default function ClientDetailPage({
         <button
           onClick={() => handleGeneratePdf(modulepart, ref, docId)}
           className={`${baseBtn} text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30`}
-          title="Le PDF n'existe pas encore cote Dolibarr. Cliquer pour le generer."
+          title="Le PDF n'existe pas encore. Cliquer pour le generer."
         >
           <FilePlus className="w-3 h-3" />
           PDF absent — Generer
