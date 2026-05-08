@@ -1,3 +1,13 @@
+// V1.1.B Phase 2 A3 — fiche client via crm-router.
+// mybotia → mybotia_business : client + contacts + projects + quotes +
+//   invoices + activities[] (vide, business V1 n'a pas d'events)
+// legacy → Dolibarr (5 endpoints en parallèle, comportement V1.1.A)
+//
+// Le `id` est un UUID si provider=business, sinon un id numérique Dolibarr.
+// On résout le provider d'abord, puis on dispatch.
+
+import crypto from "node:crypto";
+
 import {
   getThirdParty,
   getThirdPartyContacts,
@@ -13,14 +23,193 @@ import {
   mapProposal,
   mapDolibarrProject,
 } from "@/lib/mappers";
+import { resolveCockpitTenants } from "@/lib/tenant-resolver";
+import { requireFeature } from "@/lib/tenant-features";
+import {
+  getCrmProvider,
+  CrmRouterError,
+  crmRouterErrorResponse,
+  logCrmRoute,
+} from "@/lib/crm-router";
+import {
+  businessGetJson,
+  businessSendJson,
+  BusinessClientError,
+} from "@/lib/business-client";
+import {
+  mapBusinessClientToCockpit,
+  mapBusinessProjectToCockpit,
+  type BusinessClient,
+  type BusinessProject,
+} from "@/lib/business-mappers";
+
+const NO_STORE = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+} as const;
+const ROUTE_GET = "/api/clients/[id]";
+const ROUTE_PATCH = "/api/clients/[id]";
+
+// Shapes business non couvertes par business-mappers : minimal local types.
+type BusinessContactRow = {
+  id: string;
+  clientId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+};
+
+type BusinessQuoteRow = {
+  id: string;
+  reference: string;
+  clientId: string;
+  status: string;
+  totalTtc: string | number;
+  issuedAt: string | null;
+  createdAt: string;
+};
+
+type BusinessInvoiceRow = {
+  id: string;
+  reference: string;
+  clientId: string;
+  status: string;
+  totalTtc: string | number;
+  issuedAt: string | null;
+  createdAt: string;
+};
+
+function safeNumber(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = parseFloat(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  return 0;
+}
 
 export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  let tenantId: string | null = null;
+  let tenantSlug = "?";
+  let providerKind: string | null = null;
+  let status = 200;
+  let errorCode: string | null = null;
+  let response: Response;
 
   try {
+    const { id } = await params;
+
+    const featureCheck = await requireFeature(request, "crm");
+    if (!featureCheck.ok) {
+      response = featureCheck.response;
+      status = response.status;
+      errorCode = "feature_disabled";
+      return response;
+    }
+
+    const cockpit = await resolveCockpitTenants(request);
+    if (!cockpit.ok) {
+      status = cockpit.status;
+      errorCode = "cockpit_refused";
+      response = Response.json(
+        { error: cockpit.error },
+        { status: cockpit.status, headers: NO_STORE },
+      );
+      return response;
+    }
+    tenantSlug = cockpit.slug;
+
+    const provider = await getCrmProvider(tenantSlug);
+    tenantId = provider.tenantId;
+    providerKind = provider.kind;
+
+    if (provider.kind === "external") {
+      status = 501;
+      errorCode = "crm_provider_not_configured";
+      response = Response.json(
+        { error: errorCode, tenant: tenantSlug },
+        { status, headers: NO_STORE },
+      );
+      return response;
+    }
+
+    if (provider.kind === "mybotia_business") {
+      const claims = {
+        tenantId: provider.tenantId,
+        tenantSlug,
+        scopes: ["crm:read"] as const,
+      };
+      const idEnc = encodeURIComponent(id);
+      const [bizClient, bizContacts, bizProjects, bizQuotes, bizInvoices] =
+        await Promise.all([
+          businessGetJson<BusinessClient>(`/api/v1/clients/${idEnc}`, claims),
+          businessGetJson<BusinessContactRow[]>(
+            `/api/v1/contacts?client_id=${idEnc}`,
+            claims,
+          ),
+          businessGetJson<BusinessProject[]>(
+            `/api/v1/projects?client_id=${idEnc}`,
+            claims,
+          ),
+          businessGetJson<BusinessQuoteRow[]>(
+            `/api/v1/quotes?client_id=${idEnc}`,
+            claims,
+          ),
+          businessGetJson<BusinessInvoiceRow[]>(
+            `/api/v1/invoices?client_id=${idEnc}`,
+            claims,
+          ),
+        ]);
+
+      const client = mapBusinessClientToCockpit(bizClient, tenantSlug);
+      const projects = bizProjects.map((p, i) =>
+        mapBusinessProjectToCockpit(p, i, client.name, tenantSlug),
+      );
+
+      response = Response.json(
+        {
+          client,
+          contacts: bizContacts.map((c) => ({
+            id: c.id,
+            name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim(),
+            email: c.email ?? "",
+            phone: c.phone ?? undefined,
+            role: c.role ?? undefined,
+          })),
+          activities: [],
+          invoices: bizInvoices.map((inv) => ({
+            id: inv.id,
+            ref: inv.reference,
+            total: safeNumber(inv.totalTtc),
+            status:
+              inv.status === "paid"
+                ? "paid"
+                : inv.status === "draft"
+                  ? "draft"
+                  : "sent",
+            date: inv.issuedAt ?? inv.createdAt?.slice(0, 10) ?? "",
+          })),
+          proposals: bizQuotes.map((q) => ({
+            id: q.id,
+            ref: q.reference,
+            total: safeNumber(q.totalTtc),
+            status: q.status,
+            date: q.issuedAt ?? q.createdAt?.slice(0, 10) ?? "",
+          })),
+          projects,
+        },
+        { headers: NO_STORE },
+      );
+      return response;
+    }
+
+    // dolibarr (legacy) — flow inchangé
     const session = await getSession();
     const tenant = session?.tenant;
 
@@ -42,7 +231,7 @@ export async function GET(
 
     const activities = sortedEvents.slice(0, 15).map((e) => mapEventToActivity(e));
 
-    return Response.json({
+    response = Response.json({
       client,
       contacts: contacts.map((c) => ({
         id: c.id,
@@ -60,7 +249,7 @@ export async function GET(
           inv.paye === "1" ? "paid" : inv.status === "0" ? "draft" : "sent",
         date: inv.date
           ? new Date(
-              typeof inv.date === "number" ? inv.date * 1000 : inv.date
+              typeof inv.date === "number" ? inv.date * 1000 : inv.date,
             )
               .toISOString()
               .slice(0, 10)
@@ -69,11 +258,43 @@ export async function GET(
       proposals: proposals.map((p) => mapProposal(p)),
       projects: projects.map((p, i) => mapDolibarrProject(p, i, client.name)),
     });
+    return response;
   } catch (e) {
-    return Response.json(
-      { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
-      { status: 502 }
+    if (e instanceof CrmRouterError) {
+      status = e.status;
+      errorCode = e.code;
+      response = crmRouterErrorResponse(e);
+      return response;
+    }
+    if (e instanceof BusinessClientError) {
+      status = e.status;
+      errorCode = e.code;
+      response = Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+      return response;
+    }
+    status = 502;
+    errorCode = e instanceof Error ? e.name : "UnknownError";
+    response = Response.json(
+      { error: e instanceof Error ? e.message : "Erreur CRM" },
+      { status: 502, headers: NO_STORE },
     );
+    return response;
+  } finally {
+    logCrmRoute({
+      evt: "crm_route",
+      request_id: requestId,
+      tenant_id: tenantId,
+      tenant_slug: tenantSlug,
+      route: ROUTE_GET,
+      crm_provider: providerKind,
+      source: providerKind,
+      status,
+      duration_ms: Date.now() - startedAt,
+      error_code: errorCode,
+    });
   }
 }
 
@@ -81,26 +302,7 @@ export async function GET(
 // mybotia → mybotia_business avec scope crm:write.
 // Tenants legacy : Dolibarr Platform n'expose pas updateClient → 501.
 
-import crypto from "node:crypto";
-
-import { resolveCockpitTenants } from "@/lib/tenant-resolver";
-import { requireFeature } from "@/lib/tenant-features";
-import {
-  getCrmProvider,
-  CrmRouterError,
-  crmRouterErrorResponse,
-  logCrmRoute,
-} from "@/lib/crm-router";
-import { businessSendJson, BusinessClientError } from "@/lib/business-client";
-import {
-  mapBusinessClientToCockpit,
-  type BusinessClient,
-} from "@/lib/business-mappers";
-
-const NO_STORE_PATCH = {
-  "Cache-Control": "no-store, no-cache, must-revalidate",
-} as const;
-const ROUTE_PATCH = "/api/clients/[id]";
+const NO_STORE_PATCH = NO_STORE;
 
 export async function PATCH(
   request: Request,
