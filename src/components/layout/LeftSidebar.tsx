@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { useCockpitFeatures } from "@/hooks/use-api";
 import { Shield, Coins, Stethoscope, MessageSquare } from "lucide-react";
+import { UserAvatarV4 } from "@/components/conversations/UserAvatarV4";
 
 const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
@@ -81,9 +82,12 @@ export function LeftSidebar({
     return features[item.feature] === true;
   });
 
-  const initials = user?.email
-    ? user.email.slice(0, 2).toUpperCase()
-    : "??";
+  // Bloc Settings V1 — fallback initiales propre via UserAvatarV4 (dérivé
+  // prénom+nom JWT, sinon email avec split sur ./_/-). Quand avatar_url sera
+  // alimenté côté core."user" (V1.3), passer la valeur ici.
+  const userDisplayName = user
+    ? [user.first_name, user.last_name].filter(Boolean).join(" ") || undefined
+    : undefined;
 
   return (
     <aside
@@ -258,12 +262,19 @@ export function LeftSidebar({
       {!collapsed && (
         <div className="p-4 border-t border-border-subtle">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-surface-3 ring-1 ring-accent-primary/20 flex items-center justify-center overflow-hidden">
-              <span className="text-sm font-bold text-accent-glow">{initials}</span>
-            </div>
+            <UserAvatarV4
+              email={user?.email}
+              name={userDisplayName}
+              size={36}
+              className="ring-1 ring-accent-primary/20 shrink-0"
+            />
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-sm font-semibold text-text-primary truncate">{user?.email}</span>
-              <span className="micro-label text-text-muted">{user?.tenant_slug} &middot; {user?.role}</span>
+              <span className="text-sm font-semibold text-text-primary truncate">
+                {userDisplayName ?? user?.email}
+              </span>
+              <span className="micro-label text-text-muted">
+                {user?.tenant_slug} &middot; {user?.role}
+              </span>
             </div>
             <button
               onClick={logout}
