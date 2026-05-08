@@ -21,7 +21,11 @@ import {
   crmRouterErrorResponse,
   logCrmRoute,
 } from "@/lib/crm-router";
-import { businessGetJson, BusinessClientError } from "@/lib/business-client";
+import {
+  businessGetJson,
+  businessSendJson,
+  BusinessClientError,
+} from "@/lib/business-client";
 import {
   mapBusinessProjectToCockpit,
   type BusinessProject,
@@ -157,9 +161,47 @@ export async function POST(request: Request) {
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
     }
-    const { tenant } = cockpit;
+    const { tenant, slug: tenantSlug } = cockpit;
+
+    const provider = await getCrmProvider(tenantSlug);
 
     const body = await request.json();
+
+    if (provider.kind === "external") {
+      return Response.json(
+        { error: "crm_provider_not_configured", tenant: tenantSlug },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    if (provider.kind === "mybotia_business") {
+      // V1.1.B Phase 2 — projet créé directement dans mybotia_business via
+      // service token. Le contrat business attend { clientId, name, ... },
+      // pas le shape Dolibarr (ref/title/socid/...). On accepte les deux.
+      const businessBody = {
+        clientId: body.clientId ?? body.socid,
+        name: body.name ?? body.title,
+        description: body.description || null,
+        status: body.status || "active",
+        dueDate: body.dueDate || body.date_end || null,
+      };
+      const created = await businessSendJson<{ id: string; clientId: string; name: string }>(
+        "POST",
+        "/api/v1/projects",
+        businessBody,
+        {
+          tenantId: provider.tenantId,
+          tenantSlug,
+          scopes: ["crm:read", "crm:write"],
+        },
+      );
+      return Response.json(
+        { id: created.id, tenant_slug: tenantSlug, name: created.name },
+        { status: 201, headers: NO_STORE },
+      );
+    }
+
+    // dolibarr (legacy) — flow inchangé
     if (!body.title || !body.ref) {
       return Response.json(
         { error: "title et ref sont requis" },
@@ -195,6 +237,13 @@ export async function POST(request: Request) {
       { status: 201, headers: NO_STORE }
     );
   } catch (e) {
+    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof BusinessClientError) {
+      return Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+    }
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur creation projet" },
       { status: 502, headers: NO_STORE }

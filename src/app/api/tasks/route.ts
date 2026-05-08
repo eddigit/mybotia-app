@@ -24,7 +24,11 @@ import {
   crmRouterErrorResponse,
   logCrmRoute,
 } from "@/lib/crm-router";
-import { businessGetJson, BusinessClientError } from "@/lib/business-client";
+import {
+  businessGetJson,
+  businessSendJson,
+  BusinessClientError,
+} from "@/lib/business-client";
 import {
   mapBusinessTaskToCockpit,
   type BusinessTask,
@@ -265,9 +269,45 @@ export async function POST(request: Request) {
     }
     const { tenant } = cockpit;
 
+    const provider = await getCrmProvider(cockpit.slug);
+
     const session = await getSession();
     const body = await request.json();
 
+    if (provider.kind === "external") {
+      return Response.json(
+        { error: "crm_provider_not_configured", tenant: cockpit.slug },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    if (provider.kind === "mybotia_business") {
+      // V1.1.B Phase 2 — task créée dans business via service token.
+      // Contrat business : { projectId, title, ... }. On accepte les deux shapes.
+      const businessBody = {
+        projectId: body.projectId ?? body.fk_project,
+        title: body.title ?? body.label,
+        description: body.description || null,
+        status: body.status || "todo",
+        dueDate: body.dueDate || body.date_end || null,
+      };
+      const created = await businessSendJson<{ id: string; title: string; status: string }>(
+        "POST",
+        "/api/v1/tasks",
+        businessBody,
+        {
+          tenantId: provider.tenantId,
+          tenantSlug: cockpit.slug,
+          scopes: ["crm:read", "crm:write"],
+        },
+      );
+      return Response.json(
+        { id: created.id, tenant_slug: cockpit.slug, title: created.title },
+        { status: 201, headers: NO_STORE },
+      );
+    }
+
+    // dolibarr (legacy) — flow inchangé
     if (!body.label || !body.fk_project) {
       return Response.json(
         { error: "label et fk_project sont requis" },
@@ -299,6 +339,13 @@ export async function POST(request: Request) {
       { status: 201, headers: NO_STORE }
     );
   } catch (e) {
+    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof BusinessClientError) {
+      return Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+    }
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur creation tache" },
       { status: 502, headers: NO_STORE }

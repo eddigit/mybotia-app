@@ -101,8 +101,10 @@ function logBusinessCall(entry: BusinessCallLog): void {
   console.log(JSON.stringify(entry));
 }
 
-async function fetchJson<T>(
+async function fetchJsonWithMethod<T>(
   url: string,
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  body: unknown,
   token: string,
   opts: FetchOpts,
 ): Promise<T> {
@@ -112,14 +114,22 @@ async function fetchJson<T>(
     opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   );
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  let payload: BodyInit | undefined;
+  if (body !== undefined && method !== "GET" && method !== "DELETE") {
+    headers["Content-Type"] = "application/json";
+    payload = JSON.stringify(body);
+  }
+
   let res: Response;
   try {
     res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
+      method,
+      headers,
+      body: payload,
       signal: opts.signal ?? controller.signal,
       cache: "no-store",
     });
@@ -135,17 +145,17 @@ async function fetchJson<T>(
 
   const contentType = res.headers.get("content-type") ?? "";
   const isJson = contentType.includes("application/json");
-  const body = isJson ? await res.json().catch(() => null) : null;
+  const responseBody = isJson ? await res.json().catch(() => null) : null;
 
   if (!res.ok) {
     const code =
-      (body && typeof body === "object" && "error" in body
-        ? String((body as { error: unknown }).error)
+      (responseBody && typeof responseBody === "object" && "error" in responseBody
+        ? String((responseBody as { error: unknown }).error)
         : `http_${res.status}`) || `http_${res.status}`;
-    throw new BusinessClientError(res.status, code, `business HTTP ${res.status}`, body);
+    throw new BusinessClientError(res.status, code, `business HTTP ${res.status}`, responseBody);
   }
 
-  return body as T;
+  return responseBody as T;
 }
 
 /**
@@ -157,6 +167,31 @@ export async function businessGetJson<T>(
   claims: ServiceTokenClaims,
   opts: FetchOpts = {},
 ): Promise<T> {
+  return businessSendJsonInternal<T>("GET", path, undefined, claims, opts);
+}
+
+/**
+ * V1.1.B Phase 2 — POST/PUT/PATCH/DELETE signés vers mybotia-business.
+ * Body sérialisé en JSON. Le caller doit fournir un scope `crm:write` (ou
+ * équivalent) dans `claims.scopes`, sinon business renvoie 403.
+ */
+export async function businessSendJson<T>(
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body: unknown,
+  claims: ServiceTokenClaims,
+  opts: FetchOpts = {},
+): Promise<T> {
+  return businessSendJsonInternal<T>(method, path, body, claims, opts);
+}
+
+async function businessSendJsonInternal<T>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body: unknown,
+  claims: ServiceTokenClaims,
+  opts: FetchOpts,
+): Promise<T> {
   if (!path.startsWith("/")) {
     throw new BusinessClientError(500, "bad_path", "path must start with /");
   }
@@ -166,7 +201,13 @@ export async function businessGetJson<T>(
   let status = 0;
   let errorCode: string | null = null;
   try {
-    const wrapper = await fetchJson<{ data: T }>(url, token, opts);
+    const wrapper = await fetchJsonWithMethod<{ data: T }>(
+      url,
+      method,
+      body,
+      token,
+      opts,
+    );
     if (!wrapper || typeof wrapper !== "object" || !("data" in wrapper)) {
       errorCode = "bad_response_shape";
       throw new BusinessClientError(

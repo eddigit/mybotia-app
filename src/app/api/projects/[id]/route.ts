@@ -21,6 +21,12 @@ import {
 import { mapDolibarrProject } from "@/lib/mappers";
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
 import { requireFeature } from "@/lib/tenant-features";
+import {
+  getCrmProvider,
+  CrmRouterError,
+  crmRouterErrorResponse,
+} from "@/lib/crm-router";
+import { businessSendJson, BusinessClientError } from "@/lib/business-client";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -159,7 +165,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    if (!id || !/^\d+$/.test(id)) {
+    if (!id) {
       return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
 
@@ -169,6 +175,42 @@ export async function PATCH(
     const cockpit = await resolveCockpitTenants(request);
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
+    }
+
+    const provider = await getCrmProvider(cockpit.slug);
+
+    // V1.1.B Phase 2 — branche business : id au format UUID, body au shape business.
+    if (provider.kind === "mybotia_business") {
+      const rawBody = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!rawBody || typeof rawBody !== "object") {
+        return Response.json({ error: "body json invalide" }, { status: 400, headers: NO_STORE });
+      }
+      const updated = await businessSendJson<{ id: string; name: string; status: string }>(
+        "PUT",
+        `/api/v1/projects/${encodeURIComponent(id)}`,
+        rawBody,
+        {
+          tenantId: provider.tenantId,
+          tenantSlug: cockpit.slug,
+          scopes: ["crm:read", "crm:write"],
+        },
+      );
+      return Response.json(
+        { ok: true, id: updated.id, tenant_slug: cockpit.slug, updated },
+        { headers: NO_STORE },
+      );
+    }
+
+    if (provider.kind === "external") {
+      return Response.json(
+        { error: "crm_provider_not_configured", tenant: cockpit.slug },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    // dolibarr (legacy) — id numérique obligatoire
+    if (!/^\d+$/.test(id)) {
+      return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
 
     const rawBody = await request.json().catch(() => null);
@@ -255,6 +297,13 @@ export async function PATCH(
       { headers: NO_STORE }
     );
   } catch (e) {
+    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof BusinessClientError) {
+      return Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+    }
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
       { status: 502, headers: NO_STORE }
@@ -268,7 +317,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    if (!id || !/^\d+$/.test(id)) {
+    if (!id) {
       return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
     }
 
@@ -279,6 +328,42 @@ export async function DELETE(
     if (!cockpit.ok) {
       return Response.json({ error: cockpit.error }, { status: cockpit.status, headers: NO_STORE });
     }
+
+    const provider = await getCrmProvider(cockpit.slug);
+
+    if (provider.kind === "mybotia_business") {
+      // V1.1.B Phase 2 — DELETE business via service token. Pas de
+      // garde-fou Dolibarr (proposals/invoices) : business V1 a son propre
+      // ON DELETE CASCADE configuré au niveau schéma.
+      await request.json().catch(() => null);
+      const out = await businessSendJson<{ id: string; deleted: boolean }>(
+        "DELETE",
+        `/api/v1/projects/${encodeURIComponent(id)}`,
+        undefined,
+        {
+          tenantId: provider.tenantId,
+          tenantSlug: cockpit.slug,
+          scopes: ["crm:read", "crm:write"],
+        },
+      );
+      return Response.json(
+        { ok: true, id: out.id, tenant_slug: cockpit.slug },
+        { headers: NO_STORE },
+      );
+    }
+
+    if (provider.kind === "external") {
+      return Response.json(
+        { error: "crm_provider_not_configured", tenant: cockpit.slug },
+        { status: 501, headers: NO_STORE },
+      );
+    }
+
+    // dolibarr (legacy) — id numérique obligatoire
+    if (!/^\d+$/.test(id)) {
+      return Response.json({ error: "id projet invalide" }, { status: 400, headers: NO_STORE });
+    }
+
     const tenantCfg = cockpit.tenant;
 
     // Body lu mais ignoré pour l'ACL (5G : hostname est l'autorité).
@@ -310,6 +395,13 @@ export async function DELETE(
       { headers: NO_STORE }
     );
   } catch (e) {
+    if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
+    if (e instanceof BusinessClientError) {
+      return Response.json(
+        { error: e.code, message: e.message },
+        { status: e.status, headers: NO_STORE },
+      );
+    }
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur Dolibarr" },
       { status: 502, headers: NO_STORE }
