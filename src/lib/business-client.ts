@@ -185,6 +185,115 @@ export async function businessSendJson<T>(
   return businessSendJsonInternal<T>(method, path, body, claims, opts);
 }
 
+/**
+ * V1.1.B Phase 3D — GET binaire signé vers mybotia-business (PDF).
+ *
+ * Usage : proxy des routes `/api/v1/quotes/{id}/pdf` et
+ * `/api/v1/invoices/{id}/pdf` (render-on-demand `@react-pdf/renderer`).
+ *
+ * Contrairement à `businessGetJson`, on NE déballe PAS un wrapper `{ data }` :
+ * ces routes retournent directement le binaire `application/pdf`.
+ *
+ * Le caller décide ensuite quels headers re-propager (Content-Disposition
+ * notamment) — pas de business binding ici.
+ */
+export type BusinessBinaryResponse = {
+  blob: Blob;
+  contentType: string;
+  contentDisposition: string | null;
+  status: number;
+};
+
+export async function businessFetchBinary(
+  path: string,
+  claims: ServiceTokenClaims,
+  opts: FetchOpts = {},
+): Promise<BusinessBinaryResponse> {
+  if (!path.startsWith("/")) {
+    throw new BusinessClientError(500, "bad_path", "path must start with /");
+  }
+
+  const url = `${getBusinessUrl()}${path}`;
+  const token = signServiceToken(claims);
+  const startedAt = Date.now();
+  let status = 0;
+  let errorCode: string | null = null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(new Error("business_client_timeout")),
+    opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  );
+
+  try {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/pdf, application/octet-stream;q=0.9, */*;q=0.1",
+        },
+        signal: opts.signal ?? controller.signal,
+        cache: "no-store",
+      });
+    } catch (err) {
+      errorCode = "network_error";
+      throw new BusinessClientError(
+        502,
+        errorCode,
+        err instanceof Error ? err.message : "fetch failed",
+      );
+    }
+
+    status = res.status;
+    if (!res.ok) {
+      const ct = res.headers.get("content-type") ?? "";
+      let details: unknown = null;
+      let code = `http_${res.status}`;
+      if (ct.includes("application/json")) {
+        const body = await res.json().catch(() => null);
+        details = body;
+        if (body && typeof body === "object" && "error" in body) {
+          code = String((body as { error: unknown }).error) || code;
+        }
+      }
+      errorCode = code;
+      throw new BusinessClientError(
+        res.status,
+        code,
+        `business HTTP ${res.status}`,
+        details,
+      );
+    }
+
+    const contentType = res.headers.get("content-type") ?? "application/octet-stream";
+    const contentDisposition = res.headers.get("content-disposition");
+    const blob = await res.blob();
+    return { blob, contentType, contentDisposition, status: res.status };
+  } catch (err) {
+    if (err instanceof BusinessClientError) {
+      status = err.status;
+      errorCode = errorCode ?? err.code;
+    } else {
+      status = 502;
+      errorCode = "unknown_error";
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+    logBusinessCall({
+      evt: "business_call",
+      tenant_id: claims.tenantId,
+      tenant_slug: claims.tenantSlug,
+      path,
+      status,
+      duration_ms: Date.now() - startedAt,
+      error_code: errorCode,
+    });
+  }
+}
+
 async function businessSendJsonInternal<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,

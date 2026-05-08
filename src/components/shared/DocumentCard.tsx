@@ -50,10 +50,12 @@ export function DocumentCard({
 }) {
   const [state, setState] = useState<DocState>("idle");
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [missingMsg, setMissingMsg] = useState<string | null>(null);
 
   async function handleDownload() {
     setState("downloading");
     setErrMsg(null);
+    setMissingMsg(null);
     try {
       const url = `/api/documents/download?modulepart=${encodeURIComponent(
         modulepart
@@ -73,6 +75,11 @@ export function DocumentCard({
         return;
       }
       if (res.status === 404 || res.status === 502) {
+        const data = await res.json().catch(() => ({}));
+        // V1.1.B Phase 3D — message business-first si renvoyé par la route.
+        setMissingMsg(
+          typeof data?.error === "string" ? data.error : null,
+        );
         setState("missing");
         return;
       }
@@ -154,6 +161,7 @@ export function DocumentCard({
       <DocumentActionButton
         state={state}
         errMsg={errMsg}
+        missingMsg={missingMsg}
         onDownload={handleDownload}
         onGenerate={handleGenerate}
       />
@@ -164,11 +172,13 @@ export function DocumentCard({
 function DocumentActionButton({
   state,
   errMsg,
+  missingMsg,
   onDownload,
   onGenerate,
 }: {
   state: DocState;
   errMsg: string | null;
+  missingMsg: string | null;
   onDownload: () => void;
   onGenerate: () => void;
 }) {
@@ -203,7 +213,10 @@ function DocumentActionButton({
       <button
         onClick={onGenerate}
         className={`${baseBtn} text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30`}
-        title="Le PDF n'existe pas encore. Cliquer pour le generer."
+        title={
+          missingMsg ||
+          "Le PDF n'existe pas encore. Cliquer pour le generer."
+        }
       >
         <FilePlus className="w-3 h-3" />
         PDF absent — Generer
