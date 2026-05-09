@@ -12,10 +12,11 @@
 //
 // Validation : Zod côté client + erreurs serveur (`validation_error` et
 // codes biz comme `feature_disabled` / `crm_provider_not_business`).
+// V1.1.H.1 P0-UX-2 — anti-perte de saisie : draft localStorage.
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, RotateCcw, X } from "lucide-react";
 import { z } from "zod";
 
 import {
@@ -28,6 +29,31 @@ import {
 } from "@/components/shared/FormModal";
 import { useScopedClients } from "@/hooks/use-api";
 import { toast } from "@/components/shared/Toast";
+import { useFormDraft } from "@/hooks/use-form-draft";
+
+const DRAFT_KEY = "draft:create-affaire";
+
+type AffaireDraft = {
+  title: string;
+  clientId: string;
+  stage: string;
+  ownerUserId: string;
+  expectedCloseDate: string;
+  oneshotAmountHt: string;
+  mrrHt: string;
+  description: string;
+};
+
+const emptyAffaireDraft: AffaireDraft = {
+  title: "",
+  clientId: "",
+  stage: "lead",
+  ownerUserId: "",
+  expectedCloseDate: "",
+  oneshotAmountHt: "",
+  mrrHt: "",
+  description: "",
+};
 
 const STAGE_OPTIONS = [
   { value: "lead", label: "Prospect" },
@@ -94,11 +120,20 @@ export function CreateAffaireModal({
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // V1.1.H.1 P0-UX-2 — draft
+  const [affaireDraft, setAffaireDraft] = useState<AffaireDraft>({
+    ...emptyAffaireDraft,
+    clientId: defaultClientId ?? "",
+  });
+  const { hasDraft, clearDraft } = useFormDraft(DRAFT_KEY, affaireDraft, setAffaireDraft);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+
   // Reset state when (re)opening
   useEffect(() => {
     if (!open) return;
     setGlobalError(null);
     setFieldErrors({});
+    setDraftBannerDismissed(false);
   }, [open]);
 
   const sortedClients = useMemo(
@@ -115,16 +150,15 @@ export function CreateAffaireModal({
     setGlobalError(null);
     setFieldErrors({});
 
-    const fd = new FormData(e.currentTarget);
     const raw = {
-      title: String(fd.get("title") || "").trim(),
-      clientId: String(fd.get("clientId") || ""),
-      stage: String(fd.get("stage") || "lead"),
-      ownerUserId: String(fd.get("ownerUserId") || ""),
-      expectedCloseDate: String(fd.get("expectedCloseDate") || ""),
-      description: String(fd.get("description") || ""),
-      oneshotAmountHt: String(fd.get("oneshotAmountHt") || ""),
-      mrrHt: String(fd.get("mrrHt") || ""),
+      title: affaireDraft.title.trim(),
+      clientId: lockClient && defaultClientId ? defaultClientId : affaireDraft.clientId,
+      stage: affaireDraft.stage || "lead",
+      ownerUserId: affaireDraft.ownerUserId,
+      expectedCloseDate: affaireDraft.expectedCloseDate,
+      description: affaireDraft.description,
+      oneshotAmountHt: affaireDraft.oneshotAmountHt,
+      mrrHt: affaireDraft.mrrHt,
     };
 
     const parsed = formSchema.safeParse(raw);
@@ -192,6 +226,9 @@ export function CreateAffaireModal({
 
       const newId = String(json.id ?? "");
       toast.success("Affaire créée");
+      // V1.1.H.1 — submit success : nettoyer le brouillon
+      clearDraft();
+      setAffaireDraft(emptyAffaireDraft);
       onCreated?.(newId);
       onClose();
       if (newId) router.push(`/affaires/${newId}`);
@@ -204,6 +241,23 @@ export function CreateAffaireModal({
 
   return (
     <FormModal open={open} onClose={onClose} title="Nouvelle affaire">
+      {/* V1.1.H.1 — ruban brouillon restauré */}
+      {hasDraft && !draftBannerDismissed && (
+        <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[11px]">
+          <span className="flex items-center gap-1.5">
+            <RotateCcw className="w-3 h-3" />
+            Brouillon restauré
+          </span>
+          <button
+            type="button"
+            onClick={() => { clearDraft(); setAffaireDraft(emptyAffaireDraft); setDraftBannerDismissed(true); }}
+            className="flex items-center gap-0.5 hover:text-amber-100"
+            title="Effacer le brouillon"
+          >
+            <X className="w-3 h-3" /> Effacer
+          </button>
+        </div>
+      )}
       <form onSubmit={handleSubmit} noValidate>
         <FormField label="Titre *">
           <input
@@ -212,6 +266,8 @@ export function CreateAffaireModal({
             autoFocus
             className={inputClass}
             placeholder="Ex : Refonte site Cabinet Martin"
+            value={affaireDraft.title}
+            onChange={(e) => setAffaireDraft((d) => ({ ...d, title: e.target.value }))}
           />
           {fieldErrors.title && (
             <p className="text-xs text-rose-300 mt-1">{fieldErrors.title}</p>
@@ -226,7 +282,8 @@ export function CreateAffaireModal({
             <select
               name={lockClient ? "_clientId_display" : "clientId"}
               className={selectClass}
-              defaultValue={defaultClientId ?? ""}
+              value={lockClient ? (defaultClientId ?? "") : affaireDraft.clientId}
+              onChange={(e) => !lockClient && setAffaireDraft((d) => ({ ...d, clientId: e.target.value }))}
               disabled={lockClient || clientsLoading}
               required={!lockClient}
             >
@@ -247,7 +304,12 @@ export function CreateAffaireModal({
           </FormField>
 
           <FormField label="Stage">
-            <select name="stage" defaultValue="lead" className={selectClass}>
+            <select
+              name="stage"
+              className={selectClass}
+              value={affaireDraft.stage}
+              onChange={(e) => setAffaireDraft((d) => ({ ...d, stage: e.target.value }))}
+            >
               {STAGE_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
@@ -263,6 +325,8 @@ export function CreateAffaireModal({
               name="ownerUserId"
               className={inputClass}
               placeholder="Optionnel"
+              value={affaireDraft.ownerUserId}
+              onChange={(e) => setAffaireDraft((d) => ({ ...d, ownerUserId: e.target.value }))}
             />
             {fieldErrors.ownerUserId && (
               <p className="text-xs text-rose-300 mt-1">
@@ -275,6 +339,8 @@ export function CreateAffaireModal({
               name="expectedCloseDate"
               type="date"
               className={inputClass}
+              value={affaireDraft.expectedCloseDate}
+              onChange={(e) => setAffaireDraft((d) => ({ ...d, expectedCloseDate: e.target.value }))}
             />
             {fieldErrors.expectedCloseDate && (
               <p className="text-xs text-rose-300 mt-1">
@@ -293,6 +359,8 @@ export function CreateAffaireModal({
               min="0"
               className={inputClass}
               placeholder="0.00"
+              value={affaireDraft.oneshotAmountHt}
+              onChange={(e) => setAffaireDraft((d) => ({ ...d, oneshotAmountHt: e.target.value }))}
             />
             {fieldErrors.oneshotAmountHt && (
               <p className="text-xs text-rose-300 mt-1">
@@ -308,6 +376,8 @@ export function CreateAffaireModal({
               min="0"
               className={inputClass}
               placeholder="0.00"
+              value={affaireDraft.mrrHt}
+              onChange={(e) => setAffaireDraft((d) => ({ ...d, mrrHt: e.target.value }))}
             />
             {fieldErrors.mrrHt && (
               <p className="text-xs text-rose-300 mt-1">{fieldErrors.mrrHt}</p>
@@ -321,6 +391,8 @@ export function CreateAffaireModal({
             rows={3}
             className={inputClass}
             placeholder="Objectifs, périmètre, contexte…"
+            value={affaireDraft.description}
+            onChange={(e) => setAffaireDraft((d) => ({ ...d, description: e.target.value }))}
           />
         </FormField>
 

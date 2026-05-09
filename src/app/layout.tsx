@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { AppShell } from "@/components/layout/AppShell";
 import { ToastHost } from "@/components/shared/Toast";
+import { SessionExpiredModal } from "@/components/session/SessionExpiredModal";
 import "./globals.css";
 
 const inter = Inter({
@@ -52,6 +53,8 @@ export default function RootLayout({
           <AuthProvider>
             <AppShell>{children}</AppShell>
             <ToastHost />
+            {/* V1.1.H.1 P0-UX-2 — modal session expirée (hors AppShell) */}
+            <SessionExpiredModal />
           </AuthProvider>
         </ThemeProvider>
       </body>

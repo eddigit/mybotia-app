@@ -16,10 +16,11 @@
 //
 // Calcul totaux LIVE côté front via `lib/quotes/totals.ts` (mirror serveur).
 // Le serveur recalcule de toute façon : c'est purement informatif.
+// V1.1.H.1 P0-UX-2 — anti-perte de saisie : draft localStorage.
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { z } from "zod";
 
 import {
@@ -42,6 +43,7 @@ import {
   type QuoteItemInput,
 } from "@/lib/quotes/totals";
 import { formatMoneyFR } from "@/lib/format";
+import { useFormDraft } from "@/hooks/use-form-draft";
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Brouillon" },
@@ -73,6 +75,8 @@ const formSchema = z.object({
   items: z.array(itemSchema).min(1, "Au moins une ligne est requise"),
 });
 
+const DRAFT_KEY = "draft:create-quote";
+
 type LineDraft = {
   key: string;
   label: string;
@@ -80,6 +84,16 @@ type LineDraft = {
   qty: string;
   unitPriceHt: string;
   vatRate: string;
+};
+
+type QuoteDraft = {
+  clientId: string;
+  projectId: string;
+  subject: string;
+  status: "draft" | "sent" | "accepted" | "refused" | "cancelled";
+  validUntil: string;
+  notes: string;
+  lines: LineDraft[];
 };
 
 function emptyLine(vat = "20"): LineDraft {
@@ -115,30 +129,42 @@ export function CreateQuoteModal({
   const { data: clients, loading: clientsLoading } = useScopedClients();
   const { data: affaires } = useAffaires();
 
-  const [clientId, setClientId] = useState(defaultClientId ?? "");
-  const [projectId, setProjectId] = useState(defaultProjectId ?? "");
-  const [subject, setSubject] = useState("");
-  const [status, setStatus] = useState<
-    "draft" | "sent" | "accepted" | "refused" | "cancelled"
-  >("draft");
-  const [validUntil, setValidUntil] = useState("");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
+  // V1.1.H.1 P0-UX-2 — draft groupé
+  const [quoteDraft, setQuoteDraft] = useState<QuoteDraft>({
+    clientId: defaultClientId ?? "",
+    projectId: defaultProjectId ?? "",
+    subject: "",
+    status: "draft",
+    validUntil: "",
+    notes: "",
+    lines: [emptyLine()],
+  });
+  const { hasDraft, clearDraft } = useFormDraft(DRAFT_KEY, quoteDraft, setQuoteDraft);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+
+  // Aliases pour compatibilité avec le reste du composant
+  const clientId = quoteDraft.clientId;
+  const projectId = quoteDraft.projectId;
+  const subject = quoteDraft.subject;
+  const status = quoteDraft.status;
+  const validUntil = quoteDraft.validUntil;
+  const notes = quoteDraft.notes;
+  const lines = quoteDraft.lines;
+  const setClientId = (v: string) => setQuoteDraft((d) => ({ ...d, clientId: v }));
+  const setProjectId = (v: string) => setQuoteDraft((d) => ({ ...d, projectId: v }));
+  const setSubject = (v: string) => setQuoteDraft((d) => ({ ...d, subject: v }));
+  const setStatus = (v: "draft" | "sent" | "accepted" | "refused" | "cancelled") => setQuoteDraft((d) => ({ ...d, status: v }));
+  const setValidUntil = (v: string) => setQuoteDraft((d) => ({ ...d, validUntil: v }));
+  const setNotes = (v: string) => setQuoteDraft((d) => ({ ...d, notes: v }));
+  const setLines = (fn: (prev: LineDraft[]) => LineDraft[]) => setQuoteDraft((d) => ({ ...d, lines: fn(d.lines) }));
 
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Reset on (re)open
+  // Reset on (re)open — ne réinitialise PAS si un brouillon est chargé
   useEffect(() => {
-    if (!open) return;
-    setClientId(defaultClientId ?? "");
-    setProjectId(defaultProjectId ?? "");
-    setSubject("");
-    setStatus("draft");
-    setValidUntil("");
-    setNotes("");
-    setLines([emptyLine()]);
+    if (!open) { setDraftBannerDismissed(false); return; }
     setGlobalError(null);
     setFieldErrors({});
   }, [open, defaultClientId, defaultProjectId]);
@@ -192,6 +218,16 @@ export function CreateQuoteModal({
     );
   }
 
+  const emptyQuoteDraft: QuoteDraft = {
+    clientId: defaultClientId ?? "",
+    projectId: defaultProjectId ?? "",
+    subject: "",
+    status: "draft",
+    validUntil: "",
+    notes: "",
+    lines: [emptyLine()],
+  };
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
@@ -241,6 +277,9 @@ export function CreateQuoteModal({
     try {
       const created = await createQuoteApi(body);
       toast.success(`Devis ${created.number ?? ""} créé`);
+      // V1.1.H.1 — submit success : nettoyer le brouillon
+      clearDraft();
+      setQuoteDraft(emptyQuoteDraft);
       onCreated?.(created.id);
       onClose();
       if (created.id) router.push(`/quotes/${created.id}`);
@@ -253,6 +292,23 @@ export function CreateQuoteModal({
 
   return (
     <FormModal open={open} onClose={onClose} title="Nouveau devis">
+      {/* V1.1.H.1 — ruban brouillon restauré */}
+      {hasDraft && !draftBannerDismissed && (
+        <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[11px]">
+          <span className="flex items-center gap-1.5">
+            <RotateCcw className="w-3 h-3" />
+            Brouillon restauré
+          </span>
+          <button
+            type="button"
+            onClick={() => { clearDraft(); setQuoteDraft(emptyQuoteDraft); setDraftBannerDismissed(true); }}
+            className="flex items-center gap-0.5 hover:text-amber-100"
+            title="Effacer le brouillon"
+          >
+            <X className="w-3 h-3" /> Effacer
+          </button>
+        </div>
+      )}
       <form onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Client *">

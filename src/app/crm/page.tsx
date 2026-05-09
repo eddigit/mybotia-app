@@ -2,9 +2,10 @@
 
 // Cockpit principal — VERROUILLÉ tenant=mybotia.
 // Plus aucun pill tenant, plus aucune vue globale.
+// V1.1.H.1 P0-UX-2 — anti-perte de saisie : draft localStorage création client.
 
 import { useState } from "react";
-import { BarChart3, Plus, FolderPlus, Loader2, Users } from "lucide-react";
+import { BarChart3, Plus, FolderPlus, Loader2, RotateCcw, X, Users } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import {
@@ -21,6 +22,7 @@ import { Pipeline } from "@/components/crm/Pipeline";
 import { useScopedClients, useScopedDashboard, useCockpitFeatures } from "@/hooks/use-api";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { formatMoneyCompactFR } from "@/lib/format";
+import { useFormDraft } from "@/hooks/use-form-draft";
 
 type FilterKey = "all" | "active" | "prospect" | "churned" | "supplier";
 
@@ -31,6 +33,28 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "supplier", label: "Fournisseurs" },
   { key: "churned", label: "Inactifs" },
 ];
+
+const DRAFT_KEY = "draft:create-client";
+
+type ClientDraft = {
+  name: string;
+  name_alias: string;
+  type: string;
+  email: string;
+  phone: string;
+  town: string;
+  note_public: string;
+};
+
+const emptyClientDraft: ClientDraft = {
+  name: "",
+  name_alias: "",
+  type: "client",
+  email: "",
+  phone: "",
+  town: "",
+  note_public: "",
+};
 
 export default function CRMPage() {
   // Bloc 6B — feature gate
@@ -43,6 +67,11 @@ export default function CRMPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  // V1.1.H.1 P0-UX-2 — draft création client
+  const [clientDraft, setClientDraft] = useState<ClientDraft>(emptyClientDraft);
+  const { hasDraft, clearDraft } = useFormDraft(DRAFT_KEY, clientDraft, setClientDraft);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
 
   const loading = clientsLoading || dashboardLoading;
   const deals = dashboard?.deals ?? [];
@@ -61,24 +90,26 @@ export default function CRMPage() {
   async function handleCreateClient(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setCreating(true);
-    const form = new FormData(e.currentTarget);
     try {
       const res = await fetch("/api/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.get("name"),
-          name_alias: form.get("name_alias"),
-          email: form.get("email"),
-          phone: form.get("phone"),
-          town: form.get("town"),
-          client: form.get("type") === "client" ? "1" : "0",
-          prospect: form.get("type") === "prospect" ? "1" : "0",
-          fournisseur: form.get("type") === "fournisseur" ? "1" : "0",
-          note_public: form.get("note_public"),
+          name: clientDraft.name,
+          name_alias: clientDraft.name_alias,
+          email: clientDraft.email,
+          phone: clientDraft.phone,
+          town: clientDraft.town,
+          client: clientDraft.type === "client" ? "1" : "0",
+          prospect: clientDraft.type === "prospect" ? "1" : "0",
+          fournisseur: clientDraft.type === "fournisseur" ? "1" : "0",
+          note_public: clientDraft.note_public,
         }),
       });
       if (res.ok) {
+        // V1.1.H.1 — submit success : nettoyer le brouillon
+        clearDraft();
+        setClientDraft(emptyClientDraft);
         setShowCreate(false);
         refetchClients();
       }
@@ -169,19 +200,61 @@ export default function CRMPage() {
             <ClientCard key={client.id} client={client} />
           ))}
         </div>
+        {filteredClients.length === 0 && !loading && (
+          <EmptyState icon={Users} title="Aucun tiers trouvé" />
+        )}
       </div>
 
       {/* Create client modal */}
-      <FormModal open={showCreate} onClose={() => setShowCreate(false)} title="Nouveau tiers">
+      <FormModal
+        open={showCreate}
+        onClose={() => { setShowCreate(false); setDraftBannerDismissed(false); }}
+        title="Nouveau tiers"
+      >
+        {/* V1.1.H.1 — ruban brouillon restauré */}
+        {hasDraft && !draftBannerDismissed && (
+          <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[11px]">
+            <span className="flex items-center gap-1.5">
+              <RotateCcw className="w-3 h-3" />
+              Brouillon restauré
+            </span>
+            <button
+              type="button"
+              onClick={() => { clearDraft(); setClientDraft(emptyClientDraft); setDraftBannerDismissed(true); }}
+              className="flex items-center gap-0.5 hover:text-amber-100"
+              title="Effacer le brouillon"
+            >
+              <X className="w-3 h-3" /> Effacer
+            </button>
+          </div>
+        )}
         <form onSubmit={handleCreateClient}>
           <FormField label="Nom de la societe *">
-            <input name="name" required className={inputClass} placeholder="Ex: Cabinet Martin & Associes" />
+            <input
+              name="name"
+              required
+              className={inputClass}
+              placeholder="Ex: Cabinet Martin & Associes"
+              value={clientDraft.name}
+              onChange={(e) => setClientDraft((d) => ({ ...d, name: e.target.value }))}
+            />
           </FormField>
           <FormField label="Alias / nom court">
-            <input name="name_alias" className={inputClass} placeholder="Ex: Martin" />
+            <input
+              name="name_alias"
+              className={inputClass}
+              placeholder="Ex: Martin"
+              value={clientDraft.name_alias}
+              onChange={(e) => setClientDraft((d) => ({ ...d, name_alias: e.target.value }))}
+            />
           </FormField>
           <FormField label="Type">
-            <select name="type" className={selectClass} defaultValue="client">
+            <select
+              name="type"
+              className={selectClass}
+              value={clientDraft.type}
+              onChange={(e) => setClientDraft((d) => ({ ...d, type: e.target.value }))}
+            >
               <option value="client">Client</option>
               <option value="prospect">Prospect</option>
               <option value="fournisseur">Fournisseur</option>
@@ -189,17 +262,43 @@ export default function CRMPage() {
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Email">
-              <input name="email" type="email" className={inputClass} placeholder="contact@..." />
+              <input
+                name="email"
+                type="email"
+                className={inputClass}
+                placeholder="contact@..."
+                value={clientDraft.email}
+                onChange={(e) => setClientDraft((d) => ({ ...d, email: e.target.value }))}
+              />
             </FormField>
             <FormField label="Telephone">
-              <input name="phone" className={inputClass} placeholder="+33 6..." />
+              <input
+                name="phone"
+                className={inputClass}
+                placeholder="+33 6..."
+                value={clientDraft.phone}
+                onChange={(e) => setClientDraft((d) => ({ ...d, phone: e.target.value }))}
+              />
             </FormField>
           </div>
           <FormField label="Ville">
-            <input name="town" className={inputClass} placeholder="Paris" />
+            <input
+              name="town"
+              className={inputClass}
+              placeholder="Paris"
+              value={clientDraft.town}
+              onChange={(e) => setClientDraft((d) => ({ ...d, town: e.target.value }))}
+            />
           </FormField>
           <FormField label="Note">
-            <textarea name="note_public" className={inputClass} rows={2} placeholder="Notes..." />
+            <textarea
+              name="note_public"
+              className={inputClass}
+              rows={2}
+              placeholder="Notes..."
+              value={clientDraft.note_public}
+              onChange={(e) => setClientDraft((d) => ({ ...d, note_public: e.target.value }))}
+            />
           </FormField>
           <div className="flex items-center justify-end gap-3 mt-6">
             <button type="button" onClick={() => setShowCreate(false)} className={btnSecondary}>

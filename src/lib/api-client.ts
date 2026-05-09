@@ -37,6 +37,14 @@ function refreshSession(): Promise<boolean> {
 
 function redirectToLogin(): never {
   if (typeof window !== "undefined") {
+    // V1.1.H.1 P0-UX-2 — dispatch avant redirect pour que les form drafts
+    // aient le temps d'être sauvegardés et que la SessionExpiredModal soit
+    // affichée si le redirect est bloqué (ex : modal ouverte en foreground).
+    window.dispatchEvent(
+      new CustomEvent("mybotia:session-expired", {
+        detail: { url: window.location.href },
+      }),
+    );
     const next = encodeURIComponent(window.location.href);
     window.location.assign(`${LOGIN_PATH}?next=${next}`);
   }
