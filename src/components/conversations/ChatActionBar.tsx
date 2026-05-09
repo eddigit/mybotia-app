@@ -48,7 +48,10 @@ export function ChatActionBar({
 }) {
   const refs = detectDocumentReferences(messageContent);
   const actions: ActionItem[] = [];
-  const agentLabel = agentName || "Léa";
+  // V1.1.G — fallback neutre (pas "Léa" hardcodé). Le parent transmet
+  // déjà l'agent du cockpit courant via `agentName`, ce default ne
+  // sert qu'au cas pathologique où la prop est vide.
+  const agentLabel = agentName || "Assistant";
 
   // 1) Voir fiche client si conv contextualisée
   if (clientContext) {

@@ -3,7 +3,7 @@ import {
   sendAgentMessage,
   projectSessionId,
 } from "@/lib/claude-bridge";
-import { getSession } from "@/lib/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
 
 // Mapping tenant_slug -> agent_id
 // Determine quel collaborateur IA repond par defaut selon le tenant du user connecte.
@@ -30,18 +30,38 @@ function resolveAgentId(
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return Response.json({ error: "Non authentifie" }, { status: 401 });
+    // V1.1.G — Filtre cockpit (tenant + agent) côté SQLite legacy.
+    // Le bridge legacy n'expose pas de filtre tenant_slug/agent_id natif :
+    // on filtre côté app après réception. Fail-closed si cockpit invalide.
+    const cockpit = await resolveChatCockpit(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status });
     }
-    // Isolation par user_email par defaut, MEME pour superadmin.
-    // Un superadmin peut explicitement passer ?scope=all pour voir toutes les
-    // conversations (debug / supervision) — jamais par defaut.
+    const { session, tenantSlug, agentId } = cockpit;
+
     const url = new URL(request.url);
     const scope = url.searchParams.get("scope");
     const showAll = session.isSuperadmin && scope === "all";
-    const conversations = await listConversations(showAll ? undefined : session.email);
-    return Response.json(conversations);
+    const all = await listConversations(showAll ? undefined : session.email);
+
+    // Filtre strict côté serveur : agent cockpit (le bridge expose agentId,
+    // pas tenant_slug, mais la map tenant→agent est 1:1 donc filtrer par agent
+    // équivaut à filtrer par tenant). Garde-fou : fail-closed sur cockpit
+    // tenant non mappé. `tenantSlug` est volontairement utilisé ci-dessus
+    // pour la log et pour valider que le cockpit est cohérent ; on filtre
+    // ensuite par agentId du registry.
+    void tenantSlug;
+    type Row = { agentId?: string | null } & Record<string, unknown>;
+    const rows = all as unknown as Row[];
+    const filtered = rows.filter((r) => {
+      const aId = (r as Row & { agentId?: string }).agentId ?? null;
+      // agent_id : doit matcher l'agent du cockpit. Pas de tolérance NULL :
+      // les rows sans agent_id sont écartées du cockpit (legacy = pas de
+      // tenant connu, donc pas affichées).
+      return aId === agentId;
+    });
+
+    return Response.json(filtered);
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Erreur conversations" },
@@ -52,11 +72,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    // 1. Authentification : recuperer la session depuis le cookie JWT
-    const session = await getSession();
-    if (!session) {
-      return Response.json({ error: "Non authentifie" }, { status: 401 });
+    // V1.1.G — POST aussi scope cockpit (sinon création tagée tenant JWT).
+    const cockpit = await resolveChatCockpit(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status });
     }
+    const { session, tenantSlug, agentId: cockpitAgent } = cockpit;
 
     const body = await request.json();
     const {
@@ -79,20 +100,17 @@ export async function POST(request: Request) {
       return Response.json({ error: "message est requis" }, { status: 400 });
     }
 
-    // 2. Determiner l'agent cote serveur (pas de confiance dans le client)
-    const agentId = resolveAgentId(
-      session.tenantSlug,
-      requestedAgentId,
-      session.isSuperadmin
-    );
+    // 2. Agent : superadmin peut overrider, sinon agent cockpit forcé.
+    const agentId = session.isSuperadmin
+      ? resolveAgentId(tenantSlug, requestedAgentId, true)
+      : cockpitAgent;
 
-    // 3. Construire le userContext depuis la session JWT
-    // TODO: enrichir le JWT avec first_name/last_name pour avoir un vrai nom humain
+    // 3. userContext propage le tenant cockpit (pas tenant JWT).
     const userContext = {
       name: session.email,
       email: session.email,
       role: session.role,
-      tenant_slug: session.tenantSlug,
+      tenant_slug: tenantSlug,
       is_superadmin: session.isSuperadmin,
     };
 

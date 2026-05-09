@@ -1,6 +1,6 @@
 import { query } from "@/lib/v4/db";
 import { apiError } from "@/lib/v4/errors";
-import { getSessionV4 } from "@/lib/v4/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
 import {
   resolveAgentId,
   UnknownTenantError,
@@ -46,15 +46,33 @@ function toApi(r: ConvRow) {
 }
 
 export async function GET(request: Request) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  // V1.1.G — Filtre cockpit (tenant + agent) au lieu de tenant JWT seul.
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) {
+    const code =
+      cockpit.status === 403
+        ? "forbidden"
+        : cockpit.status === 401
+          ? "unauthorized"
+          : "validation_failed";
+    return apiError(code, cockpit.error);
+  }
+  const { session, tenantSlug, agentId } = cockpit;
 
   const url = new URL(request.url);
   const folderId = url.searchParams.get("folderId");
   const archived = url.searchParams.get("archived") === "true";
 
-  const where: string[] = ["tenant_slug = $1", "user_email = $2"];
-  const params: unknown[] = [session.tenantSlug, session.email];
+  // Filtre obligatoire :
+  //   tenant_slug = cockpit
+  //   agent_id   = agent du cockpit OR NULL (legacy null toléré)
+  //   user_email = session.email (isolation intra-tenant)
+  const where: string[] = [
+    "tenant_slug = $1",
+    "user_email = $2",
+    "(agent_id = $3 OR agent_id IS NULL)",
+  ];
+  const params: unknown[] = [tenantSlug, session.email, agentId];
   where.push(archived ? "archived_at IS NOT NULL" : "archived_at IS NULL");
   if (folderId) {
     params.push(folderId);
@@ -70,8 +88,19 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  // V1.1.G — Création scope cockpit (pas tenant JWT). Sinon Gilles depuis
+  // cockpit VLM créerait des conversations marquées tenant_slug=mybotia.
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) {
+    const code =
+      cockpit.status === 403
+        ? "forbidden"
+        : cockpit.status === 401
+          ? "unauthorized"
+          : "validation_failed";
+    return apiError(code, cockpit.error);
+  }
+  const { session, tenantSlug, agentId: cockpitAgentId } = cockpit;
 
   let body: {
     agentId?: string;
@@ -88,7 +117,11 @@ export async function POST(request: Request) {
 
   let agentId: string;
   try {
-    agentId = resolveAgentId(session.tenantSlug, body.agentId, session.isSuperadmin);
+    // L'agent attendu est celui du cockpit. Superadmin peut overrider via body
+    // (debug), sinon refus si le body demande un autre agent.
+    agentId = resolveAgentId(tenantSlug, body.agentId, session.isSuperadmin);
+    // Sécurité supplémentaire : non-superadmin → on force agent du cockpit.
+    if (!session.isSuperadmin) agentId = cockpitAgentId;
   } catch (err) {
     if (err instanceof UnknownTenantError) {
       return apiError("tenant_unknown", `Tenant non configuré: ${err.tenantSlug}`);
@@ -99,12 +132,12 @@ export async function POST(request: Request) {
     return apiError("validation_failed", err instanceof Error ? err.message : "Agent invalide");
   }
 
-  // Validation folder ownership si fourni
+  // Validation folder ownership si fourni — scope cockpit + user.
   if (body.folderId) {
     const f = await query<{ id: string }>(
       `SELECT id FROM chat.folders
        WHERE id=$1 AND tenant_slug=$2 AND user_email=$3 AND archived_at IS NULL`,
-      [body.folderId, session.tenantSlug, session.email]
+      [body.folderId, tenantSlug, session.email]
     );
     if (f.rowCount === 0) {
       return apiError("not_found", "Dossier introuvable ou non autorisé", { field: "folderId" });
@@ -119,7 +152,7 @@ export async function POST(request: Request) {
        (tenant_slug, user_email, agent_id, folder_id, title, channel, project_ref, client_ref)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
     [
-      session.tenantSlug,
+      tenantSlug,
       session.email,
       agentId,
       body.folderId ?? null,

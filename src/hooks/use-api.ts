@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Client, Project, Agent, Deal, Activity, Metric } from "@/types";
 
+// V1.1.G — nom canonique de l'event window dispatché par TenantSwitcher
+// après une bascule cockpit réussie. Tout hook tenant-dépendant (cockpit
+// features, agents, conversations, voice, business scoped) écoute cet event
+// et refetch — invalidation cross-domain atomique sans `router.refresh()`
+// global qui ne couvre que les Server Components.
+export const TENANT_SWITCHED_EVENT = "mybotia:tenant-switched";
+
 // Generic fetcher with fallback and refetch
 function useApi<T>(url: string | null, fallback: T): {
   data: T;
@@ -50,6 +57,19 @@ function useApi<T>(url: string | null, fallback: T): {
       cancelled = true;
     };
   }, [url, tick]);
+
+  // V1.1.G — invalidation cross-domain : tout `useApi` se branche sur l'event
+  // `mybotia:tenant-switched` dispatché par `TenantSwitcher`. Toute donnée
+  // tenant-dépendante (cockpit features, agents, conversations, scoped
+  // business, etc.) est ainsi rafraîchie atomiquement après bascule, sans
+  // dépendre uniquement d'un `router.refresh()` qui ne couvre que les Server
+  // Components et laisse les caches mémoire des Client Components stale.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => refetch();
+    window.addEventListener(TENANT_SWITCHED_EVENT, handler);
+    return () => window.removeEventListener(TENANT_SWITCHED_EVENT, handler);
+  }, [refetch]);
 
   return { data, loading, error, refetch };
 }

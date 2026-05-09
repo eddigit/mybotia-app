@@ -33,6 +33,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { UserAvatarV4 } from "./UserAvatarV4";
 import { AgentStatusCardV4 } from "./premium/AgentStatusCardV4";
 import { ChatActionBar } from "./ChatActionBar";
+import { useActiveAgent } from "@/hooks/use-active-agent";
 
 /**
  * Workspace chat V4 intégré dans l'AppShell prod.
@@ -1424,7 +1425,14 @@ function ConversationView({
     return () => clearInterval(t);
   }, [sending, sendStartedAt]);
 
-  const agentLabel = conv?.agentName ?? "Assistant";
+  // V1.1.G — défaut tenant-aware. Si la conversation ne porte pas
+  // d'agentId/agentName (anciennes conv ou conv générique), on retombe
+  // sur l'agent canonique du cockpit courant (Léa sur mybotia, Max sur
+  // VL Medical, Lucy sur IGH, etc.) plutôt que sur "Léa" hardcodé.
+  const { agent: cockpitAgent } = useActiveAgent();
+  const fallbackAgentId = cockpitAgent?.slug ?? "lea";
+  const fallbackAgentName = cockpitAgent?.name ?? "Assistant";
+  const agentLabel = conv?.agentName ?? fallbackAgentName;
   const sendingStatus =
     elapsed < 2
       ? `Connexion à ${agentLabel}…`
@@ -1467,14 +1475,14 @@ function ConversationView({
               <MessageRow
                 key={m.id}
                 message={m}
-                agentId={conv?.agentId ?? "lea"}
-                agentName={conv?.agentName ?? "Léa"}
+                agentId={conv?.agentId ?? fallbackAgentId}
+                agentName={conv?.agentName ?? fallbackAgentName}
                 clientContext={clientContext}
                 onSeedPrompt={seedPrompt}
               />
             ))}
             {sending && (
-              <TypingRow agentId={conv?.agentId ?? "lea"} agentName={agentLabel} status={sendingStatus} />
+              <TypingRow agentId={conv?.agentId ?? fallbackAgentId} agentName={agentLabel} status={sendingStatus} />
             )}
           </>
         )}

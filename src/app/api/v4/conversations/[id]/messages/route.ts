@@ -1,7 +1,13 @@
 import { query } from "@/lib/v4/db";
 import { apiError } from "@/lib/v4/errors";
-import { getSessionV4 } from "@/lib/v4/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
 import { bridgeChat, BridgeError } from "@/lib/v4/bridge";
+
+function cockpitErr(status: number, msg: string) {
+  const code =
+    status === 403 ? "forbidden" : status === 401 ? "unauthorized" : "validation_failed";
+  return apiError(code, msg);
+}
 
 interface MsgRow {
   id: string;
@@ -36,7 +42,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 async function loadConversation(
   conversationId: string,
   tenantSlug: string,
-  userEmail: string
+  userEmail: string,
+  agentId: string
 ): Promise<{
   archived: boolean;
   agentId: string;
@@ -45,6 +52,8 @@ async function loadConversation(
   clientRef: string | null;
   projectRef: string | null;
 } | null> {
+  // V1.1.G — Filtre cockpit (tenant + agent) en plus du user_email.
+  // L'agent_id NULL est toléré pour les rows legacy avant V1.1.G.
   const { rows } = await query<{
     archived_at: string | null;
     agent_id: string;
@@ -55,8 +64,9 @@ async function loadConversation(
   }>(
     `SELECT archived_at, agent_id, bridge_session_id, channel, client_ref, project_ref
        FROM chat.conversations
-     WHERE id=$1 AND tenant_slug=$2 AND user_email=$3`,
-    [conversationId, tenantSlug, userEmail]
+     WHERE id=$1 AND tenant_slug=$2 AND user_email=$3
+       AND (agent_id = $4 OR agent_id IS NULL)`,
+    [conversationId, tenantSlug, userEmail, agentId]
   );
   if (rows.length === 0) return null;
   return {
@@ -73,12 +83,13 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug, agentId } = cockpit;
   const { id } = await params;
   if (!UUID_RE.test(id)) return apiError("not_found", "Conversation introuvable");
 
-  const conv = await loadConversation(id, session.tenantSlug, session.email);
+  const conv = await loadConversation(id, tenantSlug, session.email, agentId);
   if (!conv) return apiError("not_found", "Conversation introuvable");
 
   const url = new URL(request.url);
@@ -99,12 +110,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug, agentId } = cockpit;
   const { id } = await params;
   if (!UUID_RE.test(id)) return apiError("not_found", "Conversation introuvable");
 
-  const conv = await loadConversation(id, session.tenantSlug, session.email);
+  const conv = await loadConversation(id, tenantSlug, session.email, agentId);
   if (!conv) return apiError("not_found", "Conversation introuvable");
   if (conv.archived) return apiError("conflict", "Conversation archivée");
 
@@ -139,7 +151,9 @@ export async function POST(
         name: session.email || "Utilisateur",
         email: session.email,
         role: session.role || "member",
-        tenant_slug: session.tenantSlug,
+        // V1.1.G — Tenant cockpit (pas tenant JWT) : sinon Gilles depuis cockpit
+        // VLM enverrait tenant_slug=mybotia au bridge, qui rejetterait l'agent max.
+        tenant_slug: tenantSlug,
         is_superadmin: session.isSuperadmin,
         // V1 garde-fou (Agent 4 — 2026-05-08) : Léa doit savoir de qui/quoi on
         // parle. On propage les refs de la conv (peuplées si l'UI les a posées

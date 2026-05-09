@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, Building2, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTenantBranding } from "@/lib/tenant/branding";
+import { TENANT_SWITCHED_EVENT } from "@/hooks/use-api";
 
 interface TenantEntry {
   slug: string;
@@ -157,6 +158,7 @@ export function TenantSwitcher({ collapsed }: TenantSwitcherProps) {
       return;
     }
     setSwitching(slug);
+    const previousSlug = data.current;
     try {
       const res = await fetch("/api/me/switch-tenant", {
         method: "POST",
@@ -170,12 +172,52 @@ export function TenantSwitcher({ collapsed }: TenantSwitcherProps) {
       }
       const target = data.tenants.find((t) => t.slug === slug);
       const name = target ? effectiveDisplayName(target) : slug;
+
+      // V1.1.G — invalidation cross-domain.
+      // Le cookie `cockpit_tenant` est posé serveur-side avant ce point. On
+      // dispatch ensuite l'event window pour que TOUS les hooks `useApi`
+      // (cockpitFeatures, agents, conversations, voice, business scoped, etc.)
+      // refetch atomiquement. Sans cet event, seuls les Server Components
+      // étaient invalidés via `router.refresh()` — la sidebar droite (agent
+      // actif, VoicePanel) restait bloquée sur le cockpit précédent.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(TENANT_SWITCHED_EVENT, {
+            detail: { fromSlug: previousSlug, toSlug: slug },
+          })
+        );
+      }
+
+      // Optimistic update local : on marque le nouveau slug comme courant
+      // immédiatement pour que le badge switcher (et le re-render) se mettent
+      // à jour sans attendre le re-fetch /api/me/tenants.
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              current: slug,
+              tenants: prev.tenants.map((t) => ({
+                ...t,
+                isCurrent: t.slug === slug,
+              })),
+            }
+          : prev
+      );
+
       setToast({ message: `Cockpit basculé sur ${name}`, tone: "success" });
       setOpen(false);
-      // Refresh server components + reload data via router. Navigation home pour
-      // s'assurer qu'on n'est pas sur une page tenant-spécifique du précédent cockpit.
+
+      // Refresh Server Components + navigation home (le précédent cockpit
+      // peut avoir des pages tenant-spécifiques inaccessibles dans le nouveau).
       router.replace("/");
       router.refresh();
+
+      // Fail-safe — si une query mémoire reste stale (ex: hook custom hors
+      // useApi qui n'écouterait pas l'event), un second refresh 500ms après
+      // recharge l'arbre Server Components au cas où l'event n'a pas suffi.
+      setTimeout(() => {
+        router.refresh();
+      }, 500);
     } catch (e) {
       setToast({
         message: e instanceof Error ? e.message : "Bascule impossible",

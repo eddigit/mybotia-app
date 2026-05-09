@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
 import { projectSessionId } from "@/lib/claude-bridge";
 
 const BRIDGE_URL = process.env.CLAUDE_BRIDGE_URL || "http://127.0.0.1:9400";
@@ -23,10 +23,12 @@ const TENANT_AGENT_MAP: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session) {
-    return Response.json({ error: "Non authentifie" }, { status: 401 });
+  // V1.1.G — Stream cockpit-aware (tenant + agent du cockpit, pas du JWT).
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) {
+    return Response.json({ error: cockpit.error }, { status: cockpit.status });
   }
+  const { session, tenantSlug, agentId: cockpitAgent } = cockpit;
 
   const body = await request.json();
   const {
@@ -52,13 +54,13 @@ export async function POST(request: Request) {
   const agentId =
     session.isSuperadmin && requestedAgentId
       ? requestedAgentId
-      : TENANT_AGENT_MAP[session.tenantSlug] || "lea";
+      : (TENANT_AGENT_MAP[tenantSlug] || cockpitAgent);
 
   const userContext = {
     name: session.email,
     email: session.email,
     role: session.role,
-    tenant_slug: session.tenantSlug,
+    tenant_slug: tenantSlug,
     is_superadmin: session.isSuperadmin,
   };
 

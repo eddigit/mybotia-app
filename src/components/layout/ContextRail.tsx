@@ -14,6 +14,7 @@ import { VoicePanel } from "@/components/voice/VoicePanel";
 import { getVoiceConfig } from "@/lib/voice-config";
 import { useVoiceConvContext } from "@/contexts/voice-context";
 import { useRouter } from "next/navigation";
+import { useActiveAgent } from "@/hooks/use-active-agent";
 
 // Phase 3B — Voice Panel honnête.
 // Avant : "{agent} est en ligne" + "Latence < 3s Stable" hardcoded.
@@ -50,8 +51,20 @@ interface ContextRailProps {
 
 export function ContextRail({ onClose, agents }: ContextRailProps) {
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const activeAgent = agents[0] ?? null;
-  const voiceConfig = activeAgent ? getVoiceConfig(activeAgent.id) : null;
+  // V1.1.G — l'agent affiché dans la sidebar droite est désormais l'agent
+  // CANONIQUE du cockpit courant (résolu via cookie `cockpit_tenant`), pas
+  // `agents[0]` qui dépend de la session JWT et reste sur Léa après bascule
+  // superadmin. La liste `agents` reste utilisée uniquement pour le compteur
+  // "X AGENTS ACTIFS" en bas du widget.
+  const { agent: tenantAgent } = useActiveAgent();
+  const activeAgent = tenantAgent
+    ? ({
+        id: tenantAgent.slug,
+        name: tenantAgent.name,
+        role: tenantAgent.role,
+      } as Pick<Agent, "id" | "name" | "role">)
+    : null;
+  const voiceConfig = tenantAgent ? getVoiceConfig(tenantAgent.slug) : null;
   // Phase 3B — état réel du service voice (healthcheck best-effort).
   const [voiceHealth, setVoiceHealth] = useState<VoiceHealth>("unknown");
   // V1 garde-fou Voice (Agent 4 — 2026-05-08) : contexte conv courant.
@@ -125,7 +138,12 @@ export function ContextRail({ onClose, agents }: ContextRailProps) {
             </p>
           </>
         ) : (
-          <p className="text-xs text-text-muted mb-3">Aucun agent disponible</p>
+          // V1.1.G — fail-closed : si le cockpit courant n'a pas d'agent
+          // mappé (slug absent de TENANT_AGENTS), on l'indique clairement
+          // au lieu de retomber sur Léa par défaut.
+          <p className="text-xs text-text-muted mb-3">
+            Aucun agent configuré pour ce cockpit
+          </p>
         )}
 
         {/* Voice toggle */}

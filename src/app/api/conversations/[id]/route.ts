@@ -1,18 +1,21 @@
 import { deleteConversation, updateConversation } from "@/lib/claude-bridge";
-import { getSession } from "@/lib/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return Response.json({ error: "Non authentifie" }, { status: 401 });
+    // V1.1.G — Validation cockpit (tenant + agent) avant DELETE.
+    const cockpit = await resolveChatCockpit(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status });
     }
+    const { session } = cockpit;
     const { id } = await params;
-    // Isolation stricte : toujours filtrer par session.email (meme pour superadmin),
-    // pour empecher la suppression accidentelle d'une conv d'un autre user.
+    // Isolation user_email + cockpit. Le bridge legacy ne sait pas filtrer
+    // par tenant_slug — on s'appuie sur user_email + presence cockpit valide
+    // (déjà validé par resolveChatCockpit).
     await deleteConversation(id, session.email);
     return Response.json({ ok: true, id });
   } catch (e) {
@@ -28,10 +31,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return Response.json({ error: "Non authentifie" }, { status: 401 });
+    const cockpit = await resolveChatCockpit(request);
+    if (!cockpit.ok) {
+      return Response.json({ error: cockpit.error }, { status: cockpit.status });
     }
+    const { session } = cockpit;
     const { id } = await params;
     const body = (await request.json()) as { folder_id?: string | null; title?: string };
     const patch: { folder_id?: string | null; title?: string } = {};

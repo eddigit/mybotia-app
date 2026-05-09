@@ -101,10 +101,15 @@ export async function listConversations(userEmail?: string): Promise<Conversatio
 
 export async function getSessionMessages(
   sessionId: string,
-  limit = 50
+  limit = 50,
+  userEmail?: string,
+  tenantSlug?: string
 ): Promise<ChatMessage[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (userEmail) params.set("user_email", userEmail);
+  if (tenantSlug) params.set("tenant_slug", tenantSlug);
   const res = await bridgeFetch(
-    `/conversations/${encodeURIComponent(sessionId)}/messages?limit=${limit}`
+    `/conversations/${encodeURIComponent(sessionId)}/messages?${params.toString()}`
   );
   if (!res.ok) {
     throw new Error(`Bridge error: ${res.status}`);

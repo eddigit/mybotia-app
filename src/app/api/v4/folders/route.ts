@@ -1,6 +1,12 @@
 import { query } from "@/lib/v4/db";
 import { apiError } from "@/lib/v4/errors";
-import { getSessionV4 } from "@/lib/v4/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
+
+function cockpitErr(status: number, msg: string) {
+  const code =
+    status === 403 ? "forbidden" : status === 401 ? "unauthorized" : "validation_failed";
+  return apiError(code, msg);
+}
 
 interface FolderRow {
   id: string;
@@ -29,21 +35,25 @@ function toApi(r: FolderRow) {
   };
 }
 
-export async function GET() {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+export async function GET(request: Request) {
+  // V1.1.G — Filtre cockpit (tenant) au lieu de tenant JWT.
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug } = cockpit;
   const { rows } = await query<FolderRow>(
     `SELECT * FROM chat.folders
      WHERE tenant_slug=$1 AND user_email=$2 AND archived_at IS NULL
      ORDER BY updated_at DESC`,
-    [session.tenantSlug, session.email]
+    [tenantSlug, session.email]
   );
   return Response.json(rows.map(toApi));
 }
 
 export async function POST(request: Request) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  // V1.1.G — Création scope cockpit.
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug } = cockpit;
 
   let body: { name?: string; description?: string; agentId?: string; clientRef?: string; projectRef?: string };
   try {
@@ -60,7 +70,7 @@ export async function POST(request: Request) {
       `INSERT INTO chat.folders (tenant_slug, user_email, name, description, agent_id, client_ref, project_ref)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
       [
-        session.tenantSlug,
+        tenantSlug,
         session.email,
         name,
         body.description ?? null,

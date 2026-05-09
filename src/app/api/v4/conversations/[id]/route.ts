@@ -1,7 +1,14 @@
 import { query } from "@/lib/v4/db";
 import { apiError } from "@/lib/v4/errors";
-import { getSessionV4 } from "@/lib/v4/session";
+import { resolveChatCockpit } from "@/lib/v4/session";
 import { getDisplayName } from "@/lib/v4/tenant-registry";
+
+// V1.1.G — Helper de mapping erreur cockpit → apiError code.
+function cockpitErr(status: number, msg: string) {
+  const code =
+    status === 403 ? "forbidden" : status === 401 ? "unauthorized" : "validation_failed";
+  return apiError(code, msg);
+}
 
 interface ConvRow {
   id: string;
@@ -28,15 +35,19 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  const cockpit = await resolveChatCockpit(_req);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug, agentId } = cockpit;
   const { id } = await params;
   if (!UUID_RE.test(id)) return apiError("not_found", "Conversation introuvable");
 
+  // V1.1.G — Filtre tenant cockpit + agent cockpit (NULL toléré legacy).
   const { rows } = await query<ConvRow>(
     `SELECT * FROM chat.conversations
-     WHERE id=$1 AND tenant_slug=$2 AND user_email=$3 AND archived_at IS NULL`,
-    [id, session.tenantSlug, session.email]
+     WHERE id=$1 AND tenant_slug=$2 AND user_email=$3
+       AND (agent_id = $4 OR agent_id IS NULL)
+       AND archived_at IS NULL`,
+    [id, tenantSlug, session.email, agentId]
   );
   if (rows.length === 0) return apiError("not_found", "Conversation introuvable");
 
@@ -64,16 +75,19 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  const cockpit = await resolveChatCockpit(request);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug, agentId } = cockpit;
   const { id } = await params;
   if (!UUID_RE.test(id)) return apiError("not_found", "Conversation introuvable");
 
-  // Vérifier ownership conversation
+  // V1.1.G — Ownership scope cockpit (tenant + agent).
   const own = await query<{ id: string }>(
     `SELECT id FROM chat.conversations
-     WHERE id=$1 AND tenant_slug=$2 AND user_email=$3 AND archived_at IS NULL`,
-    [id, session.tenantSlug, session.email]
+     WHERE id=$1 AND tenant_slug=$2 AND user_email=$3
+       AND (agent_id = $4 OR agent_id IS NULL)
+       AND archived_at IS NULL`,
+    [id, tenantSlug, session.email, agentId]
   );
   if (own.rowCount === 0) return apiError("not_found", "Conversation introuvable");
 
@@ -103,11 +117,11 @@ export async function PATCH(
       if (!UUID_RE.test(body.folderId)) {
         return apiError("validation_failed", "folderId invalide");
       }
-      // Vérifier que le folder appartient bien au user
+      // V1.1.G — folder ownership scope cockpit.
       const f = await query<{ id: string }>(
         `SELECT id FROM chat.folders
          WHERE id=$1 AND tenant_slug=$2 AND user_email=$3 AND archived_at IS NULL`,
-        [body.folderId, session.tenantSlug, session.email]
+        [body.folderId, tenantSlug, session.email]
       );
       if (f.rowCount === 0) {
         return apiError("not_found", "Dossier introuvable ou non autorisé", {
@@ -162,15 +176,18 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSessionV4();
-  if (!session) return apiError("unauthorized", "Non authentifié");
+  const cockpit = await resolveChatCockpit(_request);
+  if (!cockpit.ok) return cockpitErr(cockpit.status, cockpit.error);
+  const { session, tenantSlug, agentId } = cockpit;
   const { id } = await params;
   if (!UUID_RE.test(id)) return apiError("not_found", "Conversation introuvable");
 
+  // V1.1.G — DELETE scope cockpit (tenant + agent + user).
   const { rowCount } = await query(
     `DELETE FROM chat.conversations
-     WHERE id = $1 AND tenant_slug = $2 AND user_email = $3`,
-    [id, session.tenantSlug, session.email]
+     WHERE id = $1 AND tenant_slug = $2 AND user_email = $3
+       AND (agent_id = $4 OR agent_id IS NULL)`,
+    [id, tenantSlug, session.email, agentId]
   );
   if (rowCount === 0) return apiError("not_found", "Conversation introuvable");
   return Response.json({ ok: true, id });
