@@ -1,9 +1,13 @@
 "use client";
 
-// Cockpit principal — VERROUILLÉ tenant=mybotia.
-// Plus aucun pill tenant, plus aucune vue globale.
+// Cockpit principal — scope résolu par le cookie cockpit_tenant (superadmin)
+// ou par le hostname (utilisateur normal). Aucun label tenant hardcodé.
 // La vue admin globale (multi-tenant) sera une zone séparée future
 // (/admin/tenants ou /agents/<agent>), pas le cockpit principal.
+//
+// P0-2 V1.1.H : CommandCenterHero et les KPI bento suivent le cockpit courant.
+// Le slug vient de `dashboard.tenant` (renvoyé par /api/dashboard via
+// resolveCockpitTenants). Le displayName est résolu via getTenantBranding.
 
 import { useState } from "react";
 import { CommandCenterHero } from "@/components/home/CommandCenterHero";
@@ -19,6 +23,7 @@ import {
   useAgents,
   useScopedTasks,
 } from "@/hooks/use-api";
+import { getTenantBranding } from "@/lib/tenant/branding";
 import { ArrowRight, FolderPlus } from "lucide-react";
 import Link from "next/link";
 import { formatMoneyCompactFR } from "@/lib/format";
@@ -28,6 +33,12 @@ export default function HomePage() {
   const { data: agents } = useAgents();
   const { data: tasks } = useScopedTasks();
   const [showCreateProject, setShowCreateProject] = useState(false);
+
+  // P0-2 V1.1.H — displayName du cockpit courant, résolu depuis le slug
+  // renvoyé par /api/dashboard (lui-même issu de resolveCockpitTenants).
+  // Fallback "MyBotIA" uniquement si la réponse dashboard n'est pas encore arrivée.
+  const cockpitSlug = dashboard?.tenant ?? "mybotia";
+  const cockpitDisplayName = getTenantBranding(cockpitSlug).displayName;
 
   const clients = dashboard?.clients ?? [];
   const deals = dashboard?.deals ?? [];
@@ -75,7 +86,7 @@ export default function HomePage() {
       <section className="mb-10 mt-6">
         <div className="flex items-baseline justify-between mb-6">
           <h2 className="section-header text-sm font-bold tracking-tight uppercase text-text-primary font-headline">
-            Analyse proactive · MyBotIA
+            Analyse proactive · {cockpitDisplayName}
           </h2>
           <button
             onClick={() => window.location.reload()}
@@ -99,7 +110,7 @@ export default function HomePage() {
                 Donnees en direct
               </div>
               <h3 className="text-2xl lg:text-3xl font-headline font-extrabold mb-4 leading-tight text-text-primary">
-                {clients.length} clients · MyBotIA
+                {clients.length} clients · {cockpitDisplayName}
               </h3>
               <p className="text-text-secondary mb-6 max-w-md leading-relaxed">
                 {dealsMissing
@@ -162,7 +173,7 @@ export default function HomePage() {
                   false,
                 ),
                 trend: "stable",
-                changeLabel: "MyBotIA",
+                changeLabel: cockpitDisplayName,
               }}
             />
           </Link>

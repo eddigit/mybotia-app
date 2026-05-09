@@ -219,6 +219,9 @@ export interface DashboardData {
   missingFeatures?: string[];
   /** Source backend résolue (mybotia_business | dolibarr | external). */
   source?: string;
+  /** P0-2 V1.1.H — slug du cockpit résolu par la route (reflète resolveCockpitTenants).
+   *  Utilisé par la UI pour afficher le nom du tenant courant dans les KPI. */
+  tenant?: string;
 }
 
 export function useScopedDashboard() {
