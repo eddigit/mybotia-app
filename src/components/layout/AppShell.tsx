@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { useAgents, useCockpitFeatures } from "@/hooks/use-api";
@@ -12,6 +12,9 @@ import { CommandPalette } from "@/components/shared/CommandPalette";
 import { MobileNavDrawer } from "./MobileNavDrawer";
 import { VoiceConvProvider } from "@/contexts/voice-context";
 import { getTenantBranding } from "@/lib/tenant/branding";
+import { useSessionHeartbeat } from "@/hooks/use-session-heartbeat";
+import { toast } from "@/components/shared/Toast";
+import type { SessionStatus } from "@/components/session/SessionStatusBadge";
 
 // Quick win 2 — propagation primaryColor tenant.
 // On override `--color-accent-primary` et `--color-accent-glow` (tokens
@@ -45,6 +48,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { data: agents } = useAgents(false, !loading && !!user);
   const { data: cockpitFeatures } = useCockpitFeatures();
+
+  // V1.1.H.1 P0-UX-2 — Session heartbeat + toast transitions
+  const handleSessionStatusChange = useCallback(
+    (status: SessionStatus, secondsLeft: number) => {
+      if (status === "warning") {
+        const m = Math.ceil(secondsLeft / 60);
+        toast.info(`Session expire dans ${m} min · Sauvegardez votre travail.`);
+      } else if (status === "critical") {
+        const m = Math.ceil(secondsLeft / 60);
+        if (m <= 1) {
+          toast.error(`Session expire dans moins d'1 minute !`);
+        } else {
+          toast.error(`Session expire dans ${m} min · Reconnectez-vous.`);
+        }
+      } else if (status === "expired") {
+        toast.error("Session expirée · Veuillez vous reconnecter.");
+      }
+    },
+    [],
+  );
+
+  const handleReconnect = useCallback(() => {
+    router.push("/login");
+  }, [router]);
+
+  const { status: sessionStatus, secondsLeft: sessionSecondsLeft } =
+    useSessionHeartbeat(handleSessionStatusChange);
 
   // Quick win 2 — branding tenant courant → override des tokens accent au
   // niveau du wrapper de l'app. Fallback : MyBotIA (#0EA5E9) tant que le
@@ -137,6 +167,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onToggleRail={() => setRailOpen(!railOpen)}
             onOpenPalette={() => setPaletteOpen(true)}
             onOpenMobileNav={() => setMobileNavOpen(true)}
+            sessionStatus={sessionStatus}
+            sessionSecondsLeft={sessionSecondsLeft}
+            onReconnect={handleReconnect}
           />
           <main className="flex-1 overflow-y-auto">
             {children}

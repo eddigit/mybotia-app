@@ -9,12 +9,17 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeSwitcher } from "@/components/shared/ThemeSwitcher";
+import { SessionStatusBadge } from "@/components/session/SessionStatusBadge";
+import type { SessionStatus } from "@/components/session/SessionStatusBadge";
 
 export function TopBar({
   railOpen,
   onToggleRail,
   onOpenPalette,
   onOpenMobileNav,
+  sessionStatus,
+  sessionSecondsLeft,
+  onReconnect,
 }: {
   railOpen: boolean;
   onToggleRail: () => void;
@@ -24,6 +29,10 @@ export function TopBar({
    * desktop pour préserver l'apparence existante.
    */
   onOpenMobileNav?: () => void;
+  /** V1.1.H.1 P0-UX-2 — session heartbeat props */
+  sessionStatus?: SessionStatus;
+  sessionSecondsLeft?: number;
+  onReconnect?: () => void;
 }) {
   // Bloc 4C — bouton qui ouvre la Command Palette globale (Cmd/Ctrl+K).
   // Détection plateforme pour afficher le bon raccourci visuel.
@@ -78,6 +87,15 @@ export function TopBar({
 
         {/* Divider */}
         <div className="h-6 w-px bg-border-subtle" />
+
+        {/* Session status badge — V1.1.H.1 P0-UX-2 */}
+        {sessionStatus && sessionStatus !== "unknown" && (
+          <SessionStatusBadge
+            status={sessionStatus}
+            secondsLeft={sessionSecondsLeft ?? 0}
+            onReconnect={onReconnect ?? (() => {})}
+          />
+        )}
 
         {/* System Active pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-primary/10 rounded-full border border-accent-primary/20">

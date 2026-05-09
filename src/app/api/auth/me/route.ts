@@ -52,6 +52,9 @@ export async function GET() {
       tenant_slug: payload.tenant_slug,
       role: payload.role,
       is_superadmin: payload.is_superadmin,
+      // V1.1.H.1 P0-UX-2 — exposes JWT exp (Unix timestamp in seconds) so
+      // the client heartbeat can compute TTL without a round-trip.
+      exp: payload.exp ?? null,
     });
   } catch {
     return Response.json(
