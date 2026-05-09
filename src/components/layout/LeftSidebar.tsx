@@ -18,6 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Briefcase,
+  Hammer,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
@@ -43,12 +46,14 @@ const navItems: Array<{
   { id: "today",         label: "Aujourd'hui",    href: "/today",         icon: Sun,             alwaysVisible: true },
   { id: "conversations", label: "Conversations",  href: "/conversations", icon: MessagesSquare,  alwaysVisible: true },
   { id: "crm",           label: "CRM / Clients",  href: "/crm",           icon: BarChart3,       feature: "crm" },
+  { id: "affaires",      label: "Affaires",       href: "/affaires",      icon: Briefcase,       feature: "pipeline" },
   { id: "pipeline",      label: "Pipeline",       href: "/pipeline",      icon: TrendingUp,      feature: "pipeline" },
+  { id: "productions",   label: "Productions",    href: "/productions",   icon: Hammer,          feature: "productions" },
   { id: "tasks",         label: "Tâches",         href: "/tasks",         icon: CheckSquare,     feature: "tasks" },
   { id: "agenda",        label: "Agenda",         href: "/agenda",        icon: Calendar,        feature: "agenda" },
   { id: "documents",     label: "Documents",      href: "/documents",     icon: FileText,        feature: "documents" },
   { id: "agents",        label: "Agents IA",      href: "/agents",        icon: Bot,             alwaysVisible: true },
-  { id: "finance",       label: "Finances",       href: "/finance",       icon: Wallet,          feature: "finance" },
+  { id: "finance",       label: "Trésorerie",     href: "/finance",       icon: Wallet,          feature: "finance" },
 ];
 
 const bottomItems = [
@@ -231,6 +236,20 @@ export function LeftSidebar({
           >
             <MessageSquare className="w-[18px] h-[18px] shrink-0" />
             {!collapsed && <span className="truncate">Protocoles WhatsApp</span>}
+          </Link>
+          <Link
+            href="/admin/modules"
+            className={cn(
+              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
+              collapsed ? "justify-center px-2" : "pl-4",
+              pathname.startsWith("/admin/modules")
+                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
+                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
+            )}
+            title="Modules — activation par tenant"
+          >
+            <Layers className="w-[18px] h-[18px] shrink-0" />
+            {!collapsed && <span className="truncate">Modules</span>}
           </Link>
         </div>
       )}

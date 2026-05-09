@@ -4,6 +4,7 @@
 export const FEATURE_KEYS = [
   "crm",
   "pipeline",
+  "productions",
   "tasks",
   "documents",
   "finance",

@@ -269,6 +269,82 @@ export function useFinanceKpis() {
   return useApi<FinanceKpiPayload | null>("/api/finance/kpis", null);
 }
 
+// ============================================================================
+// V1.1.D Phase 1 — Affaires / Productions / Finance summary (proxy business)
+// ============================================================================
+
+export interface AffaireItem {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  title?: string;
+  name?: string;
+  status: string;
+  lifecycleStage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export interface ProductionItem {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  title?: string;
+  name?: string;
+  status: string;
+  lifecycleStage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export function useAffaires() {
+  return useApi<AffaireItem[]>("/api/affaires", []);
+}
+
+export function useProductions() {
+  return useApi<ProductionItem[]>("/api/productions", []);
+}
+
+export interface FinanceSummary {
+  year: number;
+  currency: string;
+  mrr_active_ht: number;
+  arr_active_ht: number;
+  oneshot_ytd_ht: number;
+  portfolio_total_ht: number;
+  by_month: Array<{ month: number; mrr: number; oneshot: number }>;
+}
+
+export function useFinanceSummary(year?: number) {
+  const url = year
+    ? `/api/finance/summary?year=${year}`
+    : `/api/finance/summary`;
+  return useApi<FinanceSummary | null>(url, null);
+}
+
+export interface AdminTenantModule {
+  module_key: string;
+  name: string;
+  category: string;
+  version: string;
+  depends_on: string[];
+  description: string | null;
+  status: string;
+  enabled: boolean;
+  activated_at: string | null;
+  deactivated_at: string | null;
+}
+
+export interface AdminTenantModulesResponse {
+  data: {
+    tenant_slug: string;
+    tenant_id: string;
+    modules: AdminTenantModule[];
+  };
+}
+
 export interface DocumentItem {
   id: string;
   type: "devis" | "facture";

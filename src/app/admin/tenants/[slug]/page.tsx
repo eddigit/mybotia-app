@@ -33,6 +33,7 @@ import { VlmPanel } from "@/components/admin/VlmPanel";
 const FEATURE_LABELS: Record<FeatureKey, string> = {
   crm: "CRM",
   pipeline: "Pipeline",
+  productions: "Productions",
   tasks: "Tâches",
   documents: "Documents",
   finance: "Finances",

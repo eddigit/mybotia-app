@@ -1,292 +1,323 @@
 "use client";
 
-// Bloc 6C — Page Finance KPI MyBotIA, lecture seule.
-// Doctrine : aucun chiffre inventé. Sources non fiables → "à configurer".
+// V1.1.D Phase 1 — Cockpit Trésorerie (parité business /finance).
+//
+// Source : /api/finance/summary?year=YYYY (proxy → business /api/v1/finance/summary).
+// Affichage : 3 KPI (MRR HT, ARR HT, one-shot YTD) + graphique mensuel
+// MRR + one-shot stacké sur 12 mois.
+//
+// Doctrine : aucun mock. Si feature `finance` désactivée → FeatureDisabled.
+// Si endpoint vide ou erreur → empty state ou bandeau d'erreur.
+// L'ancienne page KPI multi-sources (Bloc 6C) reste accessible via /finance/kpis.
 
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Wallet,
   TrendingUp,
-  Receipt,
   Coins,
-  Building2,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  XCircle,
   Loader2,
+  AlertTriangle,
   RefreshCw,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
-import {
-  useCockpitFeatures,
-  useFinanceKpis,
-  type FinanceKpi,
-  type FinanceKpiSection,
-  type KpiStatus,
-} from "@/hooks/use-api";
+import { useCockpitFeatures, useFinanceSummary } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 
-const SECTION_ICON: Record<string, typeof Wallet> = {
-  synthesis: Building2,
-  oneshot: Wallet,
-  recurring: TrendingUp,
-  tokens: Coins,
-  activity: Building2,
-  billing: Receipt,
-  reference: Wallet,
-};
+const FR_MONTHS = [
+  "janv.",
+  "févr.",
+  "mars",
+  "avr.",
+  "mai",
+  "juin",
+  "juil.",
+  "août",
+  "sept.",
+  "oct.",
+  "nov.",
+  "déc.",
+];
 
-const STATUS_STYLE: Record<
-  KpiStatus,
-  { label: string; chipClass: string; Icon: typeof CheckCircle2 }
-> = {
-  ready: {
-    label: "ready",
-    chipClass: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    Icon: CheckCircle2,
-  },
-  partial: {
-    label: "réf.",
-    chipClass: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-    Icon: Clock,
-  },
-  to_configure: {
-    label: "à configurer",
-    chipClass: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-    Icon: AlertTriangle,
-  },
-  error: {
-    label: "erreur",
-    chipClass: "bg-red-500/15 text-red-300 border-red-500/30",
-    Icon: XCircle,
-  },
-};
-
-function formatValue(kpi: FinanceKpi, currency: string): string {
-  if (kpi.value === null || kpi.value === undefined) return "—";
-  if (typeof kpi.value === "string") return kpi.value;
-  if (kpi.unit === "EUR" || kpi.unit === currency) {
-    return `${Number(kpi.value).toLocaleString("fr-FR")} ${currency}`;
-  }
-  if (kpi.unit === "count") {
-    return Number(kpi.value).toLocaleString("fr-FR");
-  }
-  if (kpi.unit === "tokens") {
-    return Number(kpi.value).toLocaleString("fr-FR") + " tk";
-  }
-  return String(kpi.value);
-}
-
-function KpiCard({ kpi, currency }: { kpi: FinanceKpi; currency: string }) {
-  const style = STATUS_STYLE[kpi.status];
-  const Icon = style.Icon;
-  return (
-    <div className="card-sharp-high p-4 flex flex-col gap-2 min-h-[110px]">
-      <div className="flex items-start justify-between gap-2">
-        <span className="micro-label text-text-muted leading-tight">
-          {kpi.label}
-        </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight border shrink-0",
-            style.chipClass
-          )}
-        >
-          <Icon className="w-2.5 h-2.5" />
-          {style.label}
-        </span>
-      </div>
-      <p
-        className={cn(
-          "text-xl font-headline font-extrabold leading-tight",
-          kpi.status === "to_configure" || kpi.value === null
-            ? "text-text-muted"
-            : "text-text-primary"
-        )}
-      >
-        {formatValue(kpi, currency)}
-      </p>
-      {kpi.note && (
-        <p className="text-[10px] text-text-muted italic mt-auto">{kpi.note}</p>
-      )}
-    </div>
-  );
-}
-
-function Section({
-  section,
-  currency,
-}: {
-  section: FinanceKpiSection;
-  currency: string;
-}) {
-  const Icon = SECTION_ICON[section.id] || Wallet;
-  return (
-    <section className="card-sharp p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-accent-glow" />
-          <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
-            {section.title}
-          </h2>
-        </div>
-        <span className="micro-label text-text-muted font-mono">
-          {section.kpis.length}
-        </span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {section.kpis.map((kpi) => (
-          <KpiCard key={kpi.id} kpi={kpi} currency={currency} />
-        ))}
-      </div>
-    </section>
-  );
+function fmtMoney(n: number, currency: string): string {
+  return n.toLocaleString("fr-FR", {
+    style: "currency",
+    currency: currency || "EUR",
+    maximumFractionDigits: 0,
+  });
 }
 
 export default function FinancePage() {
-  // Bloc 6B-final — feature gate
   const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
   const financeEnabled = cockpitFeatures?.features?.finance === true;
 
-  const { data, loading, error, refetch } = useFinanceKpis();
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const { data: summary, loading, error, refetch } = useFinanceSummary(year);
+
+  const maxStack = useMemo(() => {
+    if (!summary) return 0;
+    return summary.by_month.reduce(
+      (acc, p) => Math.max(acc, Number(p.mrr ?? 0) + Number(p.oneshot ?? 0)),
+      0,
+    );
+  }, [summary]);
+
+  const noActivity =
+    summary !== null &&
+    summary.mrr_active_ht === 0 &&
+    summary.oneshot_ytd_ht === 0;
 
   if (!featuresLoading && cockpitFeatures && !financeEnabled) {
-    return <FeatureDisabled featureKey="finance" tenantSlug={cockpitFeatures.tenant} />;
-  }
-
-  if (loading) {
     return (
-      <div className="p-8 min-h-screen flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
-      </div>
+      <FeatureDisabled
+        featureKey="finance"
+        tenantSlug={cockpitFeatures.tenant}
+      />
     );
   }
 
-  if (error || !data) {
-    return (
-      <div className="p-8 min-h-screen space-y-4">
-        <ModuleHeader
-          icon={Wallet}
-          title="Finances"
-          subtitle="KPI lecture seule"
-        />
-        <div className="card-sharp p-6 text-sm text-status-danger flex items-start gap-2">
-          <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>
-            Erreur chargement KPI : {error || "réponse vide"}.
-            <button
-              onClick={refetch}
-              className="ml-2 inline-flex items-center gap-1 text-accent-glow hover:underline"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Réessayer
-            </button>
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  const dolibarrError = data.sources.dolibarr === "error";
+  const currency = summary?.currency || "EUR";
 
   return (
     <div className="p-8 min-h-screen space-y-6">
       <ModuleHeader
         icon={Wallet}
-        title="Finances"
-        subtitle={`Cockpit ${data.displayName || data.tenant} · devise ${data.currency}`}
+        title="Trésorerie"
+        subtitle={
+          summary
+            ? `Cockpit ${cockpitFeatures?.displayName || cockpitFeatures?.tenant || ""} · exercice ${year}`
+            : "Chargement…"
+        }
         actions={
-          <button
-            onClick={refetch}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-text-primary hover:border-accent-primary/30"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Actualiser
-          </button>
+          <div className="flex items-center gap-2">
+            {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+              <button
+                key={y}
+                type="button"
+                onClick={() => setYear(y)}
+                className={cn(
+                  "px-2.5 py-1 text-[10px] font-bold uppercase tracking-tight border transition-colors",
+                  y === year
+                    ? "bg-accent-primary/20 text-accent-glow border-accent-primary/40"
+                    : "border-border-subtle text-text-muted hover:text-text-primary",
+                )}
+              >
+                {y}
+              </button>
+            ))}
+            <button
+              onClick={refetch}
+              className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-text-primary"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Actualiser
+            </button>
+          </div>
         }
       />
 
-      {/* Bandeau sources */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <SourceChip
-          label="Données commerciales"
-          status={data.sources.dolibarr}
-          okLabel="ok"
-          ko="error"
-        />
-        <SourceChip
-          label="Données activité"
-          status={data.sources.core}
-          okLabel="ok"
-          ko="error"
-        />
-        <SourceChip
-          label="Modèle économique"
-          status={data.sources.businessModel === "ok" ? "ok" : "error"}
-          okLabel="configuré"
-          ko="missing"
-          missingLabel="à configurer"
-        />
-      </div>
-
-      {dolibarrError && (
-        <div className="flex items-start gap-2 p-3 border border-amber-400/30 bg-amber-400/10 text-[11px] text-amber-300">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span>
-            Données commerciales temporairement indisponibles — les KPI liés
-            (CA, devis, factures) sont marqués{" "}
-            <span className="font-mono">erreur</span>. Le reste du cockpit
-            reste fiable.
-          </span>
+      {error && (
+        <div className="card-sharp p-5 flex items-start gap-3 text-sm border-amber-400/30 bg-amber-400/5 text-amber-200">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">Trésorerie indisponible</p>
+            <p className="text-[12px] mt-1 text-amber-200/80">
+              {error}. Pour la vue KPI multi-sources, voir{" "}
+              <Link href="/finance/kpis" className="font-mono text-accent-glow hover:underline">
+                /finance/kpis
+              </Link>
+              .
+            </p>
+          </div>
         </div>
       )}
 
-      {data.sections.map((section) => (
-        <Section key={section.id} section={section} currency={data.currency} />
-      ))}
+      {loading && (
+        <div className="flex justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
+        </div>
+      )}
 
-      <p className="text-[10px] text-text-muted italic text-center pt-4">
-        KPI générés à {new Date(data.generatedAt).toLocaleTimeString("fr-FR")} ·
-        Sources fiables uniquement · MRR/ARR/tokens à configurer
-      </p>
+      {!loading && !error && summary && (
+        <>
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <KpiCard
+              icon={TrendingUp}
+              label="MRR actif HT"
+              value={fmtMoney(summary.mrr_active_ht, currency)}
+              hint={`ARR équivalent : ${fmtMoney(summary.arr_active_ht, currency)}`}
+              tone="info"
+            />
+            <KpiCard
+              icon={Coins}
+              label={`One-shot signé ${year}`}
+              value={fmtMoney(summary.oneshot_ytd_ht, currency)}
+            />
+            <KpiCard
+              icon={Wallet}
+              label="Portefeuille global"
+              value={fmtMoney(summary.portfolio_total_ht, currency)}
+              hint="ARR + one-shot YTD"
+              tone="success"
+            />
+          </section>
+
+          {noActivity && (
+            <div className="card-sharp p-8 text-center space-y-2">
+              <p className="text-sm font-bold text-text-primary">
+                Aucune facture émise — démarre la première.
+              </p>
+              <p className="text-[12px] text-text-muted">
+                Cette page se peuplera dès la première facture émise et le
+                premier abonnement activé côté business.
+              </p>
+            </div>
+          )}
+
+          <section className="card-sharp p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
+                MRR + one-shot — 12 mois
+              </h2>
+              <div className="flex items-center gap-3 text-[10px] text-text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 bg-accent-primary" />
+                  MRR HT
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 bg-accent-primary/30" />
+                  One-shot HT
+                </span>
+              </div>
+            </div>
+
+            {summary.by_month.length === 0 ? (
+              <p className="text-sm text-text-muted text-center py-8">
+                Aucune donnée mensuelle pour cet exercice.
+              </p>
+            ) : (
+              <div className="flex items-end gap-1 h-48">
+                {summary.by_month.map((p) => {
+                  const total = Number(p.mrr ?? 0) + Number(p.oneshot ?? 0);
+                  const totalH = maxStack > 0 ? (total / maxStack) * 100 : 0;
+                  const mrrH =
+                    maxStack > 0 ? (Number(p.mrr ?? 0) / maxStack) * 100 : 0;
+                  return (
+                    <div
+                      key={p.month}
+                      className="flex-1 flex flex-col items-center gap-1 group"
+                    >
+                      <div className="relative w-full h-full flex flex-col justify-end">
+                        <div
+                          className="bg-accent-primary/30 transition-all"
+                          style={{ height: `${Math.max(0, totalH - mrrH)}%` }}
+                          title={`One-shot : ${fmtMoney(Number(p.oneshot ?? 0), currency)}`}
+                        />
+                        <div
+                          className="bg-accent-primary transition-all"
+                          style={{ height: `${mrrH}%` }}
+                          title={`MRR : ${fmtMoney(Number(p.mrr ?? 0), currency)}`}
+                        />
+                      </div>
+                      <span className="text-[10px] text-text-muted">
+                        {FR_MONTHS[Number(p.month) - 1] ?? p.month}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="card-sharp p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
+                Détail mensuel
+              </h2>
+              <span className="text-[10px] text-text-muted font-mono">
+                {summary.by_month.length} ligne{summary.by_month.length > 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-[10px] uppercase tracking-tight text-text-muted">
+                  <tr className="border-b border-border-subtle">
+                    <th className="text-left py-2 font-bold">Mois</th>
+                    <th className="text-right py-2 font-bold">MRR HT</th>
+                    <th className="text-right py-2 font-bold">One-shot HT</th>
+                    <th className="text-right py-2 font-bold">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {summary.by_month.map((p) => {
+                    const total = Number(p.mrr ?? 0) + Number(p.oneshot ?? 0);
+                    return (
+                      <tr key={p.month}>
+                        <td className="py-2 text-text-primary">
+                          {FR_MONTHS[Number(p.month) - 1] ?? p.month} {year}
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-text-secondary">
+                          {fmtMoney(Number(p.mrr ?? 0), currency)}
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-text-secondary">
+                          {fmtMoney(Number(p.oneshot ?? 0), currency)}
+                        </td>
+                        <td className="py-2 text-right tabular-nums font-bold text-text-primary">
+                          {fmtMoney(total, currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <p className="text-[10px] text-text-muted italic text-center pt-2">
+            Vue agrégée — détail factures encaissées et abonnements actifs : à
+            venir Phase 2. KPI multi-sources Dolibarr →{" "}
+            <Link href="/finance/kpis" className="font-mono text-accent-glow hover:underline">
+              /finance/kpis
+            </Link>
+            .
+          </p>
+        </>
+      )}
     </div>
   );
 }
 
-function SourceChip({
+function KpiCard({
+  icon: Icon,
   label,
-  status,
-  okLabel,
-  ko,
-  missingLabel,
+  value,
+  hint,
+  tone,
 }: {
+  icon: typeof Wallet;
   label: string;
-  status: string;
-  okLabel: string;
-  ko: string;
-  missingLabel?: string;
+  value: string;
+  hint?: string;
+  tone?: "info" | "success";
 }) {
-  const isOk = status === "ok";
-  const isMissing = !isOk && status === ko;
+  const accent =
+    tone === "success"
+      ? "text-emerald-300"
+      : tone === "info"
+        ? "text-accent-glow"
+        : "text-text-primary";
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between p-3 border text-xs",
-        isOk
-          ? "bg-emerald-500/5 text-emerald-300 border-emerald-500/30"
-          : "bg-amber-500/5 text-amber-300 border-amber-500/30"
-      )}
-    >
-      <span className="micro-label">{label}</span>
-      <span className="inline-flex items-center gap-1 font-bold">
-        {isOk ? (
-          <CheckCircle2 className="w-3 h-3" />
-        ) : (
-          <AlertTriangle className="w-3 h-3" />
-        )}
-        {isOk ? okLabel : isMissing && missingLabel ? missingLabel : status}
-      </span>
+    <div className="card-sharp-high p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon className={cn("w-4 h-4", accent)} />
+        <span className="micro-label text-text-muted">{label}</span>
+      </div>
+      <p className="text-2xl font-headline font-extrabold leading-tight text-text-primary">
+        {value}
+      </p>
+      {hint && <p className="text-[10px] text-text-muted">{hint}</p>}
     </div>
   );
 }
