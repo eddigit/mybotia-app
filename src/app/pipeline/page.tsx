@@ -38,8 +38,6 @@ import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { useScopedProjects, useCockpitFeatures } from "@/hooks/use-api";
 import type { Project } from "@/types";
 
-const TENANT_SLUG = "mybotia";
-
 type ColumnKey =
   | "cadrage"
   | "devis"
@@ -136,15 +134,21 @@ function classifyProject(p: Project): ColumnKey {
 export default function PipelinePage() {
   const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
   const pipelineEnabled = cockpitFeatures?.features?.pipeline === true;
+  // V1.1.H P0-4 — slug cockpit courant (résolu via hostname côté serveur, jamais hardcodé)
+  const currentTenant = cockpitFeatures?.tenant ?? "";
 
   const { data: projects, loading: projectsLoading, refetch } = useScopedProjects();
   const [selected, setSelected] = useState<Project | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  // Filtre tenant défensif (ceinture+bretelles, le serveur scope déjà via Host)
+  // Filtre tenant cockpit courant (dynamique). currentTenant vide pendant le chargement :
+  // on attend la résolution avant d'afficher quoi que ce soit.
   const safeProjects = useMemo(
-    () => projects.filter((p) => !p.tenantSlug || p.tenantSlug === TENANT_SLUG),
-    [projects],
+    () =>
+      currentTenant
+        ? projects.filter((p) => !p.tenantSlug || p.tenantSlug === currentTenant)
+        : [],
+    [projects, currentTenant],
   );
 
   // Liste affichée : on exclut les affaires terminées depuis > 90j pour ne pas

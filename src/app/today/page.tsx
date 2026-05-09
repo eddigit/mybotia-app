@@ -1,9 +1,9 @@
 "use client";
 
-// Bloc 5C-fix — Cockpit Aujourd'hui MyBotIA STRICT.
-// Doctrine produit : cette page est le cockpit personnel quotidien de Gilles.
-// Elle n'est PAS multi-tenant. Le serveur force tenant=mybotia (cf /api/today).
-// Aucun filtre tenant n'est exposé côté UI.
+// Bloc 5C-fix — Cockpit Aujourd'hui.
+// Doctrine produit : cette page est le cockpit personnel quotidien, scopé sur le
+// tenant cockpit courant (résolu via hostname côté serveur, cf /api/today + /api/me/features).
+// V1.1.H P0-4 : CreateTaskModal suit cockpitFeatures.tenant, plus de hardcode mybotia.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/shared/Skeleton";
 import { btnPrimary } from "@/components/shared/FormModal";
 import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
+import { useCockpitFeatures } from "@/hooks/use-api";
 import type {
   TaskItem,
   DashboardProposal,
@@ -64,6 +65,10 @@ function daysSince(dateISO?: string): number {
 }
 
 export default function TodayPage() {
+  // V1.1.H P0-4 — slug cockpit courant pour CreateTaskModal (jamais hardcodé)
+  const { data: cockpitFeatures } = useCockpitFeatures();
+  const currentTenant = cockpitFeatures?.tenant ?? "mybotia";
+
   const [payload, setPayload] = useState<TodayPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | null>(null);
@@ -464,12 +469,12 @@ export default function TodayPage() {
         onSaved={() => fetchToday()}
       />
 
-      {/* Modal création tâche (tenant_slug=mybotia forcé) */}
+      {/* Modal création tâche — tenant cockpit courant (V1.1.H P0-4) */}
       <CreateTaskModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={() => fetchToday()}
-        tenantSlug="mybotia"
+        tenantSlug={currentTenant}
       />
     </div>
   );

@@ -22,12 +22,12 @@ import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { useScopedTasks, useScopedProjects, useCockpitFeatures, type TaskItem } from "@/hooks/use-api";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 
-const TENANT_SLUG = "mybotia";
-
 export default function TasksPage() {
-  // Bloc 6B — feature gate
+  // Bloc 6B — feature gate + tenant cockpit courant (résolu via hostname côté serveur)
   const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
   const tasksEnabled = cockpitFeatures?.features?.tasks === true;
+  // V1.1.H P0-4 — slug dynamique depuis cockpit, jamais hardcodé
+  const currentTenant = cockpitFeatures?.tenant ?? "";
 
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useScopedTasks();
   const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useScopedProjects();
@@ -55,13 +55,15 @@ export default function TasksPage() {
 
   const loading = tasksLoading || projectsLoading;
 
-  // Garde-fou défensif : on ne montre QUE les tâches mybotia même si la route
-  // venait à fuiter. Conformité brief : "si tenantSlug !== mybotia : ne pas afficher".
-  const safeTasks = tasks.filter((t) => t.tenantSlug === TENANT_SLUG);
+  // V1.1.H P0-4 — filtre tenant cockpit courant (dynamique, plus de hardcode mybotia).
+  // currentTenant vide pendant le chargement initial : on montre [] jusqu'à résolution.
+  const safeTasks = currentTenant
+    ? tasks.filter((t) => t.tenantSlug === currentTenant)
+    : [];
 
-  // Projets mybotia uniquement pour le filtre
+  // Projets du cockpit courant uniquement pour le filtre
   const mybotiaProjects = projects.filter(
-    (p) => !p.tenantSlug || p.tenantSlug === TENANT_SLUG
+    (p) => currentTenant && (!p.tenantSlug || p.tenantSlug === currentTenant)
   );
   const activeProjects = mybotiaProjects.filter((p) => p.status === "active");
 
@@ -282,7 +284,7 @@ export default function TasksPage() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={() => refetchTasks()}
-        tenantSlug={TENANT_SLUG}
+        tenantSlug={currentTenant}
       />
 
       <CreateProjectModal
