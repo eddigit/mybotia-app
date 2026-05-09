@@ -1,6 +1,18 @@
 "use client";
 
-// Bloc 6A — Détail tenant + édition légère features/business_model.
+// V1.1.E — Console détail tenant (refonte).
+//
+// Sections (de haut en bas) :
+//   - Header branding : badge tenant coloré + displayName + slug + status
+//   - Informations générales (légères, lecture seule sauf édition tech ci-dessous)
+//   - Modules (matrice toggle + config jsonb + dépendances) — TenantModulesSection
+//   - Branding (lecture seule V1.1.E)
+//   - Features cockpit (whitelist) + Modèle économique (édition existante)
+//   - Architecture / Catalogue / Stock / Livraisons / Transport / VLM (panels existants)
+//   - Audit log (20 dernières) — TenantAuditLogSection
+//
+// Source : GET /api/admin/tenants/[slug]. Édition features/business_model :
+// PATCH /api/admin/tenants/[slug]. Modules : routes dédiées.
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -13,6 +25,7 @@ import {
   Save,
   CheckCircle2,
   XCircle,
+  Palette,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import {
@@ -22,6 +35,7 @@ import {
   type TenantFeatures,
   type TenantBusinessModel,
 } from "@/lib/tenant-admin-config";
+import { getTenantBranding } from "@/lib/tenant/branding";
 import { SubscriptionsSection } from "@/components/admin/SubscriptionsSection";
 import { ArchitectureSection } from "@/components/admin/ArchitectureSection";
 import { CatalogSection } from "@/components/admin/CatalogSection";
@@ -29,6 +43,8 @@ import { StockSection } from "@/components/admin/StockSection";
 import { DeliveriesSection } from "@/components/admin/DeliveriesSection";
 import { TransportSection } from "@/components/admin/TransportSection";
 import { VlmPanel } from "@/components/admin/VlmPanel";
+import { TenantModulesSection } from "@/components/admin/TenantModulesSection";
+import { TenantAuditLogSection } from "@/components/admin/TenantAuditLogSection";
 
 const FEATURE_LABELS: Record<FeatureKey, string> = {
   crm: "CRM",
@@ -63,10 +79,11 @@ export default function AdminTenantDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [auditTick, setAuditTick] = useState(0);
 
   function loadTenant() {
     setLoading(true);
-    fetch(`/api/admin/tenants/${encodeURIComponent(slug)}`)
+    fetch(`/api/admin/tenants/${encodeURIComponent(slug)}`, { cache: "no-store" })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
@@ -78,7 +95,7 @@ export default function AdminTenantDetailPage() {
         setFeatures(t.features || {});
         setBmText(t.businessModel ? JSON.stringify(t.businessModel, null, 2) : "");
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }
 
@@ -88,7 +105,7 @@ export default function AdminTenantDetailPage() {
     if (!tenant) return false;
     const origFeatures = tenant.features || {};
     const featDirty = FEATURE_KEYS.some(
-      (k) => Boolean(features[k]) !== Boolean(origFeatures[k])
+      (k) => Boolean(features[k]) !== Boolean(origFeatures[k]),
     );
     const origBmText = tenant.businessModel ? JSON.stringify(tenant.businessModel, null, 2) : "";
     const bmDirty = bmText.trim() !== origBmText.trim();
@@ -103,7 +120,6 @@ export default function AdminTenantDetailPage() {
 
     const payload: { features?: TenantFeatures; business_model?: TenantBusinessModel | null } = {};
 
-    // features (envoyer le diff)
     const origFeatures = tenant.features || {};
     const featDiff: TenantFeatures = {};
     for (const k of FEATURE_KEYS) {
@@ -113,7 +129,6 @@ export default function AdminTenantDetailPage() {
     }
     if (Object.keys(featDiff).length > 0) payload.features = featDiff;
 
-    // business_model
     const trimmed = bmText.trim();
     const origBmText = tenant.businessModel ? JSON.stringify(tenant.businessModel, null, 2) : "";
     if (trimmed !== origBmText.trim()) {
@@ -142,6 +157,7 @@ export default function AdminTenantDetailPage() {
       setFeatures(j.tenant?.features || {});
       setBmText(j.tenant?.businessModel ? JSON.stringify(j.tenant.businessModel, null, 2) : "");
       setSuccess("Modifications enregistrées.");
+      setAuditTick((t) => t + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur");
     } finally {
@@ -177,6 +193,17 @@ export default function AdminTenantDetailPage() {
 
   if (!tenant) return null;
 
+  // Branding pour le header — la table tenant_branding peut renseigner
+  // primary_color / logo_url. On retombe sur la map V1 sinon.
+  const fallbackBranding = getTenantBranding(tenant.slug);
+  const primaryColor = tenant.primaryColor || fallbackBranding.primaryColor || "#374151";
+  const subLabel = fallbackBranding.subLabel;
+  const displayName = tenant.displayName || fallbackBranding.displayName;
+  const logoUrl = tenant.logoUrl || fallbackBranding.logoUrl;
+
+  const enabledModules = tenant.modulesEnabled ?? 0;
+  const totalModules = tenant.modulesTotal ?? 0;
+
   return (
     <div className="p-8 min-h-screen space-y-6">
       <Link
@@ -187,18 +214,74 @@ export default function AdminTenantDetailPage() {
         Tous les tenants
       </Link>
 
+      {/* Header branding ----------------------------------------------------- */}
+      <section
+        className="card-sharp p-5 border-l-4"
+        style={{ borderLeftColor: primaryColor }}
+      >
+        <div className="flex items-center gap-4">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt={`${displayName} logo`}
+              className="w-12 h-12 object-contain"
+            />
+          ) : (
+            <span
+              className="inline-flex items-center justify-center w-12 h-12 text-base font-bold uppercase tracking-tight border"
+              style={{
+                background: `${primaryColor}1A`,
+                borderColor: `${primaryColor}55`,
+                color: primaryColor,
+              }}
+              aria-hidden
+            >
+              {displayName.slice(0, 2)}
+            </span>
+          )}
+          <div className="flex-1 min-w-0">
+            <h1 className="font-headline text-xl font-extrabold text-text-primary leading-tight">
+              {displayName}
+            </h1>
+            <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5 flex-wrap">
+              <span className="font-mono">slug={tenant.slug}</span>
+              <span>·</span>
+              <span>{subLabel}</span>
+              <span>·</span>
+              <span>profile={tenant.profile}</span>
+              <span>·</span>
+              <span
+                className={
+                  tenant.status === "active" ? "text-emerald-300" : ""
+                }
+              >
+                {tenant.status}
+              </span>
+            </div>
+          </div>
+          <div className="text-right text-xs text-text-muted leading-tight">
+            <div className="font-mono text-text-primary">
+              {enabledModules}
+              <span className="text-text-muted">/{totalModules}</span> modules
+            </div>
+            <div>{tenant.userCount} utilisateurs</div>
+          </div>
+        </div>
+      </section>
+
       <ModuleHeader
         icon={Shield}
-        title={`Admin · ${tenant.displayName}`}
-        subtitle={`slug=${tenant.slug} · profile=${tenant.profile} · status=${tenant.status}`}
+        title="Configuration"
+        subtitle="Modules, branding, features cockpit, audit"
       />
 
-      {/* Infos générales */}
+      {/* Infos générales ----------------------------------------------------- */}
       <section className="card-sharp p-6">
         <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline mb-4">
           Informations générales
         </h2>
-        <div className="grid grid-cols-2 gap-4 text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
           <Field label="UUID" value={tenant.id} mono />
           <Field label="Slug" value={tenant.slug} mono />
           <Field label="Display name" value={tenant.displayName} />
@@ -219,18 +302,61 @@ export default function AdminTenantDetailPage() {
                 : "—"
             }
           />
-          <Field
-            label="Users associés"
-            value={String(tenant.userCount)}
-          />
+          <Field label="Users associés" value={String(tenant.userCount)} />
           <Field label="Mis à jour" value={tenant.updatedAt || "—"} mono />
         </div>
       </section>
 
-      {/* Features */}
+      {/* Modules ------------------------------------------------------------- */}
+      <TenantModulesSection
+        tenantSlug={tenant.slug}
+        onActivityRefresh={() => {
+          loadTenant();
+          setAuditTick((t) => t + 1);
+        }}
+      />
+
+      {/* Branding (lecture seule V1.1.E) ------------------------------------- */}
+      <section className="card-sharp p-6">
+        <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline mb-4 flex items-center gap-2">
+          <Palette className="w-4 h-4 text-accent-glow" />
+          Branding
+          <span className="text-[10px] text-text-muted font-mono normal-case font-normal">
+            (lecture seule V1.1.E)
+          </span>
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <Field label="Display name" value={displayName} />
+          <Field label="Sous-libellé" value={subLabel} />
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-text-muted">
+              Couleur primaire
+            </div>
+            <div className="mt-0.5 flex items-center gap-2 text-text-primary font-mono text-[11px]">
+              <span
+                className="inline-block w-4 h-4 border border-border-subtle"
+                style={{ background: primaryColor }}
+                aria-hidden
+              />
+              {primaryColor}
+            </div>
+          </div>
+          <Field label="Logo URL" value={logoUrl || "—"} mono />
+        </div>
+        <p className="text-[10px] text-text-muted mt-3 italic">
+          Source : <span className="font-mono">core.tenant_branding</span> +
+          fallback <span className="font-mono">lib/tenant/branding.ts</span>.
+          L&apos;édition arrive en V1.1.F.
+        </p>
+      </section>
+
+      {/* Features cockpit (édition existante) -------------------------------- */}
       <section className="card-sharp p-6">
         <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline mb-4">
-          Modules / features
+          Features cockpit
+          <span className="ml-2 text-[10px] text-text-muted font-mono normal-case font-normal">
+            (whitelist côté app)
+          </span>
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {FEATURE_KEYS.map((k) => (
@@ -253,9 +379,15 @@ export default function AdminTenantDetailPage() {
             </label>
           ))}
         </div>
+        <p className="text-[10px] text-text-muted mt-3 italic">
+          Différent des modules : la whitelist features pilote les écrans
+          cockpit (sidebar, routes UI). Les{" "}
+          <span className="font-mono">core.tenant_modules</span> ci-dessus
+          pilotent le backend (capabilities business).
+        </p>
       </section>
 
-      {/* Business model */}
+      {/* Modèle économique --------------------------------------------------- */}
       <section className="card-sharp p-6">
         <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline mb-4">
           Modèle économique
@@ -274,7 +406,7 @@ export default function AdminTenantDetailPage() {
         </p>
       </section>
 
-      {/* Connexions / outils (lecture masquée) */}
+      {/* Connexions / outils (lecture masquée) ------------------------------- */}
       <section className="card-sharp p-6 text-xs">
         <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline mb-4">
           Connexions / outils (lecture masquée)
@@ -283,7 +415,7 @@ export default function AdminTenantDetailPage() {
           Les clés techniques ne sont jamais exposées par cette page. État
           dérivé du nom de feature uniquement.
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {(["crm", "voice", "whatsapp", "penylane", "pipedrive", "advancedGed"] as const).map(
             (k) => (
               <div
@@ -301,19 +433,18 @@ export default function AdminTenantDetailPage() {
                   </span>
                 )}
               </div>
-            )
+            ),
           )}
         </div>
       </section>
 
-      {/* Bloc 7A — section architecture du tenant */}
+      {/* Architecture -------------------------------------------------------- */}
       <ArchitectureSection
         slug={tenant.slug}
         initial={tenant.architectureConfig}
         onSaved={(next) => setTenant((t) => (t ? { ...t, architectureConfig: next } : t))}
       />
 
-      {/* Bloc 7B — section catalogue produits/services */}
       <CatalogSection
         tenantSlug={tenant.slug}
         catalogEnabled={
@@ -321,41 +452,39 @@ export default function AdminTenantDetailPage() {
         }
       />
 
-      {/* Bloc 6D — section abonnements (lecture/édition DB core.subscriptions) */}
       <SubscriptionsSection
         tenantSlug={tenant.slug}
         currency={(tenant.businessModel?.currency as string) || "EUR"}
       />
 
-      {/* Bloc 7C — Stock / inventaire */}
       <StockSection
         tenantSlug={tenant.slug}
         enabled={tenant.architectureConfig?.standardModules?.stock === true}
       />
 
-      {/* Bloc 7C — Livraisons */}
       <DeliveriesSection
         tenantSlug={tenant.slug}
         enabled={tenant.architectureConfig?.standardModules?.delivery === true}
         currency={(tenant.businessModel?.currency as string) || "EUR"}
       />
 
-      {/* Bloc 7C — Transport (étapes) */}
       <TransportSection
         tenantSlug={tenant.slug}
         enabled={tenant.architectureConfig?.standardModules?.transport === true}
         currency={(tenant.businessModel?.currency as string) || "EUR"}
       />
 
-      {/* Bloc 7D — VL Medical custom vertical (rendu uniquement si slug === 'vlmedical') */}
       <VlmPanel
         tenantSlug={tenant.slug}
         enabled={tenant.architectureConfig?.verticalModules?.medicalDistribution === true}
         currency={(tenant.businessModel?.currency as string) || "EUR"}
       />
 
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Audit log ----------------------------------------------------------- */}
+      <TenantAuditLogSection tenantSlug={tenant.slug} refreshKey={auditTick} />
+
+      {/* Footer -------------------------------------------------------------- */}
+      <div className="flex items-center justify-between gap-2 sticky bottom-2 z-10">
         <div className="flex-1 text-[11px]">
           {error && (
             <div className="flex items-start gap-1.5 text-status-danger">
@@ -375,7 +504,7 @@ export default function AdminTenantDetailPage() {
           }`}
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-          {saving ? "Enregistrement…" : "Enregistrer"}
+          {saving ? "Enregistrement…" : "Enregistrer features / business model"}
         </button>
       </div>
     </div>

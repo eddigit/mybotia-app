@@ -6,6 +6,7 @@
 
 import { getSession } from "@/lib/session";
 import { getCockpitFeatures } from "@/lib/tenant-features";
+import { getCrmProvider } from "@/lib/crm-router";
 import { adminQuery } from "@/lib/admin-db";
 import type { TenantBusinessModel } from "@/lib/tenant-admin-config";
 
@@ -48,6 +49,17 @@ export async function GET(request: Request) {
     // fallback safe : on retourne les features sans les méta
   }
 
+  // V1.1.E — expose crmProvider.kind pour que le front sache afficher les
+  // boutons "PDF Premium" pointant vers /api/quotes/[id]/pdf et
+  // /api/invoices/[id]/pdf (réservés aux tenants `mybotia_business`).
+  let crmProvider: "mybotia_business" | "dolibarr" | "external" | null = null;
+  try {
+    const resolved = await getCrmProvider(slug);
+    crmProvider = resolved.kind;
+  } catch {
+    // fallback : null -> le front masque le bouton premium
+  }
+
   return Response.json(
     {
       tenant: slug,
@@ -57,6 +69,7 @@ export async function GET(request: Request) {
       features,
       businessModel,
       isSuperadmin: session.isSuperadmin,
+      crmProvider,
     },
     { headers: NO_STORE }
   );

@@ -16,10 +16,22 @@
 //   Une zone admin séparée (admin.mybotia.com ou /admin/tenants) restera
 //   le seul endroit où un superadmin peut explicitement opérer cross-tenant.
 //
+// Bloc 7F — Cockpit cookie superadmin :
+//   Pour permettre à Gilles (superadmin) de basculer entre cockpits depuis
+//   `app.mybotia.com` sans changer de hostname, on lit en priorité le cookie
+//   httpOnly `cockpit_tenant`. Ce cookie n'est honoré QUE si la session JWT
+//   porte `is_superadmin === true`. Pour tout autre user, le cookie est
+//   ignoré (et l'endpoint POST de switch refuse de le poser).
+//
+//   Ordre de résolution :
+//     1. Cookie `cockpit_tenant` (uniquement si superadmin)
+//     2. Hostname (vlmedical.mybotia.com → vlmedical)
+//     3. Default mybotia
+//
 // Usage côté route serveur :
 //   import { resolveCockpitTenant } from "@/lib/tenant-resolver";
 //   const cockpit = resolveCockpitTenant(request);
-//   // cockpit = { slug: "mybotia", source: "hostname"|"fallback-dev"|"default" }
+//   // cockpit = { slug: "mybotia", source: "hostname"|"fallback-dev"|"default"|"cookie" }
 
 const HOSTNAME_TO_TENANT: Record<string, string> = {
   "app.mybotia.com": "mybotia",
@@ -39,9 +51,22 @@ const DEFAULT_TENANT = "mybotia";
 
 export type TenantResolution = {
   slug: string;
-  source: "hostname" | "fallback-dev" | "default";
+  source: "hostname" | "fallback-dev" | "default" | "cookie";
   hostname: string | null;
 };
+
+// Bloc 7F — nom du cookie cockpit superadmin (httpOnly, scope domaine app).
+export const COCKPIT_COOKIE_NAME = "cockpit_tenant";
+
+// Slugs autorisés pour le cookie cockpit (whitelist stricte — refus de tout
+// slug arbitraire injecté côté client).
+export const KNOWN_TENANT_SLUGS: ReadonlySet<string> = new Set([
+  "mybotia",
+  "vlmedical",
+  "igh",
+  "cmb_lux",
+  "esprit_loft",
+]);
 
 /**
  * Extrait le hostname d'une requête. Strip le port si présent.
@@ -57,17 +82,53 @@ export function extractHostname(request: Request): string | null {
 }
 
 /**
- * Résout le tenant pour une route cockpit depuis le hostname.
- * - Si hostname est dans HOSTNAME_TO_TENANT : tenant déterministe.
- * - Si hostname est dev (localhost / IP) : fallback mybotia (utile en dev local).
- * - Sinon : fallback DEFAULT_TENANT (mybotia) — précaution dans les cas
- *   où le proxy n'a pas propagé le Host (déploiement test).
+ * Lit la valeur d'un cookie depuis le header `Cookie` brut. Évite la
+ * dépendance à `next/headers` (cette fonction reçoit déjà la Request).
+ * Retourne null si le cookie est absent ou si la valeur est vide.
+ */
+export function readCookieFromRequest(request: Request, name: string): string | null {
+  const raw = request.headers.get("cookie");
+  if (!raw) return null;
+  // Parsing volontairement simple : split sur "; " et "=", trim.
+  const parts = raw.split(/;\s*/);
+  for (const part of parts) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const k = part.slice(0, eq).trim();
+    if (k !== name) continue;
+    const v = part.slice(eq + 1).trim();
+    return v.length > 0 ? decodeURIComponent(v) : null;
+  }
+  return null;
+}
+
+/**
+ * Résout le tenant pour une route cockpit.
+ * Ordre :
+ *   1. Cookie `cockpit_tenant` SI fourni ET dans la whitelist ET (optionnel)
+ *      `superadminOnly=true` ET la session est superadmin.
+ *      NOTE : la vérification `is superadmin` se fait UNIQUEMENT via le helper
+ *      `resolveCockpitTenants` (qui charge la session). La fonction de base
+ *      `resolveCockpitTenant` ne sait pas encore si l'user est superadmin —
+ *      elle ne fait que lire le cookie. La sécurité finale repose sur :
+ *      a) le POST /api/me/switch-tenant qui refuse de poser le cookie pour
+ *         un non-superadmin (cookie absent → fallback hostname),
+ *      b) `resolveCockpitTenants` qui revalide ACL session vs cockpit.
+ *   2. Hostname (vlmedical.mybotia.com → vlmedical).
+ *   3. Dev hostname → fallback mybotia.
+ *   4. Default mybotia.
  *
  * Cette fonction NE fait PAS d'auth. C'est juste la résolution. Les routes
  * doivent ensuite valider que la session JWT autorise ce tenant.
  */
 export function resolveCockpitTenant(request: Request): TenantResolution {
   const hostname = extractHostname(request);
+
+  const cookieSlug = readCookieFromRequest(request, COCKPIT_COOKIE_NAME);
+  if (cookieSlug && KNOWN_TENANT_SLUGS.has(cookieSlug)) {
+    return { slug: cookieSlug, source: "cookie", hostname };
+  }
+
   if (hostname && HOSTNAME_TO_TENANT[hostname]) {
     return { slug: HOSTNAME_TO_TENANT[hostname], source: "hostname", hostname };
   }
@@ -133,7 +194,21 @@ export async function resolveCockpitTenants(request: Request): Promise<CockpitRe
   const session = await getSession();
   if (!session) return { ok: false, status: 401, error: "Non authentifie" };
 
-  const cockpit = resolveCockpitTenant(request);
+  let cockpit = resolveCockpitTenant(request);
+
+  // Bloc 7F — sécurité : un cookie `cockpit_tenant` ne doit être honoré que
+  // pour un superadmin. Pour tout autre user, on retombe sur le hostname
+  // (et on log un warning : un cookie est arrivé sans droit). Le cookie ne
+  // peut normalement pas être posé sans superadmin (cf. POST /api/me/switch-tenant),
+  // mais on défend en profondeur.
+  if (cockpit.source === "cookie" && !session.isSuperadmin) {
+    console.warn(
+      "[tenant-resolver] cookie cockpit présent pour user non-superadmin",
+      { user: session.userId, requested: cockpit.slug, tenant: session.tenantSlug }
+    );
+    // Recompute en ignorant le cookie : on simule une request sans header cookie.
+    cockpit = resolveHostnameOnly(request);
+  }
 
   // Étape 3 : query mismatch ?
   const url = new URL(request.url);
@@ -142,7 +217,7 @@ export async function resolveCockpitTenants(request: Request): Promise<CockpitRe
   if (mismatch) return { ok: false, status: 403, error: mismatch };
 
   // Étape 4 : ACL session
-  // Superadmin : peut accéder à n'importe quel cockpit qu'il visite par hostname.
+  // Superadmin : peut accéder à n'importe quel cockpit qu'il visite (hostname ou cookie).
   // User normal : son tenantSlug doit matcher le cockpit.
   if (!session.isSuperadmin && cockpit.slug !== session.tenantSlug) {
     return {
@@ -158,4 +233,20 @@ export async function resolveCockpitTenants(request: Request): Promise<CockpitRe
     slug: cockpit.slug,
     source: cockpit.source,
   };
+}
+
+/**
+ * Variante de `resolveCockpitTenant` qui ignore le cookie cockpit. Utile
+ * quand le code appelant a déjà déterminé que la session ne peut pas
+ * bénéficier du cookie (non-superadmin), pour retomber sur le hostname.
+ */
+export function resolveHostnameOnly(request: Request): TenantResolution {
+  const hostname = extractHostname(request);
+  if (hostname && HOSTNAME_TO_TENANT[hostname]) {
+    return { slug: HOSTNAME_TO_TENANT[hostname], source: "hostname", hostname };
+  }
+  if (hostname && DEV_HOSTNAMES.has(hostname)) {
+    return { slug: DEFAULT_TENANT, source: "fallback-dev", hostname };
+  }
+  return { slug: DEFAULT_TENANT, source: "default", hostname };
 }

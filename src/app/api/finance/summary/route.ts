@@ -21,6 +21,25 @@ export type FinanceSummary = {
   oneshot_ytd_ht: number;
   portfolio_total_ht: number;
   by_month: Array<{ month: number; mrr: number; oneshot: number }>;
+  active_subscriptions: Array<{
+    id: string;
+    production_id: string | null;
+    production_title: string | null;
+    client_name: string;
+    label: string;
+    mrr_ht: number;
+    billing_cycle: string;
+    started_at: string | null;
+  }>;
+  recent_invoices: Array<{
+    id: string;
+    number: string;
+    client_id: string | null;
+    client_name: string | null;
+    issued_at: string | null;
+    total_ttc: number;
+    status: string;
+  }>;
 };
 
 export async function GET(request: Request) {

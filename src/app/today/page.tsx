@@ -31,7 +31,8 @@ import type {
   DashboardInvoice,
 } from "@/hooks/use-api";
 import type { Deal, Activity } from "@/types";
-import { formatCurrency, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatDateFR, formatMoneyFR } from "@/lib/format";
 
 interface TodayPayload {
   tenant: string;
@@ -136,7 +137,7 @@ export default function TodayPage() {
         out.push({
           id: `d-${d.id}`,
           type: "Affaire sans client",
-          label: `${d.title} · ${formatCurrency(d.value)}`,
+          label: `${d.title} · ${formatMoneyFR(d.value)}`,
           severity: "medium",
         });
       }
@@ -146,7 +147,7 @@ export default function TodayPage() {
         out.push({
           id: `i-${inv.id}`,
           type: "Facture sans client",
-          label: `${inv.ref} · ${formatCurrency(inv.total)}`,
+          label: `${inv.ref} · ${formatMoneyFR(inv.total)}`,
           severity: "high",
         });
       }
@@ -156,7 +157,7 @@ export default function TodayPage() {
         out.push({
           id: `p-${p.id}`,
           type: "Devis sans client",
-          label: `${p.ref} · ${formatCurrency(p.total)}`,
+          label: `${p.ref} · ${formatMoneyFR(p.total)}`,
           severity: "medium",
         });
       }
@@ -187,7 +188,7 @@ export default function TodayPage() {
       hint:
         activeDeals.length === 0
           ? "Aucune en cours"
-          : `${formatCurrency(activeDeals.reduce((s, d) => s + d.value, 0))} pipeline`,
+          : `${formatMoneyFR(activeDeals.reduce((s, d) => s + d.value, 0))} pipeline`,
       href: "/pipeline",
     },
     {
@@ -310,7 +311,7 @@ export default function TodayPage() {
                   <span className="text-[10px] text-accent-glow font-mono uppercase shrink-0">{d.stage}</span>
                 </div>
                 <p className="text-[10px] text-text-muted truncate">{d.clientName || "(sans client)"}</p>
-                <p className="text-sm font-headline font-extrabold text-text-primary mt-1">{formatCurrency(d.value)}</p>
+                <p className="text-sm font-headline font-extrabold text-text-primary mt-1">{formatMoneyFR(d.value)}</p>
               </Link>
             ))}
           </div>
@@ -342,7 +343,7 @@ export default function TodayPage() {
                     {inv.status === "late" && (
                       <span className="text-[10px] text-status-danger font-bold uppercase">{inv.daysOverdue}j retard</span>
                     )}
-                    <span className="text-text-secondary font-semibold">{formatCurrency(inv.total)}</span>
+                    <span className="text-text-secondary font-semibold">{formatMoneyFR(inv.total)}</span>
                   </div>
                 </div>
               ))}
@@ -367,7 +368,7 @@ export default function TodayPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="text-[10px] text-text-muted uppercase">{p.status}</span>
-                    <span className="text-text-secondary font-semibold">{formatCurrency(p.total)}</span>
+                    <span className="text-text-secondary font-semibold">{formatMoneyFR(p.total)}</span>
                   </div>
                 </div>
               ))}
@@ -394,7 +395,7 @@ export default function TodayPage() {
                   {a.clientName && <p className="text-[10px] text-text-muted">{a.clientName}</p>}
                 </div>
                 <span className="text-[10px] text-text-muted font-mono shrink-0">
-                  {new Date(a.timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                  {formatDateFR(a.timestamp)}
                 </span>
               </div>
             ))}
@@ -520,7 +521,7 @@ function TaskRow({
         <p className="text-sm text-text-primary truncate">{task.title}</p>
         <p className="text-[10px] text-text-muted truncate">
           {task.projectName || "(sans affaire)"}
-          {task.dueDate && ` · ${task.dueDate}`}
+          {task.dueDate && ` · ${formatDateFR(task.dueDate)}`}
         </p>
       </button>
       {lateInfo && (

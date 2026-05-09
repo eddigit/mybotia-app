@@ -9,6 +9,7 @@ import {
   Receipt,
   FileCheck2,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { useScopedDocuments, useCockpitFeatures } from "@/hooks/use-api";
@@ -105,6 +106,20 @@ export default function DocumentsPage() {
       "_blank"
     );
   }
+
+  // V1.1.E — bouton PDF Premium business-first.
+  // Pointe vers /api/quotes/[id]/pdf ou /api/invoices/[id]/pdf qui streament
+  // le rendu @react-pdf/renderer côté mybotia-business. `dolibarrId` contient
+  // l'UUID business pour les tenants `mybotia_business`.
+  function handleDownloadPremium(type: "devis" | "facture", businessId: string) {
+    const collection = type === "devis" ? "quotes" : "invoices";
+    window.open(
+      `/api/${collection}/${encodeURIComponent(businessId)}/pdf`,
+      "_blank"
+    );
+  }
+
+  const isBusiness = cockpitFeatures?.crmProvider === "mybotia_business";
 
   if (!featuresLoading && cockpitFeatures && !documentsEnabled) {
     return <FeatureDisabled featureKey="documents" tenantSlug={cockpitFeatures.tenant} />;
@@ -284,21 +299,34 @@ export default function DocumentsPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() =>
-                            handleGenerate(doc.modulepart, doc.ref, doc.id)
-                          }
-                          disabled={isGenerating}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20 transition-all disabled:opacity-50"
-                          title="Generer PDF"
-                        >
-                          {isGenerating ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <FileOutput className="w-3 h-3" />
-                          )}
-                          PDF
-                        </button>
+                        {isBusiness && doc.dolibarrId ? (
+                          <button
+                            onClick={() =>
+                              handleDownloadPremium(doc.type, String(doc.dolibarrId))
+                            }
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase bg-accent-primary/15 text-accent-glow hover:bg-accent-primary/30 border border-accent-primary/30 transition-all"
+                            title="Telecharger le PDF Premium MyBotIA (rendu serveur)"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            PDF
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleGenerate(doc.modulepart, doc.ref, doc.id)
+                            }
+                            disabled={isGenerating}
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20 transition-all disabled:opacity-50"
+                            title="Generer PDF"
+                          >
+                            {isGenerating ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <FileOutput className="w-3 h-3" />
+                            )}
+                            PDF
+                          </button>
+                        )}
                         <button
                           onClick={() =>
                             handleDownload(doc.modulepart, doc.ref)

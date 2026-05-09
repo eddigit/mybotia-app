@@ -30,6 +30,8 @@ async function loadTenant(slug: string): Promise<AdminTenantRow | null> {
     profile: string;
     status: string;
     legal_name: string | null;
+    primary_color: string | null;
+    logo_url: string | null;
     features: TenantFeatures | null;
     business_model: TenantBusinessModel | null;
     architecture_config: TenantArchitectureConfig | null;
@@ -40,17 +42,27 @@ async function loadTenant(slug: string): Promise<AdminTenantRow | null> {
     timezone: string | null;
     updated_at: string | null;
     user_count: string;
+    modules_enabled: string;
+    modules_total: string;
+    last_module_activity_at: string | null;
   }>(
     `SELECT
        t.id, t.slug, t.display_name, t.profile, t.status,
-       b.legal_name,
+       b.legal_name, b.primary_color, b.logo_url,
        COALESCE(s.features, '{}'::jsonb) AS features,
        s.business_model,
        s.architecture_config,
        s.quota_users, s.quota_storage_mb, s.quota_llm_tokens_daily,
        s.locale, s.timezone,
        to_char(s.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
-       (SELECT COUNT(*) FROM core.tenant_user tu WHERE tu.tenant_id = t.id) AS user_count
+       (SELECT COUNT(*) FROM core.tenant_user tu WHERE tu.tenant_id = t.id) AS user_count,
+       (SELECT COUNT(*) FROM core.tenant_modules tm WHERE tm.tenant_id = t.id AND tm.enabled = true) AS modules_enabled,
+       (SELECT COUNT(*) FROM core.module_registry) AS modules_total,
+       to_char(
+         (SELECT MAX(GREATEST(COALESCE(tm.activated_at, 'epoch'::timestamptz), COALESCE(tm.deactivated_at, 'epoch'::timestamptz), tm.updated_at))
+            FROM core.tenant_modules tm WHERE tm.tenant_id = t.id) AT TIME ZONE 'UTC',
+         'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+       ) AS last_module_activity_at
      FROM core.tenant t
      LEFT JOIN core.tenant_settings s ON s.tenant_id = t.id
      LEFT JOIN core.tenant_branding b ON b.tenant_id = t.id
@@ -76,6 +88,11 @@ async function loadTenant(slug: string): Promise<AdminTenantRow | null> {
     timezone: r.timezone,
     updatedAt: r.updated_at,
     userCount: Number(r.user_count) || 0,
+    modulesEnabled: Number(r.modules_enabled) || 0,
+    modulesTotal: Number(r.modules_total) || 0,
+    lastModuleActivityAt: r.last_module_activity_at,
+    primaryColor: r.primary_color,
+    logoUrl: r.logo_url,
   };
 }
 

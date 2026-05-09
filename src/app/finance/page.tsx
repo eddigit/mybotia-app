@@ -17,13 +17,23 @@ import {
   TrendingUp,
   Coins,
   Loader2,
-  AlertTriangle,
   RefreshCw,
+  FileText,
+  Repeat,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
-import { useCockpitFeatures, useFinanceSummary } from "@/hooks/use-api";
+import {
+  useCockpitFeatures,
+  useFinanceSummary,
+  type FinanceActiveSubscription,
+  type FinanceRecentInvoice,
+} from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { formatDateFR, formatDateLongFR } from "@/lib/format";
+import { ErrorState } from "@/components/shared/ErrorState";
 
 const FR_MONTHS = [
   "janv.",
@@ -48,9 +58,61 @@ function fmtMoney(n: number, currency: string): string {
   });
 }
 
+function fmtMoneyPrecise(n: number, currency: string): string {
+  return n.toLocaleString("fr-FR", {
+    style: "currency",
+    currency: currency || "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+// Helpers FR centralisés via @/lib/format. Les fonctions locales fmtDateShort
+// et fmtDateLong restent comme adapters fins (signature `string | null`).
+function fmtDateShort(iso: string | null): string {
+  return formatDateFR(iso);
+}
+
+function fmtDateLong(iso: string | null): string {
+  return formatDateLongFR(iso);
+}
+
+const BILLING_CYCLE_LABEL: Record<string, string> = {
+  monthly: "Mensuel",
+  quarterly: "Trimestriel",
+  yearly: "Annuel",
+};
+
+const INVOICE_STATUS_TONE: Record<
+  string,
+  { label: string; className: string }
+> = {
+  draft: {
+    label: "Brouillon",
+    className: "bg-text-muted/15 text-text-muted border-border-subtle",
+  },
+  sent: {
+    label: "Envoyée",
+    className: "bg-accent-primary/15 text-accent-glow border-accent-primary/40",
+  },
+  paid: {
+    label: "Payée",
+    className: "bg-emerald-400/15 text-emerald-300 border-emerald-400/40",
+  },
+  overdue: {
+    label: "En retard",
+    className: "bg-amber-400/15 text-amber-200 border-amber-400/40",
+  },
+  cancelled: {
+    label: "Annulée",
+    className: "bg-rose-400/15 text-rose-300 border-rose-400/40",
+  },
+};
+
 export default function FinancePage() {
   const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
   const financeEnabled = cockpitFeatures?.features?.finance === true;
+  const isBusiness = cockpitFeatures?.crmProvider === "mybotia_business";
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -119,19 +181,11 @@ export default function FinancePage() {
       />
 
       {error && (
-        <div className="card-sharp p-5 flex items-start gap-3 text-sm border-amber-400/30 bg-amber-400/5 text-amber-200">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold">Trésorerie indisponible</p>
-            <p className="text-[12px] mt-1 text-amber-200/80">
-              {error}. Pour la vue KPI multi-sources, voir{" "}
-              <Link href="/finance/kpis" className="font-mono text-accent-glow hover:underline">
-                /finance/kpis
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
+        <ErrorState
+          title="Trésorerie indisponible"
+          message={`${error}. Pour la vue KPI multi-sources, voir /finance/kpis.`}
+          onRetry={refetch}
+        />
       )}
 
       {loading && (
@@ -275,9 +329,19 @@ export default function FinancePage() {
             </div>
           </section>
 
+          <ActiveSubscriptionsSection
+            subscriptions={summary.active_subscriptions}
+            currency={currency}
+          />
+
+          <RecentInvoicesSection
+            invoices={summary.recent_invoices}
+            currency={currency}
+            isBusiness={isBusiness}
+          />
+
           <p className="text-[10px] text-text-muted italic text-center pt-2">
-            Vue agrégée — détail factures encaissées et abonnements actifs : à
-            venir Phase 2. KPI multi-sources Dolibarr →{" "}
+            Vue agrégée parité business. KPI multi-sources Dolibarr →{" "}
             <Link href="/finance/kpis" className="font-mono text-accent-glow hover:underline">
               /finance/kpis
             </Link>
@@ -286,6 +350,351 @@ export default function FinancePage() {
         </>
       )}
     </div>
+  );
+}
+
+function ActiveSubscriptionsSection({
+  subscriptions,
+  currency,
+}: {
+  subscriptions: FinanceActiveSubscription[];
+  currency: string;
+}) {
+  return (
+    <section className="card-sharp p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline inline-flex items-center gap-2">
+          <Repeat className="w-4 h-4 text-accent-glow" />
+          Abonnements actifs
+        </h2>
+        <span className="text-[10px] text-text-muted font-mono">
+          {subscriptions.length} ligne{subscriptions.length > 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {subscriptions.length === 0 ? (
+        <div className="py-10 text-center space-y-3">
+          <p className="text-sm text-text-primary font-bold">
+            Aucun abonnement actif.
+          </p>
+          <p className="text-[12px] text-text-muted">
+            Les abonnements apparaissent ici dès qu&apos;une production récurrente
+            est signée.
+          </p>
+          <Link
+            href="/affaires"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/40 text-accent-glow hover:bg-accent-primary/10 transition-colors"
+          >
+            Ouvrir le pipeline affaires
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      ) : (
+        <>
+          {/* Desktop : table */}
+          <div className="overflow-x-auto hidden md:block">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-tight text-text-muted">
+                <tr className="border-b border-border-subtle">
+                  <th className="text-left py-2 font-bold">Libellé</th>
+                  <th className="text-left py-2 font-bold">Client</th>
+                  <th className="text-left py-2 font-bold">Production</th>
+                  <th className="text-right py-2 font-bold">MRR HT</th>
+                  <th className="text-left py-2 font-bold pl-3">Cycle</th>
+                  <th className="text-left py-2 font-bold">Début</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {subscriptions.map((s) => (
+                  <tr key={s.id}>
+                    <td className="py-2 text-text-primary font-medium">
+                      {s.label}
+                    </td>
+                    <td className="py-2 text-text-secondary">
+                      {s.client_name}
+                    </td>
+                    <td className="py-2 text-text-secondary">
+                      {s.production_id && s.production_title ? (
+                        <Link
+                          href={`/productions/${s.production_id}`}
+                          className="text-accent-glow hover:underline inline-flex items-center gap-1"
+                        >
+                          {s.production_title}
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right tabular-nums font-bold text-text-primary">
+                      {fmtMoney(s.mrr_ht, currency)}
+                    </td>
+                    <td className="py-2 pl-3 text-text-secondary">
+                      {BILLING_CYCLE_LABEL[s.billing_cycle] ?? s.billing_cycle}
+                    </td>
+                    <td className="py-2 text-text-secondary tabular-nums">
+                      <span title={fmtDateLong(s.started_at)}>
+                        {fmtDateShort(s.started_at)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile : cards */}
+          <div className="md:hidden space-y-3">
+            {subscriptions.map((s) => (
+              <div
+                key={s.id}
+                className="border border-border-subtle p-3 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-text-primary truncate">
+                      {s.label}
+                    </p>
+                    <p className="text-[12px] text-text-secondary truncate">
+                      {s.client_name}
+                    </p>
+                  </div>
+                  <span className="text-sm font-bold tabular-nums text-text-primary shrink-0">
+                    {fmtMoney(s.mrr_ht, currency)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-text-muted">
+                  <span>
+                    {BILLING_CYCLE_LABEL[s.billing_cycle] ?? s.billing_cycle}
+                  </span>
+                  <span className="tabular-nums">
+                    {fmtDateShort(s.started_at)}
+                  </span>
+                </div>
+                {s.production_id && s.production_title && (
+                  <Link
+                    href={`/productions/${s.production_id}`}
+                    className="inline-flex items-center gap-1 text-[11px] text-accent-glow hover:underline"
+                  >
+                    {s.production_title}
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function RecentInvoicesSection({
+  invoices,
+  currency,
+  isBusiness,
+}: {
+  invoices: FinanceRecentInvoice[];
+  currency: string;
+  isBusiness: boolean;
+}) {
+  return (
+    <section className="card-sharp p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline inline-flex items-center gap-2">
+          <FileText className="w-4 h-4 text-accent-glow" />
+          Dernières factures
+        </h2>
+        <span className="text-[10px] text-text-muted font-mono">
+          {invoices.length} ligne{invoices.length > 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {invoices.length === 0 ? (
+        <div className="py-10 text-center space-y-3">
+          <p className="text-sm text-text-primary font-bold">
+            Aucune facture émise.
+          </p>
+          <p className="text-[12px] text-text-muted">
+            Les factures apparaissent ici dès que la première est éditée côté
+            CRM.
+          </p>
+          <Link
+            href="/documents"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/40 text-accent-glow hover:bg-accent-primary/10 transition-colors"
+          >
+            Ouvrir le module documents
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      ) : (
+        <>
+          {/* Desktop : table */}
+          <div className="overflow-x-auto hidden md:block">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-tight text-text-muted">
+                <tr className="border-b border-border-subtle">
+                  <th className="text-left py-2 font-bold">Numéro</th>
+                  <th className="text-left py-2 font-bold">Client</th>
+                  <th className="text-left py-2 font-bold">Date</th>
+                  <th className="text-right py-2 font-bold">Montant TTC</th>
+                  <th className="text-left py-2 font-bold pl-3">Statut</th>
+                  <th className="text-right py-2 font-bold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {invoices.map((inv) => {
+                  const tone =
+                    INVOICE_STATUS_TONE[inv.status] ?? {
+                      label: inv.status,
+                      className:
+                        "bg-text-muted/15 text-text-muted border-border-subtle",
+                    };
+                  const pdfHref = `/api/documents/download?modulepart=facture&ref=${encodeURIComponent(inv.number)}`;
+                  return (
+                    <tr key={inv.id}>
+                      <td className="py-2 font-mono text-[12px] text-text-primary">
+                        {inv.number}
+                      </td>
+                      <td className="py-2 text-text-secondary">
+                        {inv.client_name ?? (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-text-secondary tabular-nums">
+                        <span title={fmtDateLong(inv.issued_at)}>
+                          {fmtDateShort(inv.issued_at)}
+                        </span>
+                      </td>
+                      <td className="py-2 text-right tabular-nums font-bold text-text-primary">
+                        {fmtMoneyPrecise(inv.total_ttc, currency)}
+                      </td>
+                      <td className="py-2 pl-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight border",
+                            tone.className,
+                          )}
+                        >
+                          {tone.label}
+                        </span>
+                      </td>
+                      <td className="py-2 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          {isBusiness ? (
+                            <a
+                              href={`/api/invoices/${encodeURIComponent(inv.id)}/pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
+                              title="Télécharger le PDF Premium MyBotIA"
+                            >
+                              <Download className="w-3 h-3" />
+                              PDF
+                            </a>
+                          ) : (
+                            <a
+                              href={pdfHref}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-text-primary hover:border-accent-primary/40"
+                              title="Télécharger PDF"
+                            >
+                              <Download className="w-3 h-3" />
+                              PDF
+                            </a>
+                          )}
+                          <Link
+                            href={`/documents?ref=${encodeURIComponent(inv.number)}`}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-text-primary hover:border-accent-primary/40"
+                            title="Voir dans documents"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Voir
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile : cards */}
+          <div className="md:hidden space-y-3">
+            {invoices.map((inv) => {
+              const tone =
+                INVOICE_STATUS_TONE[inv.status] ?? {
+                  label: inv.status,
+                  className:
+                    "bg-text-muted/15 text-text-muted border-border-subtle",
+                };
+              const pdfHref = `/api/documents/download?modulepart=facture&ref=${encodeURIComponent(inv.number)}`;
+              return (
+                <div
+                  key={inv.id}
+                  className="border border-border-subtle p-3 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-[12px] text-text-primary">
+                        {inv.number}
+                      </p>
+                      <p className="text-[12px] text-text-secondary truncate">
+                        {inv.client_name ?? "—"}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold tabular-nums text-text-primary shrink-0">
+                      {fmtMoneyPrecise(inv.total_ttc, currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        "inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight border",
+                        tone.className,
+                      )}
+                    >
+                      {tone.label}
+                    </span>
+                    <span className="text-[11px] text-text-muted tabular-nums">
+                      {fmtDateShort(inv.issued_at)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    {isBusiness ? (
+                      <a
+                        href={`/api/invoices/${encodeURIComponent(inv.id)}/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow"
+                      >
+                        <Download className="w-3 h-3" />
+                        PDF
+                      </a>
+                    ) : (
+                      <a
+                        href={pdfHref}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-text-primary"
+                      >
+                        <Download className="w-3 h-3" />
+                        PDF
+                      </a>
+                    )}
+                    <Link
+                      href={`/documents?ref=${encodeURIComponent(inv.number)}`}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-border-subtle text-text-muted hover:text-text-primary"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Voir
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

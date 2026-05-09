@@ -4,6 +4,7 @@ import { Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { AppShell } from "@/components/layout/AppShell";
+import { ToastHost } from "@/components/shared/Toast";
 import "./globals.css";
 
 const inter = Inter({
@@ -50,6 +51,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <AppShell>{children}</AppShell>
+            <ToastHost />
           </AuthProvider>
         </ThemeProvider>
       </body>

@@ -8,8 +8,6 @@ import {
   Sun,
   MessagesSquare,
   CheckSquare,
-  BarChart3,
-  TrendingUp,
   Calendar,
   Wallet,
   Bot,
@@ -21,298 +19,369 @@ import {
   Briefcase,
   Hammer,
   Layers,
+  Users,
+  Receipt,
+  FileSignature,
+  Shield,
+  Coins,
+  Stethoscope,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { useCockpitFeatures } from "@/hooks/use-api";
-import { Shield, Coins, Stethoscope, MessageSquare } from "lucide-react";
 import { UserAvatarV4 } from "@/components/conversations/UserAvatarV4";
+import { getTenantBranding } from "@/lib/tenant/branding";
+import { TenantSwitcher } from "./TenantSwitcher";
 
-const LOGO_URL = "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
+const LOGO_URL =
+  "https://res.cloudinary.com/dniurvpzd/image/upload/q_auto/f_auto/v1772032713/Logo_Collaborateur_IA_coujhr.svg";
 
-// Bloc 5A — sidebar orientée usage entrepreneur quotidien.
-// Bloc 6B — chaque entrée peut déclarer une `feature` qui doit être activée
-// dans le tenant courant pour être visible (sauf si `alwaysVisible=true`).
-const navItems: Array<{
+// ============================================================================
+// V1.1.E — Refonte sidebar app.mybotia.com
+// ----------------------------------------------------------------------------
+// - Groupes métier : Pilotage / Commercial / Finance / Opérations / Agents IA
+// - Filtrage par feature DB (cockpit courant) + verticals tenant-specifics
+// - Doctrine `feedback_sidebar_cockpit_boundary` : items tenant-spécifiques
+//   visibles UNIQUEMENT si cockpit.tenant === slug. JAMAIS `|| isSuperadmin`.
+// - Mobile drawer géré par MobileNavDrawer + variant="mobile"
+// - Badge tenant en haut (TenantSwitcher) + active state coloré (primaryColor
+//   à 20% alpha + barre verticale gauche).
+// ----------------------------------------------------------------------------
+
+// hex (#RRGGBB) -> rgba(r,g,b,alpha) — pour tinting de l'active state.
+function hexAlpha(hex: string, alpha: number): string {
+  const m = hex.match(/^#?([a-fA-F0-9]{6})$/);
+  if (!m) return `rgba(14,165,233,${alpha})`;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ============================================================================
+// Modèle de navigation
+// ============================================================================
+
+type NavItem = {
   id: string;
   label: string;
   href: string;
   icon: typeof LayoutDashboard;
-  badge?: number;
-  feature?: string;        // si défini : feature DB requise
-  alwaysVisible?: boolean; // toujours afficher (Command Center, Aujourd'hui, Conversations)
-}> = [
-  { id: "home",          label: "Command Center", href: "/",              icon: LayoutDashboard, alwaysVisible: true },
-  { id: "today",         label: "Aujourd'hui",    href: "/today",         icon: Sun,             alwaysVisible: true },
-  { id: "conversations", label: "Conversations",  href: "/conversations", icon: MessagesSquare,  alwaysVisible: true },
-  { id: "crm",           label: "CRM / Clients",  href: "/crm",           icon: BarChart3,       feature: "crm" },
-  { id: "affaires",      label: "Affaires",       href: "/affaires",      icon: Briefcase,       feature: "pipeline" },
-  { id: "pipeline",      label: "Pipeline",       href: "/pipeline",      icon: TrendingUp,      feature: "pipeline" },
-  { id: "productions",   label: "Productions",    href: "/productions",   icon: Hammer,          feature: "productions" },
-  { id: "tasks",         label: "Tâches",         href: "/tasks",         icon: CheckSquare,     feature: "tasks" },
-  { id: "agenda",        label: "Agenda",         href: "/agenda",        icon: Calendar,        feature: "agenda" },
-  { id: "documents",     label: "Documents",      href: "/documents",     icon: FileText,        feature: "documents" },
-  { id: "agents",        label: "Agents IA",      href: "/agents",        icon: Bot,             alwaysVisible: true },
-  { id: "finance",       label: "Trésorerie",     href: "/finance",       icon: Wallet,          feature: "finance" },
+  /** feature DB requise (`features[mod] === true`). Si absent : always visible. */
+  requiresModule?: string;
+  /** slug tenant requis (doctrine cockpit boundary). */
+  requiresTenant?: string;
+};
+
+type NavGroup = {
+  id: string;
+  label: string | null;
+  items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "pilotage",
+    label: "Pilotage",
+    items: [
+      { id: "home", label: "Tableau de bord", href: "/", icon: LayoutDashboard },
+      { id: "today", label: "Aujourd'hui", href: "/today", icon: Sun },
+      { id: "conversations", label: "Conversations", href: "/conversations", icon: MessagesSquare },
+    ],
+  },
+  {
+    id: "commercial",
+    label: "Commercial",
+    items: [
+      { id: "affaires", label: "Pipeline", href: "/affaires", icon: Briefcase, requiresModule: "pipeline" },
+      { id: "productions", label: "Productions", href: "/productions", icon: Hammer, requiresModule: "productions" },
+      { id: "crm", label: "Clients", href: "/crm", icon: Users, requiresModule: "crm" },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    items: [
+      { id: "finance", label: "Trésorerie", href: "/finance", icon: Wallet, requiresModule: "finance" },
+      // Devis / Factures : routes dédiées attendues V1.2 (`/finance/devis`,
+      // `/finance/factures`). Tant qu'elles ne sont pas livrées, on pointe sur
+      // les ancres correspondantes de la vue agrégée /finance — pas de mock,
+      // pas de 404. À mettre à jour quand les pages dédiées sortent.
+      { id: "finance-devis", label: "Devis", href: "/finance#devis", icon: FileSignature, requiresModule: "finance" },
+      { id: "finance-factures", label: "Factures", href: "/finance#factures", icon: Receipt, requiresModule: "finance" },
+    ],
+  },
+  {
+    id: "operations",
+    label: "Opérations",
+    items: [
+      { id: "tasks", label: "Tâches", href: "/tasks", icon: CheckSquare, requiresModule: "tasks" },
+      { id: "documents", label: "Documents", href: "/documents", icon: FileText, requiresModule: "documents" },
+      { id: "agenda", label: "Calendrier", href: "/agenda", icon: Calendar, requiresModule: "agenda" },
+    ],
+  },
+  {
+    id: "agents",
+    label: "Agents IA",
+    items: [
+      { id: "agents", label: "Mes agents", href: "/agents", icon: Bot },
+    ],
+  },
 ];
 
-const bottomItems = [
-  { id: "settings", label: "Parametres", href: "/settings", icon: Settings },
+// Verticals tenant-specifics (doctrine cockpit boundary).
+// Apparaissent UNIQUEMENT si le cockpit courant correspond au slug.
+const VERTICAL_ITEMS: NavItem[] = [
+  { id: "vlm", label: "VL Medical", href: "/vlm", icon: Stethoscope, requiresTenant: "vlmedical" },
+  { id: "cmb", label: "CMB", href: "/cmb", icon: Briefcase, requiresTenant: "cmb" },
 ];
+
+const BOTTOM_USER_ITEMS: NavItem[] = [
+  { id: "settings", label: "Préférences", href: "/settings", icon: Settings },
+];
+
+const BOTTOM_ADMIN_ITEMS: NavItem[] = [
+  { id: "admin-modules", label: "Modules", href: "/admin/modules", icon: Layers },
+  { id: "admin-tenants", label: "Tenants", href: "/admin/tenants", icon: Shield },
+  { id: "admin-billing", label: "Billing IA", href: "/admin/billing", icon: Wallet },
+  { id: "admin-usage", label: "Usage tokens", href: "/admin/usage/tokens", icon: Coins },
+  { id: "admin-wa", label: "Protocoles WhatsApp", href: "/admin/whatsapp-protocols", icon: MessageSquare },
+];
+
+// ============================================================================
+// Composant
+// ============================================================================
 
 export function LeftSidebar({
   collapsed,
   onToggle,
+  /**
+   * Variante d'affichage. `mobile` désactive la barre de toggle latérale et
+   * force la sidebar en pleine largeur (utilisée dans MobileNavDrawer).
+   */
+  variant = "desktop",
+  onNavigate,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  variant?: "desktop" | "mobile";
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  // Bloc 6B — features du cockpit courant (résolu serveur via hostname).
   const { data: cockpitFeatures } = useCockpitFeatures();
   const features = cockpitFeatures?.features ?? {};
+  const currentTenant = cockpitFeatures?.tenant;
   const isSuperadmin = cockpitFeatures?.isSuperadmin ?? false;
-  // Bloc 7E — entrée VL Medical visible UNIQUEMENT quand le cockpit courant
-  // est vlmedical. Le superadmin sur app.mybotia.com ne voit pas l'entrée :
-  // il accède au vertical via /admin/tenants/vlmedical ou via le hostname
-  // vlmedical.mybotia.com. Doctrine : hostname → tenant → modules visibles.
-  const showVlmEntry = cockpitFeatures?.tenant === "vlmedical";
-  // Pendant le chargement, on laisse passer (cockpitFeatures=null) pour ne pas
-  // faire scintiller la sidebar. Une fois chargé, on filtre.
-  const filteredNav = navItems.filter((item) => {
-    if (item.alwaysVisible) return true;
-    if (!item.feature) return true;
-    if (cockpitFeatures === null) return true; // loading state
-    return features[item.feature] === true;
-  });
+  const adminToolsEnabled = features.adminTools === true;
 
-  // Bloc Settings V1 — fallback initiales propre via UserAvatarV4 (dérivé
-  // prénom+nom JWT, sinon email avec split sur ./_/-). Quand avatar_url sera
-  // alimenté côté core."user" (V1.3), passer la valeur ici.
+  const isMobile = variant === "mobile";
+  // En drawer mobile : pas de collapse possible (pleine largeur).
+  const effectiveCollapsed = isMobile ? false : collapsed;
+
+  // Branding tenant (résolu via slug du cockpit, hostname-driven côté serveur).
+  const branding = getTenantBranding(currentTenant);
+  const activeBg = hexAlpha(branding.primaryColor, 0.2);
+  const activeBorder = branding.primaryColor;
+
+  // Doctrine `feedback_sidebar_cockpit_boundary` : items tenant-spécifiques
+  // visibles UNIQUEMENT si cockpit.tenant === slug. JAMAIS `|| isSuperadmin`.
+  // Pour qu'un superadmin voie l'entrée VLM, il bascule via le tenant switcher.
+  const isTenantAllowed = (slug: string) => currentTenant === slug;
+
+  // Module gating : pas de feature → always visible. Tant que le cockpit n'est
+  // pas chargé, on laisse passer pour éviter un flash sidebar.
+  const isModuleAllowed = (mod: string | undefined) => {
+    if (!mod) return true;
+    if (cockpitFeatures === null) return true;
+    return features[mod] === true;
+  };
+
+  // Compose les groupes finaux + injecte verticals si cockpit le permet.
+  const visibleGroups: NavGroup[] = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((it) => isModuleAllowed(it.requiresModule)),
+  })).filter((g) => g.items.length > 0);
+
+  const visibleVerticals = VERTICAL_ITEMS.filter(
+    (it) => it.requiresTenant && isTenantAllowed(it.requiresTenant),
+  );
+  if (visibleVerticals.length > 0) {
+    visibleGroups.push({
+      id: "verticals",
+      label: "Vertical métier",
+      items: visibleVerticals,
+    });
+  }
+
   const userDisplayName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(" ") || undefined
     : undefined;
 
+  // En drawer mobile : tout clic sur un Link interne doit fermer le drawer.
+  const handleClick = isMobile && onNavigate
+    ? (e: React.MouseEvent<HTMLElement>) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("a[href]")) onNavigate();
+      }
+    : undefined;
+
+  // ===== Render helpers =====
+
+  const renderItem = (item: NavItem) => {
+    const baseHref = item.href.split("#")[0];
+    const isActive = baseHref === "/" ? pathname === "/" : pathname.startsWith(baseHref);
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.id}
+        href={item.href}
+        className={cn(
+          "group flex items-center gap-3 py-2.5 text-sm rounded-md transition-colors duration-200 relative mx-1",
+          effectiveCollapsed ? "justify-center px-2" : "pl-4 pr-3",
+          isActive
+            ? "font-semibold text-text-primary"
+            : "text-text-muted hover:text-text-primary hover:bg-surface-2/60",
+        )}
+        style={
+          isActive
+            ? {
+                backgroundColor: activeBg,
+                boxShadow: `inset 3px 0 0 0 ${activeBorder}`,
+              }
+            : undefined
+        }
+        title={effectiveCollapsed ? item.label : undefined}
+      >
+        <Icon className="w-[18px] h-[18px] shrink-0" />
+        {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  };
+
+  const renderGroup = (group: NavGroup) => (
+    <div key={group.id} className="mb-3">
+      {!effectiveCollapsed && group.label && (
+        <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted/70">
+          {group.label}
+        </div>
+      )}
+      <div className="space-y-0.5">{group.items.map(renderItem)}</div>
+    </div>
+  );
+
   return (
     <aside
+      onClick={handleClick}
       className={cn(
         "flex flex-col h-full bg-surface-0 tracking-wide antialiased relative z-20 transition-all duration-300 ease-in-out",
-        collapsed ? "w-[68px]" : "w-[250px]"
+        isMobile
+          ? "w-full"
+          : effectiveCollapsed
+            ? "w-[68px] border-r border-border-subtle"
+            : "w-[260px] border-r border-border-subtle",
       )}
     >
-      {/* Logo */}
-      <div className="p-5 flex items-center gap-3">
-        <div className="w-10 h-10 flex items-center justify-center shrink-0">
+      {/* Logo + branding tenant — fond légèrement teinté avec la couleur tenant
+          (10% alpha) pour ancrer visuellement le cockpit courant. */}
+      <div
+        className="px-4 py-4 flex items-center gap-3 transition-colors duration-300"
+        style={{
+          backgroundColor: `color-mix(in srgb, ${branding.primaryColor} 10%, transparent)`,
+          borderBottom: `1px solid color-mix(in srgb, ${branding.primaryColor} 18%, transparent)`,
+        }}
+      >
+        <div className="w-9 h-9 flex items-center justify-center shrink-0">
           <Image
-            src={LOGO_URL}
-            alt="MyBotIA"
-            width={40}
-            height={40}
-            className="w-10 h-10 object-contain"
+            src={branding.logoUrl ?? LOGO_URL}
+            alt={branding.displayName}
+            width={36}
+            height={36}
+            className="w-9 h-9 object-contain"
             unoptimized
           />
         </div>
-        {!collapsed && (
-          <div>
-            <div className="text-[17px] mybotia-wordmark text-accent-glow">MyBotIA</div>
-            <div className="micro-label text-text-muted">Premium</div>
+        {!effectiveCollapsed && (
+          <div className="min-w-0">
+            <div className="text-[16px] mybotia-wordmark text-accent-glow leading-none truncate">
+              {branding.displayName}
+            </div>
+            <div className="micro-label text-text-muted truncate">{branding.subLabel}</div>
           </div>
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 mt-2 px-3 space-y-0.5 overflow-y-auto">
-        {filteredNav.map((item) => {
-          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          const Icon = item.icon;
+      {/* Bloc 7F — Switcher de cockpit (superadmin = combobox, sinon read-only) */}
+      <TenantSwitcher collapsed={effectiveCollapsed} />
 
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 py-3 text-sm transition-colors duration-200 relative",
-                collapsed ? "justify-center px-2" : "pl-4",
-                isActive
-                  ? "text-accent-glow font-bold border-l-2 border-accent-primary bg-accent-primary/5"
-                  : "text-text-muted hover:text-text-secondary hover:bg-surface-3/50 border-l-2 border-transparent"
-              )}
-            >
-              <Icon className="w-[18px] h-[18px] shrink-0" />
-              {!collapsed && (
-                <>
-                  <span className="truncate">{item.label}</span>
-                  {item.badge && (
-                    <span className="ml-auto mr-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-sm text-[10px] font-bold bg-accent-primary/15 text-accent-glow">
-                      {item.badge}
-                    </span>
-                  )}
-                </>
-              )}
-              {collapsed && item.badge && (
-                <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-accent-primary" />
-              )}
-            </Link>
-          );
-        })}
+      {/* Navigation groupée (Pilotage / Commercial / Finance / Opérations / Agents IA) */}
+      <nav className="flex-1 px-2 pt-1 overflow-y-auto" aria-label="Navigation principale">
+        {visibleGroups.map(renderGroup)}
       </nav>
 
-      {/* Bloc 7E — entrée VL Medical visible uniquement quand cockpit === vlmedical */}
-      {showVlmEntry && (
-        <div className="px-3 py-2 border-t border-border-subtle">
-          <Link
-            href="/vlm"
-            className={cn(
-              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
-              collapsed ? "justify-center px-2" : "pl-4",
-              pathname.startsWith("/vlm")
-                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
-                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
-            )}
-            title="VL Medical — vertical import/export"
-          >
-            <Stethoscope className="w-[18px] h-[18px] shrink-0" />
-            {!collapsed && <span className="truncate">VL Medical</span>}
-          </Link>
+      {/* Paramètres + admin tools (superadmin + features.adminTools) */}
+      <div className="px-2 pt-1 border-t border-border-subtle">
+        {!effectiveCollapsed && (
+          <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted/70">
+            Paramètres
+          </div>
+        )}
+        <div className="space-y-0.5 pb-2">
+          {BOTTOM_USER_ITEMS.map(renderItem)}
+          {isSuperadmin && adminToolsEnabled && BOTTOM_ADMIN_ITEMS.map(renderItem)}
         </div>
-      )}
-
-      {/* Bottom nav — admin tools (superadmin + features.adminTools) */}
-      {isSuperadmin && features.adminTools === true && (
-        <div className="px-3 py-2 border-t border-border-subtle space-y-0.5">
-          <Link
-            href="/admin/tenants"
-            className={cn(
-              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
-              collapsed ? "justify-center px-2" : "pl-4",
-              pathname === "/admin/tenants" || pathname.startsWith("/admin/tenants/")
-                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
-                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
-            )}
-            title="Admin tenants (superadmin)"
-          >
-            <Shield className="w-[18px] h-[18px] shrink-0" />
-            {!collapsed && <span className="truncate">Admin tenants</span>}
-          </Link>
-          <Link
-            href="/admin/billing"
-            className={cn(
-              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
-              collapsed ? "justify-center px-2" : "pl-4",
-              pathname.startsWith("/admin/billing")
-                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
-                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
-            )}
-            title="Billing IA — admin global"
-          >
-            <Wallet className="w-[18px] h-[18px] shrink-0" />
-            {!collapsed && <span className="truncate">Billing IA</span>}
-          </Link>
-          <Link
-            href="/admin/usage/tokens"
-            className={cn(
-              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
-              collapsed ? "justify-center px-2" : "pl-4",
-              pathname.startsWith("/admin/usage")
-                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
-                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
-            )}
-            title="Usage tokens — détail technique"
-          >
-            <Coins className="w-[18px] h-[18px] shrink-0" />
-            {!collapsed && <span className="truncate">Usage tokens</span>}
-          </Link>
-          <Link
-            href="/admin/whatsapp-protocols"
-            className={cn(
-              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
-              collapsed ? "justify-center px-2" : "pl-4",
-              pathname.startsWith("/admin/whatsapp-protocols")
-                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
-                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
-            )}
-            title="Protocoles WhatsApp — admin"
-          >
-            <MessageSquare className="w-[18px] h-[18px] shrink-0" />
-            {!collapsed && <span className="truncate">Protocoles WhatsApp</span>}
-          </Link>
-          <Link
-            href="/admin/modules"
-            className={cn(
-              "flex items-center gap-3 py-2 text-sm transition-colors duration-200",
-              collapsed ? "justify-center px-2" : "pl-4",
-              pathname.startsWith("/admin/modules")
-                ? "text-amber-300 font-bold border-l-2 border-amber-300/50 bg-amber-400/5"
-                : "text-text-muted hover:text-amber-300 border-l-2 border-transparent"
-            )}
-            title="Modules — activation par tenant"
-          >
-            <Layers className="w-[18px] h-[18px] shrink-0" />
-            {!collapsed && <span className="truncate">Modules</span>}
-          </Link>
-        </div>
-      )}
-
-      <div className="px-3 py-3 border-t border-border-subtle">
-        {bottomItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 py-3 text-sm transition-colors duration-200",
-                collapsed ? "justify-center px-2" : "pl-4",
-                isActive
-                  ? "text-accent-glow font-bold"
-                  : "text-text-muted hover:text-text-secondary"
-              )}
-            >
-              <Icon className="w-[18px] h-[18px] shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          );
-        })}
       </div>
 
-      {/* User profile */}
-      {!collapsed && (
-        <div className="p-4 border-t border-border-subtle">
-          <div className="flex items-center gap-3">
-            <UserAvatarV4
-              email={user?.email}
-              name={userDisplayName}
-              size={36}
-              className="ring-1 ring-accent-primary/20 shrink-0"
-            />
-            <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-sm font-semibold text-text-primary truncate">
-                {userDisplayName ?? user?.email}
-              </span>
-              <span className="micro-label text-text-muted">
-                {user?.tenant_slug} &middot; {user?.role}
-              </span>
-            </div>
-            <button
-              onClick={logout}
-              className="text-text-muted hover:text-red-400 transition-colors p-1"
-              title="Deconnexion"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+      {/* User profile + logout */}
+      <div className="px-3 py-3 border-t border-border-subtle">
+        <div
+          className={cn(
+            "flex items-center gap-3",
+            effectiveCollapsed && "justify-center",
+          )}
+        >
+          <UserAvatarV4
+            email={user?.email}
+            name={userDisplayName}
+            size={effectiveCollapsed ? 30 : 34}
+            className="ring-1 ring-accent-primary/20 shrink-0"
+          />
+          {!effectiveCollapsed && (
+            <>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-sm font-semibold text-text-primary truncate">
+                  {userDisplayName ?? user?.email}
+                </span>
+                <span className="micro-label text-text-muted truncate">
+                  {user?.tenant_slug} · {user?.role}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                className="text-text-muted hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-surface-2/60"
+                title="Déconnexion"
+                aria-label="Déconnexion"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={onToggle}
-        className="absolute -right-3 top-20 z-30 flex items-center justify-center w-6 h-6 rounded-full bg-surface-3 border border-border-default text-text-muted hover:text-text-primary hover:border-accent-primary/30 transition-all"
-      >
-        {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-      </button>
+      {/* Collapse toggle — desktop seul (sur mobile drawer, le X de fermeture
+          du drawer remplit ce rôle). */}
+      {!isMobile && (
+        <button
+          onClick={onToggle}
+          className="absolute -right-3 top-20 z-30 flex items-center justify-center w-6 h-6 rounded-full bg-surface-3 border border-border-default text-text-muted hover:text-text-primary hover:border-accent-primary/30 transition-all"
+          aria-label={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
+        >
+          {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+        </button>
+      )}
     </aside>
   );
 }

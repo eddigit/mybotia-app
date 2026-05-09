@@ -225,6 +225,9 @@ export interface CockpitFeatures {
   features: Record<string, boolean>;
   businessModel: Record<string, unknown> | null;
   isSuperadmin: boolean;
+  /** V1.1.E — kind du provider CRM. `mybotia_business` débloque les boutons
+   * "PDF Premium" pointant vers /api/quotes/[id]/pdf et /api/invoices/[id]/pdf. */
+  crmProvider?: "mybotia_business" | "dolibarr" | "external" | null;
 }
 
 export function useCockpitFeatures() {
@@ -307,6 +310,85 @@ export function useProductions() {
   return useApi<ProductionItem[]>("/api/productions", []);
 }
 
+// ----------------------------------------------------------------------------
+// V1.1.D Phase 2 — Affaire detail + quotes liés
+// ----------------------------------------------------------------------------
+
+/**
+ * AffaireRow = shape réelle renvoyée par mybotia-business (ProjectRow snake_case).
+ * Le proxy /api/affaires/[id] dégage le wrapper {data} et retourne tel quel.
+ */
+export interface AffaireRow {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  due_date: string | null;
+  project_type: string | null;
+  priority: string | null;
+  next_action: string | null;
+  created_at: string;
+  updated_at: string;
+  lifecycle_stage: "affaire" | "production";
+  [key: string]: unknown;
+}
+
+export function useAffaire(id: string | null) {
+  return useApi<AffaireRow | null>(id ? `/api/affaires/${id}` : null, null);
+}
+
+/**
+ * QuoteRow = drizzle shape côté business (camelCase). Proxy /api/quotes
+ * filtre par client_id ou status.
+ */
+export interface QuoteRow {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  projectId: string | null;
+  number: string;
+  status: "draft" | "sent" | "accepted" | "refused" | "cancelled";
+  subject: string | null;
+  notes: string | null;
+  validUntil: string | null;
+  subtotalHt: string;
+  vatTotal: string;
+  totalTtc: string;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: unknown;
+}
+
+export function useQuotesByClient(clientId: string | null) {
+  return useApi<QuoteRow[]>(
+    clientId ? `/api/quotes?client_id=${encodeURIComponent(clientId)}` : null,
+    [],
+  );
+}
+
+export interface FinanceActiveSubscription {
+  id: string;
+  production_id: string | null;
+  production_title: string | null;
+  client_name: string;
+  label: string;
+  mrr_ht: number;
+  billing_cycle: string;
+  started_at: string | null;
+}
+
+export interface FinanceRecentInvoice {
+  id: string;
+  number: string;
+  client_id: string | null;
+  client_name: string | null;
+  issued_at: string | null;
+  total_ttc: number;
+  status: string;
+}
+
 export interface FinanceSummary {
   year: number;
   currency: string;
@@ -315,6 +397,8 @@ export interface FinanceSummary {
   oneshot_ytd_ht: number;
   portfolio_total_ht: number;
   by_month: Array<{ month: number; mrr: number; oneshot: number }>;
+  active_subscriptions: FinanceActiveSubscription[];
+  recent_invoices: FinanceRecentInvoice[];
 }
 
 export function useFinanceSummary(year?: number) {
@@ -335,6 +419,9 @@ export interface AdminTenantModule {
   enabled: boolean;
   activated_at: string | null;
   deactivated_at: string | null;
+  // V1.1.E — config jsonb par tenant (peut être absent sur d'anciennes
+  // réponses biz). Toujours objet (jamais null) côté API si présent.
+  config?: Record<string, unknown>;
 }
 
 export interface AdminTenantModulesResponse {

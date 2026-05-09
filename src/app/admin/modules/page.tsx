@@ -222,12 +222,15 @@ export default function AdminModulesPage() {
                     className="text-center p-3 font-bold whitespace-nowrap"
                     title={t.displayName || t.slug}
                   >
-                    <div className="flex flex-col items-center gap-0.5">
+                    <Link
+                      href={`/admin/tenants/${encodeURIComponent(t.slug)}`}
+                      className="flex flex-col items-center gap-0.5 hover:text-accent-glow"
+                    >
                       <span className="text-text-primary">{t.slug}</span>
                       <span className="text-[9px] text-text-muted font-normal normal-case">
                         {t.profile}
                       </span>
-                    </div>
+                    </Link>
                   </th>
                 ))}
               </tr>
@@ -325,7 +328,12 @@ export default function AdminModulesPage() {
       <p className="text-[10px] text-text-muted italic text-center">
         Source : <span className="font-mono">core.module_registry</span> ×{" "}
         <span className="font-mono">core.tenant_modules</span> via business.
-        Toggle = PATCH audité côté business.
+        Toggle = PATCH audité. Pour le détail par tenant (config jsonb,
+        dépendances, audit) →{" "}
+        <Link href="/admin/tenants" className="underline hover:text-accent-glow">
+          /admin/tenants/&lt;slug&gt;
+        </Link>
+        .
       </p>
     </div>
   );

@@ -144,4 +144,11 @@ export interface AdminTenantRow {
   timezone: string | null;
   updatedAt: string | null;
   userCount: number;
+  // V1.1.E — agrégats console admin (peuvent être absents sur l'endpoint
+  // détail si non encore re-déployé). Marqués optionnels pour back-compat.
+  modulesEnabled?: number;
+  modulesTotal?: number;
+  lastModuleActivityAt?: string | null;
+  primaryColor?: string | null;
+  logoUrl?: string | null;
 }

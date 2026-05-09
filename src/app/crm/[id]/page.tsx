@@ -37,7 +37,7 @@ type DocState =
   | "error";      // erreur autre que "missing"
 
 type ModulePart = "propale" | "facture";
-import { useClient } from "@/hooks/use-api";
+import { useClient, useCockpitFeatures } from "@/hooks/use-api";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { CreateProjectModal } from "@/components/shared/CreateProjectModal";
 import { EditClientModal } from "@/components/shared/EditClientModal";
@@ -60,6 +60,8 @@ export default function ClientDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { data, loading, error, refetch } = useClient(id);
+  const { data: cockpitFeatures } = useCockpitFeatures();
+  const isBusiness = cockpitFeatures?.crmProvider === "mybotia_business";
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showEditClient, setShowEditClient] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -633,7 +635,20 @@ export default function ClientDetailPage({
                       {formatCurrency(p.total)}
                     </span>
                     {p.ref && renderPdfActions("propale", p.ref, p.id)}
-                    {p.ref && renderPremiumPdfButton("propale", p.ref, p.id)}
+                    {isBusiness ? (
+                      <a
+                        href={`/api/quotes/${encodeURIComponent(String(p.id))}/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight bg-accent-primary/15 text-accent-glow hover:bg-accent-primary/30 border border-accent-primary/30 transition-all"
+                        title="Télécharger le PDF Premium MyBotIA (rendu @react-pdf/renderer)"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Premium
+                      </a>
+                    ) : (
+                      p.ref && renderPremiumPdfButton("propale", p.ref, p.id)
+                    )}
                   </div>
                 ))}
               </div>
@@ -672,6 +687,18 @@ export default function ClientDetailPage({
                       </span>
                     </div>
                     {inv.ref && renderPdfActions("facture", inv.ref, inv.id)}
+                    {isBusiness && (
+                      <a
+                        href={`/api/invoices/${encodeURIComponent(String(inv.id))}/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight bg-accent-primary/15 text-accent-glow hover:bg-accent-primary/30 border border-accent-primary/30 transition-all"
+                        title="Télécharger le PDF Premium MyBotIA (rendu @react-pdf/renderer)"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Premium
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>

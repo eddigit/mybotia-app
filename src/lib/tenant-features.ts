@@ -8,7 +8,8 @@
 // le tenant `mybotia` historique.
 
 import { adminQuery } from "./admin-db";
-import { resolveCockpitTenant } from "./tenant-resolver";
+import { resolveCockpitTenant, resolveHostnameOnly } from "./tenant-resolver";
+import { getSession } from "./session";
 import {
   FEATURE_KEYS,
   type FeatureKey,
@@ -48,7 +49,17 @@ export async function getCockpitFeatures(request: Request): Promise<{
   slug: string;
   features: TenantFeatures;
 }> {
-  const cockpit = resolveCockpitTenant(request);
+  let cockpit = resolveCockpitTenant(request);
+
+  // Bloc 7F — défense en profondeur : si le cookie a influencé la résolution
+  // mais que la session n'est pas superadmin, on ignore le cookie.
+  if (cockpit.source === "cookie") {
+    const session = await getSession();
+    if (!session?.isSuperadmin) {
+      cockpit = resolveHostnameOnly(request);
+    }
+  }
+
   const slug = cockpit.slug;
 
   const cached = cache.get(slug);

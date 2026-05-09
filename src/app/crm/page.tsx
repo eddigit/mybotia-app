@@ -4,7 +4,8 @@
 // Plus aucun pill tenant, plus aucune vue globale.
 
 import { useState } from "react";
-import { BarChart3, Plus, FolderPlus, Loader2 } from "lucide-react";
+import { BarChart3, Plus, FolderPlus, Loader2, Users } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import {
   FormModal,
@@ -19,7 +20,7 @@ import { ClientCard } from "@/components/crm/ClientCard";
 import { Pipeline } from "@/components/crm/Pipeline";
 import { useScopedClients, useScopedDashboard, useCockpitFeatures } from "@/hooks/use-api";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
-import { formatCurrency } from "@/lib/utils";
+import { formatMoneyCompactFR } from "@/lib/format";
 
 type FilterKey = "all" | "active" | "prospect" | "churned" | "supplier";
 
@@ -107,7 +108,7 @@ export default function CRMPage() {
       <ModuleHeader
         icon={BarChart3}
         title="CRM MyBotIA"
-        subtitle={`${clients.length} tiers · ${formatCurrency(pipelineValue)} pipeline`}
+        subtitle={`${clients.length} tiers · ${formatMoneyCompactFR(pipelineValue)} pipeline`}
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => setShowCreateProject(true)} className={btnSecondary}>
@@ -122,11 +123,11 @@ export default function CRMPage() {
         }
       />
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* KPI strip — responsive : 1 col mobile, 2 sm, 4 desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Clients actifs", value: activeCount.toString(), sub: "en portefeuille" },
-          { label: "Pipeline", value: formatCurrency(pipelineValue), sub: `${deals.length} opportunites` },
+          { label: "Pipeline", value: formatMoneyCompactFR(pipelineValue), sub: `${deals.length} opportunites` },
           { label: "Prospects", value: prospectCount.toString(), sub: "en attente" },
           { label: "Fournisseurs", value: supplierCount.toString(), sub: "MyBotIA CRM" },
         ].map((kpi) => (

@@ -5,6 +5,7 @@ import {
   Bell,
   PanelRight,
   PanelRightClose,
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeSwitcher } from "@/components/shared/ThemeSwitcher";
@@ -13,10 +14,16 @@ export function TopBar({
   railOpen,
   onToggleRail,
   onOpenPalette,
+  onOpenMobileNav,
 }: {
   railOpen: boolean;
   onToggleRail: () => void;
   onOpenPalette?: () => void;
+  /**
+   * Ouvre le drawer de navigation mobile (≤768px). Le bouton est masqué sur
+   * desktop pour préserver l'apparence existante.
+   */
+  onOpenMobileNav?: () => void;
 }) {
   // Bloc 4C — bouton qui ouvre la Command Palette globale (Cmd/Ctrl+K).
   // Détection plateforme pour afficher le bon raccourci visuel.
@@ -24,7 +31,18 @@ export function TopBar({
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/i.test(navigator.platform);
   return (
-    <header className="flex items-center justify-between h-16 px-8 bg-surface-0/80 backdrop-blur-md border-b border-border-subtle sticky top-0 z-40 shadow-2xl shadow-black/10 dark:shadow-black/20">
+    <header className="flex items-center justify-between h-16 px-4 md:px-8 gap-2 md:gap-0 bg-surface-0/80 backdrop-blur-md border-b border-border-subtle sticky top-0 z-40 shadow-2xl shadow-black/10 dark:shadow-black/20">
+      {/* Burger mobile — affiché uniquement <768px */}
+      {onOpenMobileNav && (
+        <button
+          type="button"
+          onClick={onOpenMobileNav}
+          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors shrink-0"
+          aria-label="Ouvrir la navigation"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
       {/* Search — bouton qui ouvre la Command Palette */}
       <div className="flex items-center flex-1 max-w-md">
         <button

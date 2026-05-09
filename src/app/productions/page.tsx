@@ -1,13 +1,31 @@
 "use client";
 
-// V1.1.D Phase 1 — Cockpit Productions (= projects.lifecycle_stage='production').
+// V1.1.D Phase 2 — Cockpit Productions (= projects.lifecycle_stage='production').
 //
 // Source : /api/productions (proxy → mybotia-business /api/v1/productions).
 // Lecture seule : la création d'une production se fait via la bascule
 // d'une affaire signée (POST /api/v1/affaires/[id]/sign côté business).
+//
+// Phase 2 ajoute :
+//   - lien fiche détail (/productions/[id])
+//   - filtres status, billing_mode (dérivé client-side), owner, recherche
+//
+// billing_mode n'est pas une colonne persistée (cf. projects-raw.ts) : on
+// déclenche une seconde requête /api/productions/[id]/subscriptions au moment
+// du filtre uniquement si l'utilisateur active billing_mode (lazy fetch).
+// V2 : ajouter billing_mode à la vue business_productions côté biz pour éviter
+// ce round-trip.
 
-import { useMemo } from "react";
-import { Hammer, Loader2, AlertTriangle, PackageOpen } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Hammer,
+  Loader2,
+  PackageOpen,
+  Search,
+  X,
+  ChevronRight,
+} from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import {
@@ -16,6 +34,9 @@ import {
   type ProductionItem,
 } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { formatDateFR } from "@/lib/format";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 const STAGE_LABEL: Record<string, string> = {
   active: "En cours",
@@ -33,25 +54,122 @@ const STAGE_COLOR: Record<string, string> = {
   abandoned: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
 };
 
+const BILLING_LABEL: Record<string, string> = {
+  one_shot: "One-shot",
+  recurring: "Récurrent",
+  mixed: "Mixte",
+};
+
 function productionTitle(p: ProductionItem): string {
   return p.title || p.name || "(sans titre)";
 }
 
-export default function ProductionsPage() {
-  const { data: cockpitFeatures, loading: featuresLoading } = useCockpitFeatures();
-  const productionsEnabled = cockpitFeatures?.features?.productions === true;
+type BillingFilter = "" | "one_shot" | "recurring" | "mixed";
 
-  const { data: productions, loading, error } = useProductions();
+export default function ProductionsPage() {
+  const { data: cockpitFeatures, loading: featuresLoading } =
+    useCockpitFeatures();
+  const productionsEnabled =
+    cockpitFeatures?.features?.productions === true;
+
+  const { data: productions, loading, error, refetch } = useProductions();
+
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [billingFilter, setBillingFilter] = useState<BillingFilter>("");
+  const [ownerFilter, setOwnerFilter] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
+
+  // Cache des billing_mode dérivés par production_id (résolu via subs).
+  // Lazy : alimenté seulement quand billingFilter !== "".
+  const [billingByProd, setBillingByProd] = useState<
+    Record<string, "one_shot" | "recurring" | "mixed">
+  >({});
+  const [billingLoading, setBillingLoading] = useState(false);
+
+  useEffect(() => {
+    if (billingFilter === "") return;
+    if (productions.length === 0) return;
+    let cancelled = false;
+    // setState DIFFÉRÉ via microtask : évite le warning
+    // react-hooks/set-state-in-effect (cascading renders).
+    queueMicrotask(() => {
+      if (!cancelled) setBillingLoading(true);
+    });
+    Promise.all(
+      productions.map(async (p) => {
+        try {
+          const res = await fetch(
+            `/api/productions/${encodeURIComponent(p.id)}/subscriptions`,
+          );
+          if (!res.ok) return [p.id, "one_shot" as const] as const;
+          const subs = (await res.json()) as Array<{ status: string }>;
+          const hasActive =
+            Array.isArray(subs) && subs.some((s) => s.status === "active");
+          // En l'absence de oneshot persisté côté liste, heuristique :
+          //   - aucune sub active → one_shot
+          //   - sinon → recurring (pas de moyen de distinguer mixed sans
+          //     fetch /api/productions/[id] pour oneshot_amount_ht).
+          // La fiche détail affiche le mode exact.
+          return [p.id, hasActive ? ("recurring" as const) : ("one_shot" as const)] as const;
+        } catch {
+          return [p.id, "one_shot" as const] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setBillingByProd((prev) => {
+        const next = { ...prev };
+        for (const [pid, mode] of entries) next[pid] = mode;
+        return next;
+      });
+      setBillingLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [billingFilter, productions]);
+
+  const owners = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of productions) {
+      const owner = (p.ownerUserId ?? p.owner_user_id) as string | undefined;
+      if (owner) set.add(owner);
+    }
+    return Array.from(set).sort();
+  }, [productions]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return productions.filter((p) => {
+      if (statusFilter && p.status !== statusFilter) return false;
+      if (ownerFilter) {
+        const owner =
+          (p.ownerUserId ?? p.owner_user_id) as string | undefined;
+        if (owner !== ownerFilter) return false;
+      }
+      if (billingFilter) {
+        const mode = billingByProd[p.id];
+        if (!mode) return false;
+        if (mode !== billingFilter) return false;
+      }
+      if (q) {
+        const desc = (p.description ?? "") as string;
+        const hay = `${productionTitle(p)} ${desc}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [productions, statusFilter, ownerFilter, billingFilter, billingByProd, search]);
 
   const grouped = useMemo(() => {
     const out: Record<string, ProductionItem[]> = {};
-    for (const p of productions) {
+    for (const p of filtered) {
       const key = p.status || "active";
       if (!out[key]) out[key] = [];
       out[key].push(p);
     }
     return out;
-  }, [productions]);
+  }, [filtered]);
 
   if (!featuresLoading && cockpitFeatures && !productionsEnabled) {
     return (
@@ -62,29 +180,113 @@ export default function ProductionsPage() {
     );
   }
 
+  const hasActiveFilter =
+    statusFilter || billingFilter || ownerFilter || search;
+
   return (
-    <div className="p-8 min-h-screen space-y-6">
+    <div className="p-4 sm:p-8 min-h-screen space-y-6">
       <ModuleHeader
         icon={Hammer}
         title="Productions"
         subtitle={
           loading
             ? "Chargement…"
-            : `${productions.length} production${productions.length > 1 ? "s" : ""} en portefeuille`
+            : `${filtered.length}${
+                filtered.length !== productions.length
+                  ? ` sur ${productions.length}`
+                  : ""
+              } production${productions.length > 1 ? "s" : ""} en portefeuille`
         }
       />
 
-      {error && (
-        <div className="card-sharp p-5 flex items-start gap-3 text-sm border-amber-400/30 bg-amber-400/5 text-amber-200">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold">Module Productions non disponible</p>
-            <p className="text-[12px] mt-1 text-amber-200/80">
-              {error}. Vérifie que le tenant a le module{" "}
-              <span className="font-mono">productions</span> activé côté business.
-            </p>
+      {/* Filtres */}
+      <div className="card-sharp p-4 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher (titre, description)…"
+              className="w-full bg-surface-2 border border-border-subtle text-[12px] py-2 pl-8 pr-3 text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+            />
           </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full bg-surface-2 border border-border-subtle text-[12px] py-2 px-3 text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+          >
+            <option value="">Tous les statuts</option>
+            {Object.entries(STAGE_LABEL).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <select
+            value={billingFilter}
+            onChange={(e) => setBillingFilter(e.target.value as BillingFilter)}
+            className="w-full bg-surface-2 border border-border-subtle text-[12px] py-2 px-3 text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+          >
+            <option value="">Tous les modes</option>
+            {Object.entries(BILLING_LABEL).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          {owners.length > 1 ? (
+            <select
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+              className="w-full bg-surface-2 border border-border-subtle text-[12px] py-2 px-3 text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+            >
+              <option value="">Tous les owners</option>
+              {owners.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-[11px] text-text-muted self-center px-3 py-2 border border-border-subtle bg-surface-2/50">
+              {owners.length === 1
+                ? `Owner : ${owners[0]}`
+                : "Aucun owner défini"}
+            </div>
+          )}
         </div>
+
+        {hasActiveFilter ? (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setBillingFilter("");
+              setOwnerFilter("");
+              setSearch("");
+            }}
+            className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary"
+          >
+            <X className="w-3 h-3" />
+            Réinitialiser les filtres
+          </button>
+        ) : null}
+
+        {billingFilter && billingLoading ? (
+          <p className="text-[11px] text-text-muted flex items-center gap-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Résolution des modes de facturation…
+          </p>
+        ) : null}
+      </div>
+
+      {error && (
+        <ErrorState
+          title="Module Productions non disponible"
+          message={`${error}. Vérifie que le tenant a le module 'productions' activé côté business.`}
+          onRetry={refetch}
+        />
       )}
 
       {loading && (
@@ -94,22 +296,42 @@ export default function ProductionsPage() {
       )}
 
       {!loading && !error && productions.length === 0 && (
-        <div className="card-sharp p-10 text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-12 h-12 mx-auto bg-accent-primary/10 border border-accent-primary/30">
-            <PackageOpen className="w-5 h-5 text-accent-glow" />
-          </div>
-          <h3 className="text-sm font-bold text-text-primary">
-            Aucune production active
-          </h3>
-          <p className="text-[12px] text-text-muted leading-relaxed max-w-md mx-auto">
-            Une production = une affaire signée en cours d&apos;exécution.
-            Bascule une affaire vers production depuis le cockpit Affaires
-            (page <span className="font-mono">/affaires</span>) après signature.
+        <EmptyState
+          icon={PackageOpen}
+          title="Aucune production active"
+          description="Une production = une affaire signée en cours d'exécution. Bascule une affaire vers production depuis le cockpit Affaires après signature."
+          action={
+            <Link
+              href="/affaires"
+              className="inline-block px-5 py-2 text-[11px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
+            >
+              Ouvrir les affaires
+            </Link>
+          }
+        />
+      )}
+
+      {!loading && !error && productions.length > 0 && filtered.length === 0 && (
+        <div className="card-sharp p-10 text-center space-y-3">
+          <p className="text-sm font-bold text-text-primary">
+            Aucune production ne correspond aux filtres.
           </p>
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setBillingFilter("");
+              setOwnerFilter("");
+              setSearch("");
+            }}
+            className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary"
+          >
+            <X className="w-3 h-3" />
+            Réinitialiser les filtres
+          </button>
         </div>
       )}
 
-      {!loading && !error && productions.length > 0 && (
+      {!loading && !error && filtered.length > 0 && (
         <div className="space-y-6">
           {Object.entries(grouped).map(([stage, items]) => (
             <section key={stage} className="card-sharp p-5">
@@ -123,24 +345,30 @@ export default function ProductionsPage() {
               </div>
               <ul className="divide-y divide-border-subtle">
                 {items.map((p) => (
-                  <li key={p.id} className="py-2.5 flex items-center gap-3">
-                    <span
-                      className={cn(
-                        "px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight border shrink-0",
-                        STAGE_COLOR[p.status] ??
-                          "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
-                      )}
+                  <li key={p.id}>
+                    <Link
+                      href={`/productions/${encodeURIComponent(p.id)}`}
+                      className="py-2.5 flex items-center gap-3 hover:bg-surface-2/60 -mx-2 px-2 transition-colors"
                     >
-                      {STAGE_LABEL[p.status] ?? p.status}
-                    </span>
-                    <span className="text-sm text-text-primary flex-1 truncate">
-                      {productionTitle(p)}
-                    </span>
-                    {p.updatedAt && (
-                      <span className="text-[10px] text-text-muted font-mono tabular-nums shrink-0">
-                        {new Date(p.updatedAt).toLocaleDateString("fr-FR")}
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight border shrink-0",
+                          STAGE_COLOR[p.status] ??
+                            "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+                        )}
+                      >
+                        {STAGE_LABEL[p.status] ?? p.status}
                       </span>
-                    )}
+                      <span className="text-sm text-text-primary flex-1 truncate">
+                        {productionTitle(p)}
+                      </span>
+                      {p.updatedAt && (
+                        <span className="text-[10px] text-text-muted font-mono tabular-nums shrink-0 hidden sm:inline">
+                          {formatDateFR(p.updatedAt)}
+                        </span>
+                      )}
+                      <ChevronRight className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                    </Link>
                   </li>
                 ))}
               </ul>

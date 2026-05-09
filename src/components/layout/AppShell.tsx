@@ -9,6 +9,7 @@ import { TopBar } from "./TopBar";
 import { ContextRail } from "./ContextRail";
 import { Footer } from "@/components/shared/Footer";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { MobileNavDrawer } from "./MobileNavDrawer";
 import { VoiceConvProvider } from "@/contexts/voice-context";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [railOpen, setRailOpen] = useState(true);
   // Bloc 4C — Global Command Palette
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Mobile drawer (≤768px) — porte la même LeftSidebar derrière un burger menu.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -62,11 +65,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <VoiceConvProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-surface-0">
-        {/* Left Sidebar */}
-        <LeftSidebar
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
+        {/* Left Sidebar — desktop only (≥md). Sur mobile, la sidebar est
+            servie par MobileNavDrawer ci-dessous. */}
+        <div className="hidden md:flex">
+          <LeftSidebar
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+        </div>
+
+        {/* Mobile drawer + sidebar embarquée */}
+        <MobileNavDrawer
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+        >
+          <LeftSidebar
+            collapsed={false}
+            onToggle={() => undefined}
+            variant="mobile"
+            onNavigate={() => setMobileNavOpen(false)}
+          />
+        </MobileNavDrawer>
 
         {/* Main area */}
         <div className="flex flex-1 flex-col min-w-0">
@@ -74,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             railOpen={railOpen}
             onToggleRail={() => setRailOpen(!railOpen)}
             onOpenPalette={() => setPaletteOpen(true)}
+            onOpenMobileNav={() => setMobileNavOpen(true)}
           />
           <main className="flex-1 overflow-y-auto">
             {children}
@@ -81,8 +101,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Footer />
         </div>
 
-        {/* Context Rail (right) */}
-        {railOpen && <ContextRail onClose={() => setRailOpen(false)} agents={agents} />}
+        {/* Context Rail (right) — masqué sur mobile pour libérer l'écran. */}
+        {railOpen && (
+          <div className="hidden md:flex">
+            <ContextRail onClose={() => setRailOpen(false)} agents={agents} />
+          </div>
+        )}
 
         {/* Bloc 4C — Global Command Palette (Cmd/Ctrl+K) */}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

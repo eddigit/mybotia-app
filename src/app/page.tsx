@@ -21,6 +21,7 @@ import {
 } from "@/hooks/use-api";
 import { ArrowRight, FolderPlus } from "lucide-react";
 import Link from "next/link";
+import { formatMoneyCompactFR } from "@/lib/format";
 
 export default function HomePage() {
   const { data: dashboard, loading } = useScopedDashboard();
@@ -103,7 +104,7 @@ export default function HomePage() {
               <p className="text-text-secondary mb-6 max-w-md leading-relaxed">
                 {dealsMissing
                   ? "Pipeline d'opportunités à activer (module à venir)."
-                  : `${deals.length} opportunites en pipeline pour un total de ${pipelineTotal.toLocaleString("fr-FR")} EUR.`}
+                  : `${deals.length} opportunites en pipeline pour un total de ${formatMoneyCompactFR(pipelineTotal)}.`}
                 {criticalTasks.length > 0 &&
                   ` ${criticalTasks.length} tache(s) critique(s) en cours.`}
               </p>
@@ -170,9 +171,7 @@ export default function HomePage() {
               metric={{
                 id: "metric-pipeline",
                 label: "Pipeline",
-                value: dealsMissing
-                  ? "—"
-                  : `${pipelineTotal.toLocaleString("fr-FR")} EUR`,
+                value: dealsMissing ? "—" : formatMoneyCompactFR(pipelineTotal),
                 trend: "up",
                 changeLabel: dealsMissing
                   ? "module à venir"

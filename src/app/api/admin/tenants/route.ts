@@ -1,5 +1,8 @@
 // Bloc 6A — API admin tenants : liste.
 // ACL : superadmin uniquement. Lecture DB `mybotia_core`.
+//
+// V1.1.E — agrège les compteurs core.tenant_modules (modulesEnabled,
+// modulesTotal, lastModuleActivityAt) pour piloter la console admin.
 
 import { adminQuery } from "@/lib/admin-db";
 import { requireSuperadmin } from "@/lib/admin-auth";
@@ -31,6 +34,11 @@ export async function GET() {
       timezone: string | null;
       updated_at: string | null;
       user_count: string;
+      modules_enabled: string;
+      modules_total: string;
+      last_module_activity_at: string | null;
+      primary_color: string | null;
+      logo_url: string | null;
     }>(
       `SELECT
          t.id,
@@ -39,6 +47,8 @@ export async function GET() {
          t.profile,
          t.status,
          b.legal_name,
+         b.primary_color,
+         b.logo_url,
          COALESCE(s.features, '{}'::jsonb)        AS features,
          s.business_model,
          s.architecture_config,
@@ -48,7 +58,14 @@ export async function GET() {
          s.locale,
          s.timezone,
          to_char(s.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at,
-         (SELECT COUNT(*) FROM core.tenant_user tu WHERE tu.tenant_id = t.id) AS user_count
+         (SELECT COUNT(*) FROM core.tenant_user tu WHERE tu.tenant_id = t.id) AS user_count,
+         (SELECT COUNT(*) FROM core.tenant_modules tm WHERE tm.tenant_id = t.id AND tm.enabled = true) AS modules_enabled,
+         (SELECT COUNT(*) FROM core.module_registry) AS modules_total,
+         to_char(
+           (SELECT MAX(GREATEST(COALESCE(tm.activated_at, 'epoch'::timestamptz), COALESCE(tm.deactivated_at, 'epoch'::timestamptz), tm.updated_at))
+              FROM core.tenant_modules tm WHERE tm.tenant_id = t.id) AT TIME ZONE 'UTC',
+           'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+         ) AS last_module_activity_at
        FROM core.tenant t
        LEFT JOIN core.tenant_settings s ON s.tenant_id = t.id
        LEFT JOIN core.tenant_branding b ON b.tenant_id = t.id
@@ -72,6 +89,11 @@ export async function GET() {
       timezone: r.timezone,
       updatedAt: r.updated_at,
       userCount: Number(r.user_count) || 0,
+      modulesEnabled: Number(r.modules_enabled) || 0,
+      modulesTotal: Number(r.modules_total) || 0,
+      lastModuleActivityAt: r.last_module_activity_at,
+      primaryColor: r.primary_color,
+      logoUrl: r.logo_url,
     }));
 
     return Response.json({ tenants }, { headers: NO_STORE });
