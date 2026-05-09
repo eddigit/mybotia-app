@@ -2,33 +2,30 @@
 
 import { useAuth } from "@/contexts/auth-context";
 import { useAgents } from "@/hooks/use-api";
+import { useActiveAgent } from "@/hooks/use-active-agent";
 
-// Mapping tenant_slug -> nom de l'agent principal (affichage front).
-// V1 garde-fou Voice : on n'affirme plus "est en ligne" en dur.
-// La présence réelle est lue depuis useAgents() (API live), avec fallback
-// neutre si l'agent n'est pas joignable.
-const TENANT_AGENT_NAME: Record<string, string> = {
-  mybotia: "Lea",
-  vlmedical: "Max",
-  igh: "Lucy",
-  cmb_lux: "Raphael",
-  esprit_loft: "Maria",
-};
+// V1.1.H.1 — CommandCenterHero branché sur useActiveAgent (cockpit-aware).
+// Avant : TENANT_AGENT_NAME[user.tenant_slug] lisait le JWT, jamais mis à jour
+// lors d'un switch cockpit → restait sur "Lea" après bascule superadmin.
+// Après : useActiveAgent() écoute useCockpitFeatures() qui refetch sur
+// mybotia:tenant-switched → mise à jour immédiate sans F5.
 
 export function CommandCenterHero() {
   const { user } = useAuth();
   const { data: agents } = useAgents(false, !!user);
+  const { agent: cockpitAgent } = useActiveAgent();
   const now = new Date();
   const greeting = now.getHours() < 12 ? "Bonjour" : now.getHours() < 18 ? "Bon apres-midi" : "Bonsoir";
 
   const displayName = user?.first_name || user?.email?.split("@")[0] || "";
-  const expectedName =
-    (user && TENANT_AGENT_NAME[user.tenant_slug]) || "Lea";
+  // Nom de l'agent : cockpit courant (via cookie) en priorité, sinon fallback
+  // neutre (ne jamais hardcoder "Lea" — fail-closed doctrine V1.1.G).
+  const expectedName = cockpitAgent?.name ?? null;
 
   // On considère l'agent "principal" comme le premier agent retourné par
   // l'API filtrée par tenant. Pas de chiffre inventé, pas d'état hardcodé.
   const primaryAgent = agents[0];
-  const primaryName = primaryAgent?.name || expectedName;
+  const primaryName = primaryAgent?.name || expectedName || "l'agent";
   const status = primaryAgent?.status;
 
   // Libellé honnête : reflète l'état réel renvoyé par /api/agents

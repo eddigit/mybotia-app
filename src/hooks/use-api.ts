@@ -35,7 +35,11 @@ function useApi<T>(url: string | null, fallback: T): {
 
     setLoading(true);
 
-    fetch(url)
+    // V1.1.H.1 — cache: "no-store" pour contourner le cache HTTP du navigateur
+    // lors du refetch post-switch tenant. Sans cela, certains navigateurs peuvent
+    // servir la réponse précédente (ancien tenant) depuis le cache bfcache/disk
+    // même si la route serveur retourne Cache-Control: no-store.
+    fetch(url, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

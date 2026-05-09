@@ -173,21 +173,6 @@ export function TenantSwitcher({ collapsed }: TenantSwitcherProps) {
       const target = data.tenants.find((t) => t.slug === slug);
       const name = target ? effectiveDisplayName(target) : slug;
 
-      // V1.1.G — invalidation cross-domain.
-      // Le cookie `cockpit_tenant` est posé serveur-side avant ce point. On
-      // dispatch ensuite l'event window pour que TOUS les hooks `useApi`
-      // (cockpitFeatures, agents, conversations, voice, business scoped, etc.)
-      // refetch atomiquement. Sans cet event, seuls les Server Components
-      // étaient invalidés via `router.refresh()` — la sidebar droite (agent
-      // actif, VoicePanel) restait bloquée sur le cockpit précédent.
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent(TENANT_SWITCHED_EVENT, {
-            detail: { fromSlug: previousSlug, toSlug: slug },
-          })
-        );
-      }
-
       // Optimistic update local : on marque le nouveau slug comme courant
       // immédiatement pour que le badge switcher (et le re-render) se mettent
       // à jour sans attendre le re-fetch /api/me/tenants.
@@ -212,12 +197,32 @@ export function TenantSwitcher({ collapsed }: TenantSwitcherProps) {
       router.replace("/");
       router.refresh();
 
-      // Fail-safe — si une query mémoire reste stale (ex: hook custom hors
-      // useApi qui n'écouterait pas l'event), un second refresh 500ms après
-      // recharge l'arbre Server Components au cas où l'event n'a pas suffi.
-      setTimeout(() => {
-        router.refresh();
-      }, 500);
+      // V1.1.H.1 — invalidation cross-domain APRÈS router.replace()/refresh().
+      //
+      // Ordre corrigé (bug race condition V1.1.G) :
+      //   Avant : dispatchEvent était appelé AVANT router.replace(). router.replace()
+      //   cause un unmount des composants page → les useEffect cleanup des hooks
+      //   useApi settaient cancelled=true, annulant le fetch déclenché par l'event.
+      //   Le refetch tombait dans le vide et les composants remontaient avec leur
+      //   ancien state, forçant un F5 pour récupérer le bon tenant.
+      //
+      //   Après : on délègue le dispatch à un setTimeout(0) pour laisser React
+      //   flusher le cycle de navigation (router.replace → unmount → remount des
+      //   nouveaux composants avec leurs listeners) AVANT d'émettre l'event.
+      //   Les hooks useApi fraîchement montés reçoivent l'event et refetch avec
+      //   le cookie cockpit_tenant déjà posé → résolution correcte immédiate.
+      //
+      // Le cookie `cockpit_tenant` est posé serveur-side avant ce point (dans la
+      // réponse HTTP du POST /api/me/switch-tenant), donc aucune race sur le cookie.
+      if (typeof window !== "undefined") {
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent(TENANT_SWITCHED_EVENT, {
+              detail: { fromSlug: previousSlug, toSlug: slug },
+            })
+          );
+        }, 0);
+      }
     } catch (e) {
       setToast({
         message: e instanceof Error ? e.message : "Bascule impossible",
