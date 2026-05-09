@@ -8,7 +8,7 @@
 // Doctrine : feedback_jamais_de_mock — tous les champs profil lus depuis /api/me/profile.
 
 import { useState, useEffect, useCallback } from "react";
-import { User, Building2, FileText, Bot, Plug, Package, Sparkles, Pencil, Trash2, Plus, Loader2, CheckCircle2, Save } from "lucide-react";
+import { User, Building2, FileText, Bot, Plug, Package, Sparkles, Pencil, Trash2, Plus, Loader2, CheckCircle2, Save, RotateCcw } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { useAuth } from "@/contexts/auth-context";
 import { UserAvatarV4 } from "@/components/conversations/UserAvatarV4";
@@ -18,6 +18,7 @@ import { toast } from "@/components/shared/Toast";
 import { apiFetch } from "@/lib/api-client";
 import { FormModal, FormField, inputClass, selectClass, btnPrimary, btnSecondary } from "@/components/shared/FormModal";
 import { useFormDraft } from "@/hooks/use-form-draft";
+import { useCockpitFeatures } from "@/hooks/use-api";
 import {
   CATALOG_ITEM_TYPES,
   CATALOG_ITEM_UNITS,
@@ -502,24 +503,385 @@ function ProfileTab({
   );
 }
 
-function CompanyTab() {
+// ---------------------------------------------------------------------------
+// CompanyTab — V1.1.I-A : form fonctionnel Société + Branding
+// Source de vérité : core.tenant_branding (UPSERT via PATCH /api/admin/tenants/[slug])
+// ---------------------------------------------------------------------------
+
+type BrandingValues = {
+  legal_name: string; legal_form: string; siret: string; ape_code: string;
+  tva_intra: string; capital_social: string; rcs_city: string;
+  address_line1: string; address_line2: string; postal_code: string;
+  city: string; country: string; phone: string; email: string; website: string;
+  bank_name: string; iban: string; bic: string;
+  logo_url: string; logo_small_url: string;
+  primary_color: string; secondary_color: string; accent_color: string;
+  footer_html: string; cgv_text: string;
+  default_tva_rate: string; payment_terms_days: string; late_fees_rate: string;
+  quote_prefix: string; invoice_prefix: string;
+};
+
+const EMPTY_BRANDING: BrandingValues = {
+  legal_name: "", legal_form: "", siret: "", ape_code: "", tva_intra: "",
+  capital_social: "", rcs_city: "",
+  address_line1: "", address_line2: "", postal_code: "", city: "",
+  country: "FR", phone: "", email: "", website: "",
+  bank_name: "", iban: "", bic: "",
+  logo_url: "", logo_small_url: "",
+  primary_color: "#0EA5E9", secondary_color: "#6366F1", accent_color: "#F59E0B",
+  footer_html: "", cgv_text: "",
+  default_tva_rate: "20", payment_terms_days: "30", late_fees_rate: "10",
+  quote_prefix: "D", invoice_prefix: "F",
+};
+
+function brandingFromApi(b: Record<string, unknown>): BrandingValues {
+  const s = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+  return {
+    legal_name: s(b.legal_name), legal_form: s(b.legal_form),
+    siret: s(b.siret), ape_code: s(b.ape_code), tva_intra: s(b.tva_intra),
+    capital_social: s(b.capital_social), rcs_city: s(b.rcs_city),
+    address_line1: s(b.address_line1), address_line2: s(b.address_line2),
+    postal_code: s(b.postal_code), city: s(b.city),
+    country: s(b.country) || "FR", phone: s(b.phone),
+    email: s(b.email), website: s(b.website),
+    bank_name: s(b.bank_name), iban: s(b.iban), bic: s(b.bic),
+    logo_url: s(b.logo_url), logo_small_url: s(b.logo_small_url),
+    primary_color: s(b.primary_color) || "#0EA5E9",
+    secondary_color: s(b.secondary_color) || "#6366F1",
+    accent_color: s(b.accent_color) || "#F59E0B",
+    footer_html: s(b.footer_html), cgv_text: s(b.cgv_text),
+    default_tva_rate: b.default_tva_rate != null ? s(b.default_tva_rate) : "20",
+    payment_terms_days: b.payment_terms_days != null ? s(b.payment_terms_days) : "30",
+    late_fees_rate: b.late_fees_rate != null ? s(b.late_fees_rate) : "10",
+    quote_prefix: s(b.quote_prefix) || "D",
+    invoice_prefix: s(b.invoice_prefix) || "F",
+  };
+}
+
+function BrandingCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-4">
-      <SectionCard
-        title="Société"
-        body="Les coordonnées société (nom légal, logo, SIRET, TVA, adresse, IBAN) ne sont pas encore éditables ici. Côté serveur, le modèle existe (table core.tenant_branding + JSONB core.tenant_settings) — l'éditeur arrive en V1.1."
-      />
-      <PreparingCard
-        title="Champs prévus V1.1"
-        items={[
-          "Nom légal / nom commercial",
-          "Logo (URL HTTPS, upload V1.3)",
-          "Adresse complète, téléphone, site",
-          "SIRET, TVA intracommunautaire",
-          "Devise par défaut, fuseau horaire",
-        ]}
-      />
+    <div className="card-sharp p-6">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-4">{title}</h3>
+      {children}
     </div>
+  );
+}
+
+function CompanyTab() {
+  const { data: features } = useCockpitFeatures();
+  const [values, setValues] = useState<BrandingValues>(EMPTY_BRANDING);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const [saving, setSaving] = useState(false);
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
+
+  const { hasDraft, clearDraft } = useFormDraft("draft:settings-tenant-branding", values, setValues);
+
+  useEffect(() => {
+    if (!features?.tenant) return;
+    setTenantSlug(features.tenant);
+    setLoadState((prev) => (prev === "idle" ? "loading" : prev));
+  }, [features?.tenant]);
+
+  const loadFromServer = useCallback(async (slug: string) => {
+    setLoadState("loading");
+    try {
+      const res = await apiFetch(`/api/admin/tenants/${encodeURIComponent(slug)}`);
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { tenant?: { branding?: Record<string, unknown> } };
+      if (data.tenant?.branding) setValues(brandingFromApi(data.tenant.branding));
+      setLoadState("loaded");
+    } catch (e) {
+      console.error("[CompanyTab] load error", e);
+      setLoadState("error");
+      toast.error("Impossible de charger les données société");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loadState !== "loading" || !tenantSlug) return;
+    if (hasDraft) { setLoadState("loaded"); return; }
+    void loadFromServer(tenantSlug);
+  }, [loadState, tenantSlug, hasDraft, loadFromServer]);
+
+  const set = useCallback((key: keyof BrandingValues, val: string | null) => {
+    setValues((prev) => ({ ...prev, [key]: val ?? "" }));
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenantSlug) return;
+    setSaving(true);
+    try {
+      const n = (v: string) => v.trim() || null;
+      const num = (v: string) => { const x = parseFloat(v); return Number.isFinite(x) ? x : null; };
+      const branding = {
+        legal_name: n(values.legal_name), legal_form: n(values.legal_form),
+        siret: n(values.siret), ape_code: n(values.ape_code), tva_intra: n(values.tva_intra),
+        capital_social: n(values.capital_social), rcs_city: n(values.rcs_city),
+        address_line1: n(values.address_line1), address_line2: n(values.address_line2),
+        postal_code: n(values.postal_code), city: n(values.city), country: n(values.country),
+        phone: n(values.phone), email: n(values.email), website: n(values.website),
+        bank_name: n(values.bank_name), iban: n(values.iban), bic: n(values.bic),
+        logo_url: n(values.logo_url), logo_small_url: n(values.logo_small_url),
+        primary_color: n(values.primary_color), secondary_color: n(values.secondary_color),
+        accent_color: n(values.accent_color),
+        footer_html: n(values.footer_html), cgv_text: n(values.cgv_text),
+        default_tva_rate: num(values.default_tva_rate),
+        payment_terms_days: num(values.payment_terms_days),
+        late_fees_rate: num(values.late_fees_rate),
+        quote_prefix: n(values.quote_prefix), invoice_prefix: n(values.invoice_prefix),
+      };
+      const res = await apiFetch(`/api/admin/tenants/${encodeURIComponent(tenantSlug)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branding }),
+      });
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      clearDraft();
+      toast.success("Société & Branding sauvegardés");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur lors de la sauvegarde");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!features?.isSuperadmin) {
+    return (
+      <div className="card-sharp p-6">
+        <p className="text-sm text-text-muted">La configuration société est réservée aux administrateurs.</p>
+      </div>
+    );
+  }
+
+  if (loadState === "loading") {
+    return (
+      <div className="flex items-center gap-3 p-8 text-text-muted text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Chargement des données société…
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
+            Société &amp; Branding
+          </h2>
+          {tenantSlug && (
+            <p className="text-xs text-text-muted mt-0.5 font-mono">{tenantSlug}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {hasDraft && (
+            <span className="text-[10px] text-amber-300 font-mono uppercase tracking-wider px-1.5 py-0.5 border border-amber-300/30 bg-amber-300/5">
+              brouillon
+            </span>
+          )}
+          <button
+            type="submit" disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Enregistrer
+          </button>
+        </div>
+      </div>
+
+      {/* Carte 1 — Identité légale */}
+      <BrandingCard title="Identité légale">
+        <div className="grid grid-cols-2 gap-x-4">
+          <FormField label="Raison sociale">
+            <input type="text" value={values.legal_name} onChange={(e) => set("legal_name", e.target.value)} placeholder="MyBotIA SAS" className={inputClass} />
+          </FormField>
+          <FormField label="Forme juridique">
+            <input type="text" value={values.legal_form} onChange={(e) => set("legal_form", e.target.value)} placeholder="SAS, SARL, EURL…" className={inputClass} />
+          </FormField>
+          <FormField label="SIRET">
+            <input type="text" value={values.siret} onChange={(e) => set("siret", e.target.value)} placeholder="123 456 789 00012" className={inputClass} />
+          </FormField>
+          <FormField label="Code APE / NAF">
+            <input type="text" value={values.ape_code} onChange={(e) => set("ape_code", e.target.value)} placeholder="6201Z" className={inputClass} />
+          </FormField>
+          <FormField label="N° TVA intracommunautaire">
+            <input type="text" value={values.tva_intra} onChange={(e) => set("tva_intra", e.target.value)} placeholder="FR12 123456789" className={inputClass} />
+          </FormField>
+          <FormField label="Capital social">
+            <input type="text" value={values.capital_social} onChange={(e) => set("capital_social", e.target.value)} placeholder="10 000 €" className={inputClass} />
+          </FormField>
+          <div className="col-span-2">
+            <FormField label="Ville d'immatriculation (RCS)">
+              <input type="text" value={values.rcs_city} onChange={(e) => set("rcs_city", e.target.value)} placeholder="Paris" className={inputClass} />
+            </FormField>
+          </div>
+        </div>
+      </BrandingCard>
+
+      {/* Carte 2 — Coordonnées */}
+      <BrandingCard title="Coordonnées">
+        <div className="grid grid-cols-2 gap-x-4">
+          <div className="col-span-2">
+            <FormField label="Adresse ligne 1">
+              <input type="text" value={values.address_line1} onChange={(e) => set("address_line1", e.target.value)} placeholder="123 rue de la Paix" className={inputClass} />
+            </FormField>
+          </div>
+          <div className="col-span-2">
+            <FormField label="Adresse ligne 2">
+              <input type="text" value={values.address_line2} onChange={(e) => set("address_line2", e.target.value)} placeholder="Bâtiment A, Étage 3" className={inputClass} />
+            </FormField>
+          </div>
+          <FormField label="Code postal">
+            <input type="text" value={values.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="75001" className={inputClass} />
+          </FormField>
+          <FormField label="Ville">
+            <input type="text" value={values.city} onChange={(e) => set("city", e.target.value)} placeholder="Paris" className={inputClass} />
+          </FormField>
+          <FormField label="Pays">
+            <input type="text" value={values.country} onChange={(e) => set("country", e.target.value)} placeholder="FR" className={inputClass} />
+          </FormField>
+          <FormField label="Téléphone">
+            <input type="tel" value={values.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+33 1 23 45 67 89" className={inputClass} />
+          </FormField>
+          <FormField label="Email société">
+            <input type="email" value={values.email} onChange={(e) => set("email", e.target.value)} placeholder="contact@monentreprise.fr" className={inputClass} />
+          </FormField>
+          <FormField label="Site web">
+            <input type="url" value={values.website} onChange={(e) => set("website", e.target.value)} placeholder="https://monentreprise.fr" className={inputClass} />
+          </FormField>
+        </div>
+      </BrandingCard>
+
+      {/* Carte 3 — Bancaire */}
+      <BrandingCard title="Coordonnées bancaires">
+        <div className="grid grid-cols-2 gap-x-4">
+          <div className="col-span-2">
+            <FormField label="Banque">
+              <input type="text" value={values.bank_name} onChange={(e) => set("bank_name", e.target.value)} placeholder="Crédit Agricole" className={inputClass} />
+            </FormField>
+          </div>
+          <div className="col-span-2">
+            <FormField label="IBAN">
+              <input type="text" value={values.iban} onChange={(e) => set("iban", e.target.value)} placeholder="FR76 1234 5678 9012 3456 7890 123" className={`${inputClass} font-mono`} />
+            </FormField>
+          </div>
+          <FormField label="BIC / SWIFT">
+            <input type="text" value={values.bic} onChange={(e) => set("bic", e.target.value)} placeholder="AGRIFRPPXXX" className={`${inputClass} font-mono`} />
+          </FormField>
+        </div>
+      </BrandingCard>
+
+      {/* Carte 4 — Branding visuel */}
+      <BrandingCard title="Branding visuel">
+        <div className="space-y-4">
+          <FormField label="Logo principal">
+            <CloudinaryUpload value={values.logo_url || null} onChange={(url) => set("logo_url", url)} kind="logo" />
+          </FormField>
+          <FormField label="Logo réduit / favicon">
+            <CloudinaryUpload value={values.logo_small_url || null} onChange={(url) => set("logo_small_url", url)} kind="logo_small" />
+          </FormField>
+          <div className="grid grid-cols-3 gap-x-4">
+            <FormField label="Couleur primaire">
+              <div className="flex items-center gap-2">
+                <input type="color" value={values.primary_color || "#0EA5E9"} onChange={(e) => set("primary_color", e.target.value)}
+                  className="w-10 h-9 cursor-pointer border border-border-subtle bg-surface-2 p-0.5" />
+                <input type="text" value={values.primary_color} onChange={(e) => set("primary_color", e.target.value)}
+                  placeholder="#0EA5E9" className={`${inputClass} font-mono`} />
+              </div>
+            </FormField>
+            <FormField label="Couleur secondaire">
+              <div className="flex items-center gap-2">
+                <input type="color" value={values.secondary_color || "#6366F1"} onChange={(e) => set("secondary_color", e.target.value)}
+                  className="w-10 h-9 cursor-pointer border border-border-subtle bg-surface-2 p-0.5" />
+                <input type="text" value={values.secondary_color} onChange={(e) => set("secondary_color", e.target.value)}
+                  placeholder="#6366F1" className={`${inputClass} font-mono`} />
+              </div>
+            </FormField>
+            <FormField label="Couleur accent">
+              <div className="flex items-center gap-2">
+                <input type="color" value={values.accent_color || "#F59E0B"} onChange={(e) => set("accent_color", e.target.value)}
+                  className="w-10 h-9 cursor-pointer border border-border-subtle bg-surface-2 p-0.5" />
+                <input type="text" value={values.accent_color} onChange={(e) => set("accent_color", e.target.value)}
+                  placeholder="#F59E0B" className={`${inputClass} font-mono`} />
+              </div>
+            </FormField>
+          </div>
+        </div>
+      </BrandingCard>
+
+      {/* Carte 5 — Documents / numérotation */}
+      <BrandingCard title="Documents & numérotation">
+        <div className="grid grid-cols-2 gap-x-4">
+          <FormField label="TVA par défaut (%)">
+            <input type="number" step="0.01" min="0" max="100" value={values.default_tva_rate}
+              onChange={(e) => set("default_tva_rate", e.target.value)} placeholder="20" className={inputClass} />
+          </FormField>
+          <FormField label="Délai de paiement (jours)">
+            <input type="number" step="1" min="0" value={values.payment_terms_days}
+              onChange={(e) => set("payment_terms_days", e.target.value)} placeholder="30" className={inputClass} />
+          </FormField>
+          <FormField label="Pénalités de retard (% annuel)">
+            <input type="number" step="0.01" min="0" value={values.late_fees_rate}
+              onChange={(e) => set("late_fees_rate", e.target.value)} placeholder="10" className={inputClass} />
+          </FormField>
+          <div className="col-span-2 grid grid-cols-2 gap-x-4">
+            <FormField label="Préfixe devis">
+              <input type="text" value={values.quote_prefix} onChange={(e) => set("quote_prefix", e.target.value)}
+                placeholder="D" className={`${inputClass} font-mono`} />
+            </FormField>
+            <FormField label="Préfixe facture">
+              <input type="text" value={values.invoice_prefix} onChange={(e) => set("invoice_prefix", e.target.value)}
+                placeholder="F" className={`${inputClass} font-mono`} />
+            </FormField>
+          </div>
+          <div className="col-span-2">
+            <FormField label="Pied de page PDF (HTML autorisé)">
+              <textarea value={values.footer_html} onChange={(e) => set("footer_html", e.target.value)}
+                rows={3} placeholder="<p>MyBotIA SAS — SIRET : … — TVA : …</p>"
+                className={`${inputClass} resize-y`} />
+            </FormField>
+          </div>
+          <div className="col-span-2">
+            <FormField label="Conditions Générales de Vente (CGV)">
+              <textarea value={values.cgv_text} onChange={(e) => set("cgv_text", e.target.value)}
+                rows={5} placeholder="Article 1 — Objet…"
+                className={`${inputClass} resize-y`} />
+            </FormField>
+          </div>
+        </div>
+      </BrandingCard>
+
+      {/* Bouton bas */}
+      <div className="flex items-center justify-between py-2">
+        {hasDraft && (
+          <button
+            type="button"
+            onClick={() => { clearDraft(); if (tenantSlug) void loadFromServer(tenantSlug); }}
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Annuler le brouillon
+          </button>
+        )}
+        <div className="ml-auto">
+          <button
+            type="submit" disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }
 
