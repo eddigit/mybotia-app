@@ -1,8 +1,10 @@
-// Bloc 7B — PATCH catalog item.
-// Whitelist stricte. Validation enum + numérique. Pas de DELETE (active=false).
+// Bloc 7B — PATCH + DELETE catalog item.
+// Whitelist stricte. Validation enum + numérique.
+// DELETE = soft delete (active=false). Scoping cockpit_tenant.
 
 import { adminQuery } from "@/lib/admin-db";
 import { requireSuperadmin } from "@/lib/admin-auth";
+import { resolveCockpitTenant } from "@/lib/tenant-resolver";
 import {
   CATALOG_ITEM_TYPES,
   CATALOG_ITEM_UNITS,
@@ -87,6 +89,7 @@ export async function PATCH(
   if (!auth.ok) {
     return Response.json({ error: auth.error }, { status: auth.status, headers: NO_STORE });
   }
+  const cockpit = resolveCockpitTenant(request);
   const { id } = await params;
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
     return Response.json({ error: "id catalog invalide" }, { status: 400, headers: NO_STORE });
@@ -174,10 +177,21 @@ export async function PATCH(
   }
 
   try {
+    // Résoudre le tenant_id via le slug cockpit pour scoper la mutation
+    const tenantRows = await adminQuery<{ id: string }>(
+      "SELECT id FROM core.tenant WHERE slug = $1",
+      [cockpit.slug]
+    );
+    if (!tenantRows[0]) {
+      return Response.json({ error: "tenant cockpit introuvable" }, { status: 404, headers: NO_STORE });
+    }
+    const tenantId = tenantRows[0].id;
+
     args.push(id);
+    args.push(tenantId);
     const updated = await adminQuery<Row>(
       `UPDATE core.catalog_items c SET ${sets.join(", ")}
-         WHERE c.id = $${args.length}
+         WHERE c.id = $${args.length - 1} AND c.tenant_id = $${args.length}
        RETURNING c.id, c.tenant_id,
          (SELECT slug FROM core.tenant WHERE id = c.tenant_id) AS tenant_slug,
          c.sku, c.name, c.description, c.category, c.type, c.unit,
@@ -189,12 +203,55 @@ export async function PATCH(
       args
     );
     if (!updated[0]) {
-      return Response.json({ error: "item introuvable" }, { status: 404, headers: NO_STORE });
+      return Response.json({ error: "item introuvable ou hors cockpit" }, { status: 404, headers: NO_STORE });
     }
     return Response.json({ item: mapRow(updated[0]) }, { headers: NO_STORE });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur DB";
     const status = /unique|duplicate/i.test(msg) ? 409 : 502;
     return Response.json({ error: msg }, { status, headers: NO_STORE });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireSuperadmin();
+  if (!auth.ok) {
+    return Response.json({ error: auth.error }, { status: auth.status, headers: NO_STORE });
+  }
+  const cockpit = resolveCockpitTenant(request);
+  const { id } = await params;
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+    return Response.json({ error: "id catalog invalide" }, { status: 400, headers: NO_STORE });
+  }
+
+  try {
+    // Résoudre le tenant_id via le slug cockpit
+    const tenantRows = await adminQuery<{ id: string }>(
+      "SELECT id FROM core.tenant WHERE slug = $1",
+      [cockpit.slug]
+    );
+    if (!tenantRows[0]) {
+      return Response.json({ error: "tenant cockpit introuvable" }, { status: 404, headers: NO_STORE });
+    }
+    const tenantId = tenantRows[0].id;
+
+    // Soft delete : active = false. L'item reste dans les devis existants.
+    const result = await adminQuery<{ id: string }>(
+      `UPDATE core.catalog_items
+         SET active = false
+         WHERE id = $1 AND tenant_id = $2
+       RETURNING id`,
+      [id, tenantId]
+    );
+    if (!result[0]) {
+      return Response.json({ error: "item introuvable ou hors cockpit" }, { status: 404, headers: NO_STORE });
+    }
+    return Response.json({ success: true, id: result[0].id }, { headers: NO_STORE });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erreur DB";
+    return Response.json({ error: msg }, { status: 502, headers: NO_STORE });
   }
 }
