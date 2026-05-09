@@ -1,22 +1,21 @@
 "use client";
 
-// Bloc Settings V1 — page /settings honnête.
-// État : empty state structuré par onglet. Aucun input fonctionnel V1.
-// Prochaines itérations :
-//   V1.1 : profil user + société (UPDATE JSONB core.tenant_settings.config)
-//   V1.2 : IA (assistant_mode, crm_write_enabled)
-//   V1.3 : Intégrations (GitHub/Vercel/WhatsApp/Email) + upload avatar/logo
+// Bloc Settings V1.1.I-A — page /settings.
+// Section "Mon profil" fonctionnelle (avatar, identité, téléphone, timezone, signature, préférences).
+// Sections Société/Documents/IA/Intégrations : empty state honnête (V1.1.I-B+).
+// Catalogue : CRUD complet (V1.1.I-A Builder 2).
 //
-// Doctrine : feedback_jamais_de_mock — pas de champ pré-rempli avec une
-// valeur fake. On affiche "Non configuré" honnêtement.
+// Doctrine : feedback_jamais_de_mock — tous les champs profil lus depuis /api/me/profile.
 
 import { useState, useEffect, useCallback } from "react";
-import { User, Building2, FileText, Bot, Plug, Package, Sparkles, Pencil, Trash2, Plus, Loader2, CheckCircle2 } from "lucide-react";
+import { User, Building2, FileText, Bot, Plug, Package, Sparkles, Pencil, Trash2, Plus, Loader2, CheckCircle2, Save } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { useAuth } from "@/contexts/auth-context";
 import { UserAvatarV4 } from "@/components/conversations/UserAvatarV4";
+import { CloudinaryUpload } from "@/components/shared/CloudinaryUpload";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/shared/Toast";
+import { apiFetch } from "@/lib/api-client";
 import { FormModal, FormField, inputClass, selectClass, btnPrimary, btnSecondary } from "@/components/shared/FormModal";
 import { useFormDraft } from "@/hooks/use-form-draft";
 import {
@@ -90,8 +89,90 @@ export default function SettingsPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Tabs : empty state honnête. Affiche les données déjà disponibles côté JWT
-// (read-only V1) et liste les champs qui arriveront en V1.1+.
+// Timezones courantes (select profil)
+// ---------------------------------------------------------------------------
+
+const TIMEZONES = [
+  "Europe/Paris",
+  "Europe/London",
+  "Europe/Berlin",
+  "Europe/Madrid",
+  "Europe/Brussels",
+  "Europe/Amsterdam",
+  "Europe/Rome",
+  "Europe/Zurich",
+  "Europe/Luxembourg",
+  "Atlantic/Reykjavik",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Montreal",
+  "America/Sao_Paulo",
+  "Africa/Tunis",
+  "Africa/Casablanca",
+  "Africa/Lagos",
+  "Asia/Dubai",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Pacific/Auckland",
+  "UTC",
+];
+
+// ---------------------------------------------------------------------------
+// Type profil DB (retour /api/me/profile)
+// ---------------------------------------------------------------------------
+
+interface UserProfile {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  locale: string;
+  phone: string | null;
+  timezone: string;
+  email_signature: string | null;
+  preferences: {
+    notifications_email: boolean;
+    notifications_whatsapp: boolean;
+    theme: "light" | "dark" | "auto";
+    language: "fr" | "en";
+  };
+  is_superadmin: boolean;
+  last_login_at: string | null;
+}
+
+interface ProfileFormValues {
+  first_name: string;
+  last_name: string;
+  avatar_url: string | null;
+  phone: string;
+  timezone: string;
+  email_signature: string;
+  notifications_email: boolean;
+  notifications_whatsapp: boolean;
+  theme: "light" | "dark" | "auto";
+  language: "fr" | "en";
+}
+
+function profileToForm(p: UserProfile): ProfileFormValues {
+  return {
+    first_name: p.first_name ?? "",
+    last_name: p.last_name ?? "",
+    avatar_url: p.avatar_url,
+    phone: p.phone ?? "",
+    timezone: p.timezone || "Europe/Paris",
+    email_signature: p.email_signature ?? "",
+    notifications_email: p.preferences?.notifications_email ?? true,
+    notifications_whatsapp: p.preferences?.notifications_whatsapp ?? true,
+    theme: p.preferences?.theme ?? "auto",
+    language: p.preferences?.language ?? "fr",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ProfileTab — form fonctionnel V1.1.I-A
 // ---------------------------------------------------------------------------
 
 function ProfileTab({
@@ -99,20 +180,121 @@ function ProfileTab({
 }: {
   user: ReturnType<typeof useAuth>["user"];
 }) {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const [values, setValues] = useState<ProfileFormValues>({
+    first_name: "",
+    last_name: "",
+    avatar_url: null,
+    phone: "",
+    timezone: "Europe/Paris",
+    email_signature: "",
+    notifications_email: true,
+    notifications_whatsapp: true,
+    theme: "auto",
+    language: "fr",
+  });
+
+  const { hasDraft, clearDraft } = useFormDraft("draft:settings-profile", values, setValues);
+
+  const loadProfile = useCallback(async () => {
+    setLoadingProfile(true);
+    try {
+      const res = await apiFetch("/api/me/profile");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const p = (await res.json()) as UserProfile;
+      setProfile(p);
+      // Initialiser depuis DB seulement si pas de brouillon déjà restauré
+      setValues((prev) => {
+        const isEmpty =
+          !prev.first_name && !prev.last_name && !prev.phone && !prev.email_signature;
+        return isEmpty ? profileToForm(p) : prev;
+      });
+    } catch (e) {
+      console.error("[ProfileTab] loadProfile error", e);
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSubmitError(null);
+      setSubmitting(true);
+      try {
+        const res = await apiFetch("/api/me/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            first_name: values.first_name.trim() || null,
+            last_name: values.last_name.trim() || null,
+            avatar_url: values.avatar_url,
+            phone: values.phone.trim() || null,
+            timezone: values.timezone,
+            email_signature: values.email_signature.trim() || null,
+            preferences: {
+              notifications_email: values.notifications_email,
+              notifications_whatsapp: values.notifications_whatsapp,
+              theme: values.theme,
+              language: values.language,
+            },
+          }),
+        });
+        if (!res.ok) {
+          const json = (await res.json()) as { error?: string; details?: string[] };
+          throw new Error(json.details?.join(", ") ?? json.error ?? `HTTP ${res.status}`);
+        }
+        const updated = (await res.json()) as UserProfile;
+        setProfile(updated);
+        setValues(profileToForm(updated));
+        clearDraft();
+        toast.success("Profil mis à jour.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erreur lors de la sauvegarde";
+        setSubmitError(msg);
+        toast.error(msg);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [values, clearDraft]
+  );
+
   if (!user) {
     return <SectionCard title="Mon profil" body="Non connecté." />;
   }
-  const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || null;
+
+  if (loadingProfile) {
+    return (
+      <div className="flex items-center justify-center py-16 text-text-muted gap-2">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-sm">Chargement du profil…</span>
+      </div>
+    );
+  }
+
+  const displayName = [values.first_name, values.last_name].filter(Boolean).join(" ") || null;
+
   return (
-    <div className="space-y-4">
-      <div className="card-sharp p-6 flex items-center gap-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* En-tête identité */}
+      <div className="card-sharp p-5 flex items-center gap-5">
         <UserAvatarV4
           email={user.email}
           name={displayName ?? undefined}
+          avatarUrl={values.avatar_url}
           size={64}
         />
         <div>
-          <h2 className="text-lg font-bold text-text-primary font-headline">
+          <h2 className="text-base font-bold text-text-primary font-headline">
             {displayName ?? user.email}
           </h2>
           <p className="text-sm text-text-muted">{user.email}</p>
@@ -129,26 +311,194 @@ function ProfileTab({
         </div>
       </div>
 
-      <FieldList
-        title="Données actuelles"
-        fields={[
-          { label: "Email", value: user.email, source: "JWT" },
-          { label: "Prénom", value: user.first_name, source: "JWT" },
-          { label: "Nom", value: user.last_name, source: "JWT" },
-          { label: "Rôle tenant", value: user.role, source: "JWT" },
-        ]}
-      />
+      {/* Brouillon restauré */}
+      {hasDraft && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-300/5 border border-amber-300/20 text-[11px] text-amber-300">
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span>Brouillon récupéré — modifications non sauvegardées restaurées.</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (profile) setValues(profileToForm(profile));
+              clearDraft();
+            }}
+            className="ml-auto underline underline-offset-2 hover:text-amber-200"
+          >
+            Ignorer
+          </button>
+        </div>
+      )}
 
-      <PreparingCard
-        title="À configurer en V1.1"
-        items={[
-          "Avatar personnalisé (initiales propres en attendant)",
-          "Téléphone / fuseau horaire / locale",
-          "Signature email",
-          "Préférences notifications (email, WhatsApp)",
-        ]}
-      />
-    </div>
+      {/* Avatar */}
+      <div className="card-sharp p-5 space-y-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+          Photo de profil
+        </h3>
+        <CloudinaryUpload
+          value={values.avatar_url}
+          onChange={(url) => setValues({ ...values, avatar_url: url })}
+          kind="avatar"
+          placeholder="Photo de profil"
+        />
+      </div>
+
+      {/* Identité */}
+      <div className="card-sharp p-5 space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+          Identité
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-text-muted mb-1">Prénom</label>
+            <input
+              type="text"
+              value={values.first_name}
+              onChange={(e) => setValues({ ...values, first_name: e.target.value })}
+              placeholder="Prénom"
+              maxLength={100}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-text-muted mb-1">Nom</label>
+            <input
+              type="text"
+              value={values.last_name}
+              onChange={(e) => setValues({ ...values, last_name: e.target.value })}
+              placeholder="Nom de famille"
+              maxLength={100}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        {/* Email lecture seule */}
+        <div>
+          <label className="block text-xs text-text-muted mb-1">
+            Email
+            <span className="ml-2 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border border-border-subtle bg-surface-3 text-text-muted">
+              lecture seule
+            </span>
+          </label>
+          <input
+            type="email"
+            value={user.email}
+            readOnly
+            className={cn(inputClass, "cursor-not-allowed opacity-60")}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-text-muted mb-1">Téléphone</label>
+          <input
+            type="tel"
+            value={values.phone}
+            onChange={(e) => setValues({ ...values, phone: e.target.value })}
+            placeholder="+33 6 00 00 00 00"
+            maxLength={30}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-text-muted mb-1">Fuseau horaire</label>
+          <select
+            value={values.timezone}
+            onChange={(e) => setValues({ ...values, timezone: e.target.value })}
+            className={selectClass}
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Signature email */}
+      <div className="card-sharp p-5 space-y-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+          Signature email
+        </h3>
+        <textarea
+          value={values.email_signature}
+          onChange={(e) => setValues({ ...values, email_signature: e.target.value })}
+          rows={4}
+          maxLength={2000}
+          placeholder={"Cordialement,\nPrénom Nom\nPoste — Société\n+33 6 …"}
+          className={cn(inputClass, "resize-none font-mono")}
+        />
+        <p className="text-[11px] text-text-muted text-right">
+          {values.email_signature.length}/2000
+        </p>
+      </div>
+
+      {/* Préférences */}
+      <div className="card-sharp p-5 space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
+          Préférences
+        </h3>
+        <div className="space-y-3">
+          <ToggleField
+            label="Notifications par email"
+            checked={values.notifications_email}
+            onChange={(v) => setValues({ ...values, notifications_email: v })}
+          />
+          <ToggleField
+            label="Notifications WhatsApp"
+            checked={values.notifications_whatsapp}
+            onChange={(v) => setValues({ ...values, notifications_whatsapp: v })}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4 pt-1">
+          <div>
+            <label className="block text-xs text-text-muted mb-1">Thème</label>
+            <select
+              value={values.theme}
+              onChange={(e) => setValues({ ...values, theme: e.target.value as "light" | "dark" | "auto" })}
+              className={selectClass}
+            >
+              <option value="auto">Automatique (système)</option>
+              <option value="dark">Sombre</option>
+              <option value="light">Clair</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-text-muted mb-1">Langue</label>
+            <select
+              value={values.language}
+              onChange={(e) => setValues({ ...values, language: e.target.value as "fr" | "en" })}
+              className={selectClass}
+            >
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Erreur submit */}
+      {submitError && (
+        <p className="text-xs text-red-400 px-1">{submitError}</p>
+      )}
+
+      {/* Submit */}
+      <div className="flex items-center justify-between gap-4 pt-1">
+        <span className="text-[11px] text-text-muted">
+          {profile?.last_login_at
+            ? `Dernière connexion : ${new Date(profile.last_login_at).toLocaleString("fr-FR")}`
+            : null}
+        </span>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex items-center gap-2 px-5 py-2.5 bg-accent-primary text-black text-xs font-bold uppercase tracking-widest hover:bg-accent-primary/90 transition-all disabled:opacity-50"
+        >
+          {submitting ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          Enregistrer
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -927,39 +1277,6 @@ function SectionCard({ title, body }: { title: string; body: string }) {
         {title}
       </h2>
       <p className="text-sm text-text-secondary leading-relaxed">{body}</p>
-    </div>
-  );
-}
-
-function FieldList({
-  title,
-  fields,
-}: {
-  title: string;
-  fields: { label: string; value: string | null | undefined; source: string }[];
-}) {
-  return (
-    <div className="card-sharp p-6">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
-        {title}
-      </h3>
-      <dl className="space-y-2.5">
-        {fields.map((f) => (
-          <div key={f.label} className="flex items-baseline justify-between gap-4 text-sm">
-            <dt className="text-text-muted shrink-0">{f.label}</dt>
-            <dd className="font-medium text-text-primary text-right truncate">
-              {f.value ? (
-                <span>{f.value}</span>
-              ) : (
-                <span className="text-text-muted italic">non renseigné</span>
-              )}
-              <span className="ml-2 text-[10px] text-text-muted font-mono uppercase">
-                {f.source}
-              </span>
-            </dd>
-          </div>
-        ))}
-      </dl>
     </div>
   );
 }
