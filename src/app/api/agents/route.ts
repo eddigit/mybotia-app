@@ -1,5 +1,6 @@
 import type { Agent } from "@/types";
 import { getSession } from "@/lib/session";
+import { resolveCockpitTenant } from "@/lib/tenant-resolver";
 
 const MYBOTIA_API_URL = process.env.MYBOTIA_API_URL;
 const MYBOTIA_API_TOKEN = process.env.MYBOTIA_API_TOKEN;
@@ -193,12 +194,17 @@ export async function GET(request: Request) {
 
   const liveStatus = await fetchLiveStatus();
 
-  // Par défaut : filtrer par tenant du user connecté (même pour superadmin).
+  // V1.1.G : superadmin peut basculer de cockpit via cookie cockpit_tenant.
+  // On lit le cockpit courant (cookie superadmin-only ou hostname), pas le JWT figé.
+  const cockpit = await resolveCockpitTenant(request);
+  const effectiveTenantSlug = cockpit?.slug ?? session.tenantSlug;
+
+  // Par défaut : filtrer par tenant courant (cockpit, pas JWT).
   // ?all=true réservé aux pages admin (ex: /agents) qui listent tous les agents.
   const allowedIds =
     wantAll && session.isSuperadmin
       ? Object.keys(AGENT_META)
-      : TENANT_AGENTS[session.tenantSlug] ?? [];
+      : TENANT_AGENTS[effectiveTenantSlug] ?? [];
 
   const agents: Agent[] = allowedIds
     .filter((id) => AGENT_META[id])
