@@ -4,7 +4,12 @@
 //
 // Doctrine "app.mybotia = parité CRM" : la fiche affaire DOIT exister côté
 // app, utilisable, sans hard refresh. Source = /api/affaires/[id] (proxy
-// → mybotia-business). Devis liés = /api/quotes?client_id=...
+// → mybotia-business).
+//
+// BUG-AG-10 (2026-05-09) : devis liés = /api/quotes?project_id=<affaireId>,
+// strictement filtré côté business (zéro fallback silencieux client_id).
+// Si aucun devis lié → empty state actionnable, pas tous les devis du client.
+//
 // Activité récente : pas d'endpoint audit côté business V1.1.D — empty state.
 
 import { use, useMemo, useState } from "react";
@@ -17,6 +22,7 @@ import {
   CheckCircle2,
   Loader2,
   Pencil,
+  Plus,
   Receipt,
   Trash2,
   History,
@@ -25,7 +31,8 @@ import {
 import {
   useAffaire,
   useScopedClients,
-  useQuotesByClient,
+  useQuotesByProject,
+  convertQuoteToInvoiceApi,
   type AffaireRow,
   type QuoteRow,
 } from "@/hooks/use-api";
@@ -83,7 +90,9 @@ export default function AffaireDetailPage({
 
   const { data: affaire, loading, error, refetch } = useAffaire(id);
   const { data: clients } = useScopedClients();
-  const { data: quotes } = useQuotesByClient(affaire?.client_id ?? null);
+  // BUG-AG-10 — filtre strict project_id côté business. Si l'affaire n'a
+  // aucun devis lié, la liste est vide (empty state actionnable plus bas).
+  const { data: linkedQuotes } = useQuotesByProject(affaire?.id ?? null);
 
   const [editOpen, setEditOpen] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
@@ -94,11 +103,11 @@ export default function AffaireDetailPage({
     [clients, affaire],
   );
 
-  const linkedQuotes = useMemo<QuoteRow[]>(() => {
-    if (!affaire) return [];
-    const tied = quotes.filter((q) => q.projectId === affaire.id);
-    return tied.length > 0 ? tied : quotes;
-  }, [quotes, affaire]);
+  const acceptedLinkedQuotes = useMemo<QuoteRow[]>(
+    () => linkedQuotes.filter((q) => q.status === "accepted"),
+    [linkedQuotes],
+  );
+  const canSign = acceptedLinkedQuotes.length > 0;
 
   // Doctrine revenus mixtes natifs : on lit les snapshots écrits dans
   // audit_logs._intent côté business, mais ces colonnes ne sont pas exposées
@@ -209,7 +218,13 @@ export default function AffaireDetailPage({
                   onClick={() => setSignOpen(true)}
                   disabled={
                     affaire.lifecycle_stage === "production" ||
-                    affaire.status === "abandoned"
+                    affaire.status === "abandoned" ||
+                    !canSign
+                  }
+                  title={
+                    !canSign
+                      ? "Acceptez d'abord un devis lié à cette affaire"
+                      : undefined
                   }
                   className="inline-flex items-center gap-1.5 px-3 py-2 border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 text-[11px] font-bold uppercase tracking-tight hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -332,22 +347,32 @@ export default function AffaireDetailPage({
             </div>
           </section>
 
-          {/* Devis associés */}
+          {/* Devis associés — BUG-AG-10 : strictement liés à cette affaire
+              (project_id), pas de fallback "tous les devis du client". */}
           <section className="card-sharp p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
                 <Receipt className="w-3.5 h-3.5 text-accent-glow" />
-                Devis associés
+                Devis liés à cette affaire
               </h2>
               <span className="text-[10px] text-text-muted font-mono tabular-nums">
                 {linkedQuotes.length}
               </span>
             </div>
             {linkedQuotes.length === 0 ? (
-              <p className="text-xs text-text-muted italic">
-                Aucun devis pour ce client. Créez un devis depuis la page
-                Devis pour le rattacher à cette affaire.
-              </p>
+              <div className="flex flex-col items-start gap-3 py-2">
+                <p className="text-xs text-text-muted italic">
+                  Aucun devis lié à cette affaire — créez-en un avant de
+                  signer.
+                </p>
+                <Link
+                  href={`/crm/clients/${encodeURIComponent(affaire.client_id)}?createQuote=1&projectId=${encodeURIComponent(affaire.id)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 border border-accent-primary/40 bg-accent-primary/10 text-accent-glow text-[11px] font-bold uppercase tracking-tight hover:bg-accent-primary/20"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Créer un devis pour cette affaire
+                </Link>
+              </div>
             ) : (
               <>
                 <div className="hidden sm:block overflow-x-auto">
@@ -359,6 +384,7 @@ export default function AffaireDetailPage({
                         <th className="text-right font-bold py-2">HT</th>
                         <th className="text-right font-bold py-2">TTC</th>
                         <th className="text-right font-bold py-2">Date</th>
+                        <th className="text-right font-bold py-2"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle">
@@ -383,6 +409,9 @@ export default function AffaireDetailPage({
                           </td>
                           <td className="py-2 text-right tabular-nums text-text-muted">
                             {formatDateFR(q.createdAt)}
+                          </td>
+                          <td className="py-2 text-right">
+                            <ConvertQuoteButton quoteId={q.id} status={q.status} />
                           </td>
                         </tr>
                       ))}
@@ -411,6 +440,9 @@ export default function AffaireDetailPage({
                         <span className="tabular-nums text-text-primary">
                           {formatMoneyCompactFR(q.subtotalHt)} HT
                         </span>
+                      </div>
+                      <div className="mt-2 flex justify-end">
+                        <ConvertQuoteButton quoteId={q.id} status={q.status} />
                       </div>
                     </li>
                   ))}
@@ -450,5 +482,45 @@ export default function AffaireDetailPage({
         </>
       )}
     </div>
+  );
+}
+
+// V1.1.F — bouton de conversion devis → facture (visible si quote.status = "accepted").
+function ConvertQuoteButton({
+  quoteId,
+  status,
+}: {
+  quoteId: string;
+  status: QuoteRow["status"];
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  if (status !== "accepted") {
+    return null;
+  }
+  async function handleConvert() {
+    if (!confirm("Convertir ce devis en facture ?")) return;
+    setBusy(true);
+    try {
+      const inv = await convertQuoteToInvoiceApi(quoteId);
+      toast.success(`Facture ${inv.number} créée.`);
+      router.push(`/invoices/${inv.id}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur conversion");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleConvert}
+      disabled={busy}
+      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/40 text-accent-glow hover:bg-accent-primary/10 disabled:opacity-50"
+      title="Convertir en facture"
+    >
+      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Receipt className="w-3 h-3" />}
+      Facturer
+    </button>
   );
 }

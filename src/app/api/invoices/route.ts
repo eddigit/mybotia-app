@@ -1,14 +1,12 @@
-// V1.1.F — Proxy /api/quotes : GET (liste) + POST (créer) vers
-// mybotia-business /api/v1/quotes.
+// V1.1.F — Proxy /api/invoices → mybotia-business /api/v1/invoices.
 //
-// Filtres GET : `client_id`, `status`, `project_id` (alias `deal_id` côté UI
-// affaires). BUG-AG-10 (2026-05-09) : `project_id` est filtré strictement côté
-// business (zéro fallback silencieux client_id). Si l'affaire n'a aucun devis
-// lié, la liste retournée est vide.
+// GET  : liste factures (filtres client_id, status). Le filtrage par
+//        production_id est appliqué côté app (biz n'expose pas ce filtre,
+//        cf. /api/productions/[id]/invoices).
+// POST : création (scope crm:write).
 //
-// Doctrine V1.1.F : feature gate `finance` (devis = domaine finance), provider
-// gate `mybotia_business`. Erreurs propagées via codes business (401 / 403 /
-// 404 / 422 / 500 / 502) — pas de 500 bidon.
+// Doctrine V1.1.F : feature `finance` requise. Provider doit être
+// `mybotia_business` (les tenants legacy Dolibarr restent sur leurs UI).
 
 import {
   businessGetJson,
@@ -23,7 +21,42 @@ import {
 import { resolveCockpitTenants } from "@/lib/tenant-resolver";
 import { requireFeature } from "@/lib/tenant-features";
 
-const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
+const NO_STORE = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+} as const;
+
+export type InvoiceRow = {
+  id: string;
+  tenantId?: string;
+  tenant_id?: string;
+  number: string;
+  reference?: string;
+  clientId?: string;
+  client_id?: string;
+  projectId?: string | null;
+  project_id?: string | null;
+  quoteId?: string | null;
+  quote_id?: string | null;
+  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  subject?: string | null;
+  notes?: string | null;
+  issuedAt?: string | null;
+  issued_at?: string | null;
+  dueDate?: string | null;
+  due_date?: string | null;
+  subtotalHt?: string | number;
+  subtotal_ht?: string | number;
+  vatTotal?: string | number;
+  vat_total?: string | number;
+  totalTtc?: string | number;
+  total_ttc?: string | number;
+  paidAt?: string | null;
+  paid_at?: string | null;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+};
 
 export async function GET(request: Request) {
   try {
@@ -51,33 +84,44 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const search = new URLSearchParams();
-    for (const k of ["client_id", "project_id", "status"]) {
+    // production_id est désormais supporté nativement par biz GET /api/v1/invoices
+    // (cf. /opt/mybotia/mybotia-business/src/app/api/v1/invoices/route.ts) et
+    // mappe sur projects.lifecycle_stage='production'. Le filtre app-side
+    // historique est conservé en fallback pour les biz < V1.1.D.
+    for (const k of ["client_id", "status", "production_id"]) {
       const v = url.searchParams.get(k);
       if (v !== null && v !== "") search.set(k, v);
     }
-    // deal_id = alias UI cockpit affaires → mappé sur project_id côté biz.
-    const dealId = url.searchParams.get("deal_id");
-    if (dealId && !search.has("project_id")) search.set("project_id", dealId);
-
+    const productionId = url.searchParams.get("production_id");
     const qs = search.toString();
-    const path = `/api/v1/quotes${qs ? `?${qs}` : ""}`;
+    const path = `/api/v1/invoices${qs ? `?${qs}` : ""}`;
 
-    const data = await businessGetJson<unknown[]>(path, {
+    let data = await businessGetJson<InvoiceRow[]>(path, {
       tenantId: provider.tenantId,
       tenantSlug: cockpit.slug,
       scopes: ["crm:read"] as const,
     });
+
+    // Fallback app-side défensif : si le biz n'a pas honoré le filtre
+    // (déploiement non synchro), on filtre ici par projectId.
+    if (productionId) {
+      data = data.filter((inv) => {
+        const pid = inv.projectId ?? inv.project_id ?? null;
+        return pid === productionId;
+      });
+    }
+
     return Response.json(data, { headers: NO_STORE });
   } catch (e) {
     if (e instanceof CrmRouterError) return crmRouterErrorResponse(e);
     if (e instanceof BusinessClientError) {
       return Response.json(
-        { error: e.code, message: e.message, details: e.details },
+        { error: e.code, message: e.message },
         { status: e.status, headers: NO_STORE },
       );
     }
     return Response.json(
-      { error: e instanceof Error ? e.message : "Erreur quotes" },
+      { error: e instanceof Error ? e.message : "Erreur invoices" },
       { status: 502, headers: NO_STORE },
     );
   }
@@ -115,9 +159,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const created = await businessSendJson<unknown>(
+    const created = await businessSendJson<InvoiceRow>(
       "POST",
-      "/api/v1/quotes",
+      "/api/v1/invoices",
       body,
       {
         tenantId: provider.tenantId,
@@ -135,7 +179,7 @@ export async function POST(request: Request) {
       );
     }
     return Response.json(
-      { error: e instanceof Error ? e.message : "Erreur création devis" },
+      { error: e instanceof Error ? e.message : "Erreur invoices" },
       { status: 502, headers: NO_STORE },
     );
   }

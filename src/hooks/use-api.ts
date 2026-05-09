@@ -368,6 +368,345 @@ export function useQuotesByClient(clientId: string | null) {
   );
 }
 
+/**
+ * BUG-AG-10 (2026-05-09) — devis strictement liés à une affaire.
+ * project_id côté DB = identifiant unique de l'affaire (lifecycle_stage='affaire').
+ * Aucun fallback sur client_id : si l'affaire n'a aucun devis lié, retour vide.
+ * Différent de `useQuotes({ projectId })` qui fetch toujours, ici null = idle.
+ */
+export function useQuotesByProject(projectId: string | null) {
+  return useApi<QuoteRow[]>(
+    projectId
+      ? `/api/quotes?project_id=${encodeURIComponent(projectId)}`
+      : null,
+    [],
+  );
+}
+
+// ----------------------------------------------------------------------------
+// V1.1.F — Devis CRUD côté cockpit app.mybotia.com
+// ----------------------------------------------------------------------------
+
+/**
+ * Item de devis (ligne). camelCase, drizzle shape côté biz. À la création/
+ * modification, on poste seulement label, qty, unitPriceHt, vatRate (+
+ * description optionnelle). Le serveur recalcule les line* totals.
+ */
+export interface QuoteItemRow {
+  id?: string;
+  quoteId?: string;
+  sortOrder?: number;
+  label: string;
+  description: string | null;
+  qty: string | number;
+  unitPriceHt: string | number;
+  vatRate: string | number;
+  lineHt?: string | number;
+  lineVat?: string | number;
+  lineTtc?: string | number;
+}
+
+/**
+ * Réponse détail = QuoteRow + items[] inlinés. Le proxy /api/quotes/[id]
+ * dégage le wrapper {data} et retourne tel quel.
+ */
+export interface QuoteDetail extends QuoteRow {
+  items: QuoteItemRow[];
+}
+
+/** Liste tous les devis du cockpit courant (plus filtres optionnels). */
+export function useQuotes(opts?: {
+  clientId?: string;
+  status?: string;
+  projectId?: string;
+}) {
+  const params = new URLSearchParams();
+  if (opts?.clientId) params.set("client_id", opts.clientId);
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.projectId) params.set("project_id", opts.projectId);
+  const qs = params.toString();
+  return useApi<QuoteRow[]>(`/api/quotes${qs ? `?${qs}` : ""}`, []);
+}
+
+export function useQuote(id: string | null) {
+  return useApi<QuoteDetail | null>(
+    id ? `/api/quotes/${encodeURIComponent(id)}` : null,
+    null,
+  );
+}
+
+/** Body POST /api/quotes — passé tel quel à business. */
+export interface CreateQuoteBody {
+  clientId: string;
+  projectId?: string | null;
+  subject?: string | null;
+  status?: "draft" | "sent" | "accepted" | "refused" | "cancelled";
+  notes?: string | null;
+  validUntil?: string | null;
+  items: Array<{
+    label: string;
+    description?: string | null;
+    qty: number;
+    unitPriceHt: number;
+    vatRate: number;
+  }>;
+}
+
+export async function createQuoteApi(
+  body: CreateQuoteBody,
+): Promise<QuoteDetail> {
+  const res = await fetch("/api/quotes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json as unknown as QuoteDetail;
+}
+
+/** Body PATCH partiel — id à part. */
+export interface UpdateQuoteBody {
+  clientId?: string;
+  projectId?: string | null;
+  subject?: string | null;
+  status?: "draft" | "sent" | "accepted" | "refused" | "cancelled";
+  notes?: string | null;
+  validUntil?: string | null;
+  items?: Array<{
+    label: string;
+    description?: string | null;
+    qty: number;
+    unitPriceHt: number;
+    vatRate: number;
+  }>;
+}
+
+export async function updateQuoteApi(
+  id: string,
+  body: UpdateQuoteBody,
+): Promise<QuoteDetail> {
+  const res = await fetch(`/api/quotes/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json as unknown as QuoteDetail;
+}
+
+export async function deleteQuoteApi(id: string): Promise<void> {
+  const res = await fetch(`/api/quotes/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+}
+
+/** Conversion devis → facture brouillon. Retourne l'invoice créée. */
+export async function convertQuoteToInvoiceApi(
+  quoteId: string,
+): Promise<{ id: string; number: string; [k: string]: unknown }> {
+  const res = await fetch(
+    `/api/invoices/from-quote/${encodeURIComponent(quoteId)}`,
+    { method: "POST" },
+  );
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json as { id: string; number: string; [k: string]: unknown };
+}
+
+// ----------------------------------------------------------------------------
+// V1.1.F — Factures CRUD (mêmes patterns que devis).
+// Ces hooks sont consommés par /app/invoices et /components/invoices/*.
+// Les routes proxy correspondantes existent déjà (V1.1.F invoices route.ts).
+// ----------------------------------------------------------------------------
+
+export interface InvoiceItemRow {
+  id?: string;
+  invoiceId?: string;
+  sortOrder?: number;
+  label: string;
+  description: string | null;
+  qty: string | number;
+  unitPriceHt?: string | number;
+  unit_price_ht?: string | number;
+  vatRate?: string | number;
+  vat_rate?: string | number;
+  lineHt?: string | number;
+  lineVat?: string | number;
+  lineTtc?: string | number;
+  [key: string]: unknown;
+}
+
+export interface InvoiceRow {
+  id: string;
+  tenantId: string;
+  clientId: string;
+  projectId: string | null;
+  quoteId: string | null;
+  number: string;
+  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  subject: string | null;
+  notes: string | null;
+  issuedAt: string | null;
+  dueDate: string | null;
+  paidAt?: string | null;
+  subtotalHt: string;
+  vatTotal: string;
+  totalTtc: string;
+  createdAt: string;
+  updatedAt: string;
+  items?: InvoiceItemRow[];
+  // Snake_case fallbacks tolérés (compat shape biz si jamais le wrapper
+  // sortait du snake_case). Toujours optionnels.
+  client_id?: string;
+  project_id?: string | null;
+  quote_id?: string | null;
+  issued_at?: string | null;
+  due_date?: string | null;
+  paid_at?: string | null;
+  subtotal_ht?: string;
+  vat_total?: string;
+  total_ttc?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function useInvoices(opts?: {
+  clientId?: string;
+  status?: string;
+  projectId?: string;
+}) {
+  const params = new URLSearchParams();
+  if (opts?.clientId) params.set("client_id", opts.clientId);
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.projectId) params.set("project_id", opts.projectId);
+  const qs = params.toString();
+  return useApi<InvoiceRow[]>(`/api/invoices${qs ? `?${qs}` : ""}`, []);
+}
+
+export function useInvoice(id: string | null) {
+  return useApi<InvoiceRow | null>(
+    id ? `/api/invoices/${encodeURIComponent(id)}` : null,
+    null,
+  );
+}
+
+export interface CreateInvoiceBody {
+  clientId: string;
+  projectId?: string | null;
+  quoteId?: string | null;
+  subject?: string | null;
+  status?: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  notes?: string | null;
+  issuedAt?: string | null;
+  dueDate?: string | null;
+  items: Array<{
+    label: string;
+    description?: string | null;
+    qty: number;
+    unitPriceHt: number;
+    vatRate: number;
+  }>;
+}
+
+export async function createInvoiceApi(
+  body: CreateInvoiceBody,
+): Promise<InvoiceRow> {
+  const res = await fetch("/api/invoices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json as unknown as InvoiceRow;
+}
+
+export interface UpdateInvoiceBody {
+  clientId?: string;
+  projectId?: string | null;
+  subject?: string | null;
+  status?: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  notes?: string | null;
+  issuedAt?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  items?: Array<{
+    label: string;
+    description?: string | null;
+    qty: number;
+    unitPriceHt: number;
+    vatRate: number;
+  }>;
+}
+
+export async function updateInvoiceApi(
+  id: string,
+  body: UpdateInvoiceBody,
+): Promise<InvoiceRow> {
+  const res = await fetch(`/api/invoices/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return json as unknown as InvoiceRow;
+}
+
+export async function deleteInvoiceApi(id: string): Promise<void> {
+  const res = await fetch(`/api/invoices/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      `HTTP ${res.status}`;
+    throw new Error(message);
+  }
+}
+
 export interface FinanceActiveSubscription {
   id: string;
   production_id: string | null;
@@ -574,3 +913,4 @@ export async function deleteFolderApi(id: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
+

@@ -125,16 +125,17 @@ export function SignAffaireModal({
     open ? clientId : null,
   );
 
-  // Devis acceptés liés à cette affaire OU à ce client. La FK quotes.deal_id
-  // (= projectId business) est livrée DDL file 08 ; on filtre côté client
-  // avec fallback sur tous les devis acceptés du client.
-  const acceptedQuotes = useMemo<QuoteRow[]>(() => {
-    const dealLinked = quotes.filter(
-      (q) => q.status === "accepted" && q.projectId === affaireId,
-    );
-    if (dealLinked.length > 0) return dealLinked;
-    return quotes.filter((q) => q.status === "accepted");
-  }, [quotes, affaireId]);
+  // BUG-AG-10 (2026-05-09) — devis acceptés strictement liés à cette
+  // affaire (projectId === affaireId). Aucun fallback "tous les devis
+  // acceptés du client" : on ne propose JAMAIS un devis qui n'appartient
+  // pas à l'affaire à signer (risque d'attacher le mauvais devis).
+  const acceptedQuotes = useMemo<QuoteRow[]>(
+    () =>
+      quotes.filter(
+        (q) => q.status === "accepted" && q.projectId === affaireId,
+      ),
+    [quotes, affaireId],
+  );
 
   const [billingMode, setBillingMode] = useState<BillingMode>("mixed");
   const [acceptedQuoteId, setAcceptedQuoteId] = useState<string>("");

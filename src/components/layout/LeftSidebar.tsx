@@ -105,12 +105,11 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       { id: "finance", label: "Trésorerie", href: "/finance", icon: Wallet, requiresModule: "finance" },
-      // Devis / Factures : routes dédiées attendues V1.2 (`/finance/devis`,
-      // `/finance/factures`). Tant qu'elles ne sont pas livrées, on pointe sur
-      // les ancres correspondantes de la vue agrégée /finance — pas de mock,
-      // pas de 404. À mettre à jour quand les pages dédiées sortent.
-      { id: "finance-devis", label: "Devis", href: "/finance#devis", icon: FileSignature, requiresModule: "finance" },
-      { id: "finance-factures", label: "Factures", href: "/finance#factures", icon: Receipt, requiresModule: "finance" },
+      // V1.1.F — Factures : page dédiée /invoices (CRUD complet côté app).
+      // Devis : page dédiée /quotes en parallèle (CRUD partiel côté app,
+      // /finance#devis reste accessible pour la vue agrégée).
+      { id: "finance-devis", label: "Devis", href: "/quotes", icon: FileSignature, requiresModule: "finance" },
+      { id: "finance-factures", label: "Factures", href: "/invoices", icon: Receipt, requiresModule: "finance" },
     ],
   },
   {

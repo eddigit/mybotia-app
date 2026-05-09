@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { useAgents } from "@/hooks/use-api";
+import { useAgents, useCockpitFeatures } from "@/hooks/use-api";
 import { LeftSidebar } from "./LeftSidebar";
 import { TopBar } from "./TopBar";
 import { ContextRail } from "./ContextRail";
@@ -11,6 +11,27 @@ import { Footer } from "@/components/shared/Footer";
 import { CommandPalette } from "@/components/shared/CommandPalette";
 import { MobileNavDrawer } from "./MobileNavDrawer";
 import { VoiceConvProvider } from "@/contexts/voice-context";
+import { getTenantBranding } from "@/lib/tenant/branding";
+
+// Quick win 2 — propagation primaryColor tenant.
+// On override `--color-accent-primary` et `--color-accent-glow` (tokens
+// Tailwind v4 `@theme`) au niveau du wrapper de l'app : tous les utilitaires
+// `bg-accent-primary`, `text-accent-glow`, `border-accent-primary/30`, etc.
+// héritent de la couleur tenant sans toucher chaque composant.
+// `--brand-primary` est exposé en alias pour les nouveaux composants qui
+// veulent opt-in clairement (cf. brief V1.1.E).
+function tintHex(hex: string, lightenPct: number): string {
+  const m = hex.match(/^#?([a-fA-F0-9]{6})$/);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  let r = (n >> 16) & 0xff;
+  let g = (n >> 8) & 0xff;
+  let b = n & 0xff;
+  r = Math.round(r + (255 - r) * lightenPct);
+  g = Math.round(g + (255 - g) * lightenPct);
+  b = Math.round(b + (255 - b) * lightenPct);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`.toUpperCase();
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -23,6 +44,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading } = useAuth();
   const { data: agents } = useAgents(false, !loading && !!user);
+  const { data: cockpitFeatures } = useCockpitFeatures();
+
+  // Quick win 2 — branding tenant courant → override des tokens accent au
+  // niveau du wrapper de l'app. Fallback : MyBotIA (#0EA5E9) tant que le
+  // cockpit n'est pas chargé.
+  const brandStyle = useMemo<React.CSSProperties>(() => {
+    const branding = getTenantBranding(cockpitFeatures?.tenant);
+    const primary = branding.primaryColor;
+    const glow = tintHex(primary, 0.18); // équivalent sky-400 vs sky-500
+    return {
+      ["--brand-primary" as string]: primary,
+      ["--color-accent-primary" as string]: primary,
+      ["--color-accent-glow" as string]: glow,
+      ["--color-accent-secondary" as string]: primary,
+      ["--color-accent-container" as string]: primary,
+      ["--color-accent-light" as string]: tintHex(primary, 0.4),
+      ["--color-border-accent" as string]: `${primary}40`,
+    };
+  }, [cockpitFeatures?.tenant]);
 
   // Bloc 4C — raccourci global Cmd+K (Mac) / Ctrl+K (Win/Linux)
   // Ne s'active pas sur /login (avant auth).
@@ -64,7 +104,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <VoiceConvProvider>
-      <div className="flex h-screen w-screen overflow-hidden bg-surface-0">
+      <div
+        className="flex h-screen w-screen overflow-hidden bg-surface-0"
+        style={brandStyle}
+      >
         {/* Left Sidebar — desktop only (≥md). Sur mobile, la sidebar est
             servie par MobileNavDrawer ci-dessous. */}
         <div className="hidden md:flex">

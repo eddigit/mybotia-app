@@ -22,6 +22,8 @@ import {
   Plus,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Skeleton } from "@/components/shared/Skeleton";
 import { btnPrimary } from "@/components/shared/FormModal";
 import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
@@ -33,6 +35,12 @@ import type {
 import type { Deal, Activity } from "@/types";
 import { cn } from "@/lib/utils";
 import { formatDateFR, formatMoneyFR } from "@/lib/format";
+import {
+  DEAL_STAGE_LABEL,
+  DEAL_STAGE_COLOR,
+  PROPOSAL_STATUS_LABEL,
+  PROPOSAL_STATUS_COLOR,
+} from "@/lib/labels/affaires";
 
 interface TodayPayload {
   tenant: string;
@@ -217,8 +225,15 @@ export default function TodayPage() {
 
   if (loading) {
     return (
-      <div className="p-8 min-h-screen flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
+      <div className="p-8 min-h-screen space-y-6">
+        <ModuleHeader
+          icon={Sun}
+          title="Aujourd'hui — Cockpit quotidien MyBotIA"
+          subtitle="Chargement…"
+        />
+        <Skeleton.KPI count={4} />
+        <Skeleton.Card className="h-48" />
+        <Skeleton.Card className="h-32" />
       </div>
     );
   }
@@ -308,7 +323,14 @@ export default function TodayPage() {
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <p className="text-xs font-bold text-text-primary truncate flex-1">{d.title}</p>
-                  <span className="text-[10px] text-accent-glow font-mono uppercase shrink-0">{d.stage}</span>
+                  <span
+                    className={cn(
+                      "text-[10px] font-mono uppercase shrink-0 tracking-tight",
+                      DEAL_STAGE_COLOR[d.stage] ?? "text-accent-glow",
+                    )}
+                  >
+                    {DEAL_STAGE_LABEL[d.stage] ?? d.stage}
+                  </span>
                 </div>
                 <p className="text-[10px] text-text-muted truncate">{d.clientName || "(sans client)"}</p>
                 <p className="text-sm font-headline font-extrabold text-text-primary mt-1">{formatMoneyFR(d.value)}</p>
@@ -367,7 +389,14 @@ export default function TodayPage() {
                     <span className="text-text-muted truncate">{p.clientName || "(sans client)"}</span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-[10px] text-text-muted uppercase">{p.status}</span>
+                    <span
+                      className={cn(
+                        "text-[10px] uppercase tracking-tight",
+                        PROPOSAL_STATUS_COLOR[p.status] ?? "text-text-muted",
+                      )}
+                    >
+                      {PROPOSAL_STATUS_LABEL[p.status] ?? p.status}
+                    </span>
                     <span className="text-text-secondary font-semibold">{formatMoneyFR(p.total)}</span>
                   </div>
                 </div>
@@ -472,8 +501,10 @@ function SectionHeader({
   );
 }
 
+// Quick win 5 — wrapper minimaliste qui délègue à EmptyState (variant="inline")
+// pour la cohérence visuelle avec les autres pages cockpit.
 function EmptyHint({ text }: { text: string }) {
-  return <p className="text-xs text-text-muted italic">{text}</p>;
+  return <EmptyState variant="inline" title={text} />;
 }
 
 function TaskRow({

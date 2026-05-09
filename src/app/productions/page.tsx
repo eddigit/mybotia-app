@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { formatDateFR } from "@/lib/format";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { Skeleton } from "@/components/shared/Skeleton";
 
 const STAGE_LABEL: Record<string, string> = {
   active: "En cours",
@@ -289,11 +290,7 @@ export default function ProductionsPage() {
         />
       )}
 
-      {loading && (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
-        </div>
-      )}
+      {loading && <Skeleton.Table rows={8} cols={6} />}
 
       {!loading && !error && productions.length === 0 && (
         <EmptyState

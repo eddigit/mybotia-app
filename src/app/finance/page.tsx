@@ -16,7 +16,6 @@ import {
   Wallet,
   TrendingUp,
   Coins,
-  Loader2,
   RefreshCw,
   FileText,
   Repeat,
@@ -34,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDateFR, formatDateLongFR } from "@/lib/format";
 import { ErrorState } from "@/components/shared/ErrorState";
+import { Skeleton } from "@/components/shared/Skeleton";
 
 const FR_MONTHS = [
   "janv.",
@@ -189,9 +189,11 @@ export default function FinancePage() {
       )}
 
       {loading && (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
-        </div>
+        <>
+          <Skeleton.KPI count={3} />
+          <Skeleton.Card className="h-64" />
+          <Skeleton.Table rows={6} cols={4} />
+        </>
       )}
 
       {!loading && !error && summary && (
@@ -361,7 +363,7 @@ function ActiveSubscriptionsSection({
   currency: string;
 }) {
   return (
-    <section className="card-sharp p-5">
+    <section id="abonnements" className="card-sharp p-5 scroll-mt-24">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline inline-flex items-center gap-2">
           <Repeat className="w-4 h-4 text-accent-glow" />
@@ -499,7 +501,7 @@ function RecentInvoicesSection({
   isBusiness: boolean;
 }) {
   return (
-    <section className="card-sharp p-5">
+    <section id="factures" className="card-sharp p-5 scroll-mt-24">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline inline-flex items-center gap-2">
           <FileText className="w-4 h-4 text-accent-glow" />

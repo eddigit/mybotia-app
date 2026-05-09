@@ -13,10 +13,10 @@ import {
   Layers,
   ChevronRight,
   AlertCircle,
-  Loader2,
   Search,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
+import { Skeleton } from "@/components/shared/Skeleton";
 import type { AdminTenantRow } from "@/lib/tenant-admin-config";
 import { getTenantBranding } from "@/lib/tenant/branding";
 
@@ -75,8 +75,9 @@ export default function AdminTenantsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 min-h-screen flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
+      <div className="p-8 min-h-screen space-y-6">
+        <ModuleHeader icon={Shield} title="Admin · Tenants" subtitle="Chargement…" />
+        <Skeleton.Table rows={6} cols={5} />
       </div>
     );
   }

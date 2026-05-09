@@ -17,7 +17,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
-  Loader2,
   Briefcase,
   Plus,
   Search,
@@ -27,6 +26,7 @@ import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { Skeleton } from "@/components/shared/Skeleton";
 import { CreateAffaireModal } from "@/components/affaires/CreateAffaireModal";
 import {
   useAffaires,
@@ -36,30 +36,7 @@ import {
 } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import { formatDateFR, formatMoneyCompactFR } from "@/lib/format";
-
-const STAGE_LABEL: Record<string, string> = {
-  lead: "Prospect",
-  qualified: "Qualifié",
-  won: "Gagné",
-  lost: "Perdu",
-  active: "En cours",
-  paused: "En attente",
-  done: "Livré",
-  cancelled: "Annulé",
-  abandoned: "Abandonné",
-};
-
-const STAGE_COLOR: Record<string, string> = {
-  lead: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-  qualified: "bg-violet-500/15 text-violet-300 border-violet-500/30",
-  won: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  lost: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-  active: "bg-accent-primary/15 text-accent-glow border-accent-primary/30",
-  paused: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  done: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  cancelled: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-  abandoned: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
-};
+import { STAGE_LABEL, STAGE_COLOR } from "@/lib/labels/affaires";
 
 const STAGES_FILTERABLE = [
   "lead",
@@ -297,11 +274,7 @@ export default function AffairesPage() {
         </div>
       )}
 
-      {loading && (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-accent-glow" />
-        </div>
-      )}
+      {loading && <Skeleton.Table rows={8} cols={6} />}
 
       {!loading && !error && affaires.length === 0 && (
         <EmptyState

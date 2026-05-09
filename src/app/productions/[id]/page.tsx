@@ -35,6 +35,7 @@ import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { useCockpitFeatures, useScopedClients } from "@/hooks/use-api";
 import { EditProductionModal } from "@/components/productions/EditProductionModal";
 import { AddSubscriptionModal } from "@/components/productions/AddSubscriptionModal";
+import { CreateInvoiceFromProductionModal } from "@/components/productions/CreateInvoiceFromProductionModal";
 import { cn } from "@/lib/utils";
 
 const STAGE_LABEL: Record<string, string> = {
@@ -188,6 +189,7 @@ export default function ProductionDetailPage({
   const [tick, setTick] = useState(0);
   const [showEdit, setShowEdit] = useState(false);
   const [showAddSub, setShowAddSub] = useState(false);
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
   const { data: clients } = useScopedClients();
@@ -403,13 +405,13 @@ export default function ProductionDetailPage({
               )}
               Archiver
             </button>
-            <Link
-              href={`/billing?production_id=${encodeURIComponent(production.id)}`}
+            <button
+              onClick={() => setShowCreateInvoice(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
             >
               <FilePlus className="w-3.5 h-3.5" />
-              Générer facture
-            </Link>
+              Créer facture
+            </button>
           </div>
         </div>
       </div>
@@ -557,13 +559,22 @@ export default function ProductionDetailPage({
 
       {/* Bloc factures */}
       <section className="card-sharp p-5 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
             Factures émises
           </h2>
-          <span className="text-[10px] text-text-muted font-mono tabular-nums">
-            {invoices.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-text-muted font-mono tabular-nums">
+              {invoices.length}
+            </span>
+            <button
+              onClick={() => setShowCreateInvoice(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
+            >
+              <Plus className="w-3 h-3" />
+              Nouvelle facture
+            </button>
+          </div>
         </div>
 
         {invoices.length === 0 ? (
@@ -574,13 +585,13 @@ export default function ProductionDetailPage({
             <p className="text-[12px] text-text-muted leading-relaxed max-w-md mx-auto">
               Aucune facture émise pour cette production.
             </p>
-            <Link
-              href={`/billing?production_id=${encodeURIComponent(production.id)}`}
+            <button
+              onClick={() => setShowCreateInvoice(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
             >
               <FilePlus className="w-3.5 h-3.5" />
               Émettre la première facture
-            </Link>
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -663,6 +674,16 @@ export default function ProductionDetailPage({
         onClose={() => setShowAddSub(false)}
         onSaved={refetch}
         productionId={production.id}
+      />
+      <CreateInvoiceFromProductionModal
+        open={showCreateInvoice}
+        onClose={() => setShowCreateInvoice(false)}
+        productionId={production.id}
+        productionTitle={productionTitle(production)}
+        clientId={clientId}
+        clientName={clientName}
+        oneshotHt={oneshotHt}
+        subscriptions={subs}
       />
     </div>
   );
