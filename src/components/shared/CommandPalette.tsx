@@ -94,7 +94,7 @@ function buildResults(
   // Search projects
   for (const p of projects) {
     const s = Math.max(matchScore(query, p.name), matchScore(query, p.ref || ""));
-    if (s > 0) all.push({ id: `project-${p.id}`, label: p.name, sublabel: p.ref || p.clientName, icon: <FolderKanban className="w-4 h-4" />, href: `/crm`, category: "Projets", score: s });
+    if (s > 0) all.push({ id: `project-${p.id}`, label: p.name, sublabel: p.ref || p.clientName, icon: <FolderKanban className="w-4 h-4" />, href: `/crm`, category: "Affaires", score: s });
   }
 
   // Search agents
@@ -250,7 +250,7 @@ export function CommandPalette({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Rechercher clients, projets, agents, taches..."
+              placeholder="Rechercher clients, affaires, agents, taches..."
               className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none font-body"
             />
             <button

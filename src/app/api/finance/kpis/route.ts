@@ -264,7 +264,7 @@ export async function GET(request: Request) {
   // One-shot
   sections.push({
     id: "oneshot",
-    title: "One-shot (devis & projets)",
+    title: "One-shot (devis & affaires)",
     kpis: [
       k(
         "oneshot-signed-amount",
@@ -531,7 +531,7 @@ export async function GET(request: Request) {
       ),
       k(
         "projects-active",
-        "Projets actifs",
+        "Affaires actives",
         dolibarrStatus === "ok" ? activeProjects : null,
         dolibarrStatus === "ok" ? "ready" : "error",
         "count"

@@ -238,7 +238,7 @@ export function ConversationThread({
               <span className="text-text-muted">·</span>
               <span className="text-[11px] text-text-muted">
                 {conversation.channel === "project"
-                  ? "session projet"
+                  ? "session affaire"
                   : conversation.channel}
               </span>
               {conversation.projectId && (

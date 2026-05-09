@@ -60,7 +60,7 @@ export function CreateProjectModal({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json?.error || "Erreur lors de la creation du projet");
+        setError(json?.error || "Erreur lors de la creation de l'affaire");
         return;
       }
       onCreated?.(String(json.id));
@@ -73,7 +73,7 @@ export function CreateProjectModal({
   }
 
   return (
-    <FormModal open={open} onClose={onClose} title="Nouveau projet">
+    <FormModal open={open} onClose={onClose} title="Nouvelle affaire">
       <form onSubmit={handleSubmit}>
         <FormField label="Titre *">
           <input

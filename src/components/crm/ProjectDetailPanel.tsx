@@ -159,7 +159,7 @@ export function ProjectDetailPanel({
             proposals: [],
             invoices: [],
             deleteAllowed: false,
-            deleteBlockedReason: "Détail projet indisponible.",
+            deleteBlockedReason: "Détail affaire indisponible.",
             isTestProject: false,
           });
         }
@@ -253,7 +253,7 @@ export function ProjectDetailPanel({
         <div className="flex items-start justify-between gap-3 px-6 py-5 border-b border-border-subtle shrink-0">
           <div className="min-w-0 flex-1">
             <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
-              Projet
+              Affaire
             </span>
             <h2 className="text-base font-bold text-text-primary leading-tight mt-0.5 break-words">
               {project.name}
@@ -417,7 +417,7 @@ export function ProjectDetailPanel({
               </div>
             ) : tasks.length === 0 ? (
               <div className="text-[11px] text-text-muted py-2 italic">
-                Aucune tâche pour ce projet.
+                Aucune tâche pour cette affaire.
               </div>
             ) : (
               <div className="space-y-1">

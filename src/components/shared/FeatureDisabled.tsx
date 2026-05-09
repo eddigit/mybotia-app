@@ -25,8 +25,8 @@ export function FeatureDisabled({
           {title || "Module non activé pour ce cockpit"}
         </h1>
         <p className="text-sm text-text-secondary leading-relaxed">
-          La fonctionnalité <span className="font-mono text-accent-glow">{featureKey}</span>{" "}
-          n&apos;est pas activée pour
+          Le module <span className="font-mono text-accent-glow">{featureKey}</span>{" "}
+          n&apos;est pas activé pour
           {tenantSlug ? (
             <>
               {" le cockpit "}<span className="font-mono">{tenantSlug}</span>.

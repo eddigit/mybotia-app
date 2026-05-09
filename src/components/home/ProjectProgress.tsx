@@ -7,14 +7,14 @@ export function ProjectProgress({ projects }: { projects: Project[] }) {
   return (
     <div className="card-sharp-high p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="section-title">Projets actifs</h3>
+        <h3 className="section-title">Affaires actives</h3>
         <Link href="/tasks" className="micro-label text-accent-glow hover:underline flex items-center gap-0.5">
           Tout voir <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
       {projects.length === 0 && (
         <p className="text-xs text-text-muted italic py-4 text-center">
-          Aucun projet actif. Créez-en un pour le voir apparaître ici.
+          Aucune affaire active. Créez-en une pour la voir apparaître ici.
         </p>
       )}
       <div className="space-y-4">

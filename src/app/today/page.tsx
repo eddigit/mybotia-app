@@ -519,7 +519,7 @@ function TaskRow({
       >
         <p className="text-sm text-text-primary truncate">{task.title}</p>
         <p className="text-[10px] text-text-muted truncate">
-          {task.projectName || "(sans projet)"}
+          {task.projectName || "(sans affaire)"}
           {task.dueDate && ` · ${task.dueDate}`}
         </p>
       </button>

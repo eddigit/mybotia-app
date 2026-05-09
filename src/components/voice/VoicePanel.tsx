@@ -425,11 +425,11 @@ export function VoicePanel({
   // de laisser l'utilisateur croire que Léa "sait de qui on parle".
   const hasContext = !!(clientRef || projectRef);
   const contextLabel = hasContext
-    ? [clientRef && `Client : ${clientRef}`, projectRef && `Projet : ${projectRef}`]
+    ? [clientRef && `Client : ${clientRef}`, projectRef && `Affaire : ${projectRef}`]
         .filter(Boolean)
         .join(" · ")
     : conversationId
-      ? "Pas de client ni de projet lié à cette conversation"
+      ? "Pas de client ni d'affaire liée à cette conversation"
       : "Aucune conversation active — l'agent répondra sans contexte client";
 
   return (

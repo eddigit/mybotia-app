@@ -214,7 +214,7 @@ export function ClientBusinessCardV4({
           {data.projects && (
             <span className="flex items-center gap-1">
               <FileText size={11} strokeWidth={1.5} />
-              <span>{data.projects.length} projet(s)</span>
+              <span>{data.projects.length} affaire(s)</span>
             </span>
           )}
           {data.proposals && (

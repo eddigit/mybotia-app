@@ -35,7 +35,7 @@ export function TopBar({
         >
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <span className="text-sm text-text-muted truncate">
-            Rechercher clients, projets, agents…
+            Rechercher clients, affaires, agents…
           </span>
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
             <kbd className="px-1.5 py-0.5 text-[9px] font-bold bg-surface-3 rounded border border-border-subtle text-text-muted font-mono">

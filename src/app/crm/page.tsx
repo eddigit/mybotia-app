@@ -112,7 +112,7 @@ export default function CRMPage() {
           <div className="flex items-center gap-2">
             <button onClick={() => setShowCreateProject(true)} className={btnSecondary}>
               <FolderPlus className="w-3.5 h-3.5" />
-              Nouveau projet
+              Nouvelle affaire
             </button>
             <button onClick={() => setShowCreate(true)} className={btnPrimary}>
               <Plus className="w-3.5 h-3.5" />

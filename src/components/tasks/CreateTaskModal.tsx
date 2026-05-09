@@ -104,7 +104,7 @@ export function CreateTaskModal({
             placeholder="Décrire la tâche..."
           />
         </FormField>
-        <FormField label="Projet *">
+        <FormField label="Affaire *">
           <select
             name="fk_project"
             required
@@ -112,7 +112,7 @@ export function CreateTaskModal({
             value={fkProject}
             onChange={(e) => setFkProject(e.target.value)}
           >
-            <option value="">— Choisir un projet —</option>
+            <option value="">— Choisir une affaire —</option>
             {tenantProjects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.ref ? `${p.ref} — ` : ""}

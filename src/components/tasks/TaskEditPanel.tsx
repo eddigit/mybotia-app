@@ -365,7 +365,7 @@ export function TaskEditPanel({
           </div>
 
           <div>
-            <label className="block micro-label text-text-muted mb-1.5">Projet</label>
+            <label className="block micro-label text-text-muted mb-1.5">Affaire</label>
             <select
               value={fkProject}
               onChange={(e) => setFkProject(e.target.value)}
@@ -387,11 +387,11 @@ export function TaskEditPanel({
               <span>Client lié</span>
             </div>
             <p className="text-xs text-text-primary truncate">
-              {projectInfo?.clientName || "(aucun client rattaché au projet)"}
+              {projectInfo?.clientName || "(aucun client rattaché à l'affaire)"}
             </p>
             <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-text-muted pt-1">
               <Briefcase className="w-3 h-3" />
-              <span>Projet</span>
+              <span>Affaire</span>
             </div>
             <p className="text-xs text-text-secondary truncate font-mono">
               {projectInfo?.ref || task.projectRef || "—"}

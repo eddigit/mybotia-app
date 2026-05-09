@@ -380,7 +380,7 @@ export default function ClientDetailPage({
                 const projectsCount = projects.length;
                 const cascadeWarn =
                   projectsCount > 0
-                    ? `\n\nATTENTION : ce client a ${projectsCount} projet(s) lié(s). La suppression supprimera AUSSI les projets, leurs tâches, devis et factures (cascade). Cette action est irréversible.`
+                    ? `\n\nATTENTION : ce client a ${projectsCount} affaire(s) liée(s). La suppression supprimera AUSSI les affaires, leurs tâches, devis et factures (cascade). Cette action est irréversible.`
                     : "\n\nCette action est irréversible.";
                 if (!confirm(`Supprimer définitivement "${client.company || client.name}" ?${cascadeWarn}`)) {
                   return;
@@ -510,7 +510,7 @@ export default function ClientDetailPage({
             <div className="flex items-center gap-2">
               <FolderOpen className="w-4 h-4 text-accent-glow" />
               <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
-                Projets ({projects.length})
+                Affaires ({projects.length})
               </h2>
             </div>
             <button
@@ -522,7 +522,7 @@ export default function ClientDetailPage({
             </button>
           </div>
           {projects.length === 0 ? (
-            <p className="text-sm text-text-muted">Aucun projet</p>
+            <p className="text-sm text-text-muted">Aucune affaire</p>
           ) : (
             <div className="space-y-3">
               {projects.map((p) => (
@@ -547,7 +547,7 @@ export default function ClientDetailPage({
                         type="button"
                         onClick={() => setEditingProjectId(p.id)}
                         className="px-2 py-1 text-[10px] font-bold uppercase tracking-tight text-accent-glow hover:text-text-primary border border-border-subtle hover:border-accent-primary/40 transition-colors"
-                        title="Modifier le projet"
+                        title="Modifier l'affaire"
                       >
                         Modifier
                       </button>
@@ -556,7 +556,7 @@ export default function ClientDetailPage({
                         onClick={async () => {
                           if (
                             !confirm(
-                              `Supprimer définitivement le projet "${p.name}" ?\n\nATTENTION : toutes les tâches liées à ce projet seront aussi supprimées (cascade). Les devis et factures liés perdront leur référence projet.\n\nCette action est irréversible.`,
+                              `Supprimer définitivement l'affaire "${p.name}" ?\n\nATTENTION : toutes les tâches liées à cette affaire seront aussi supprimées (cascade). Les devis et factures liés perdront leur référence affaire.\n\nCette action est irréversible.`,
                             )
                           )
                             return;
@@ -568,7 +568,7 @@ export default function ClientDetailPage({
                             );
                             if (!res.ok) {
                               const j = await res.json().catch(() => ({}));
-                              alert(`Erreur suppression projet : ${j?.error || res.status}`);
+                              alert(`Erreur suppression affaire : ${j?.error || res.status}`);
                               return;
                             }
                             refetch();
@@ -578,7 +578,7 @@ export default function ClientDetailPage({
                         }}
                         disabled={deletingProjectId === p.id}
                         className="px-2 py-1 text-[10px] font-bold uppercase tracking-tight text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400/60 transition-colors disabled:opacity-50"
-                        title="Supprimer le projet"
+                        title="Supprimer l'affaire"
                       >
                         {deletingProjectId === p.id ? "..." : "Suppr"}
                       </button>

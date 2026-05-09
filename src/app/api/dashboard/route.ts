@@ -120,7 +120,7 @@ export async function GET(request: Request) {
         },
         {
           id: "metric-projects",
-          label: "Projets actifs",
+          label: "Affaires actives",
           value: bizDash.kpis.projects_active,
           trend: "stable" as const,
         },

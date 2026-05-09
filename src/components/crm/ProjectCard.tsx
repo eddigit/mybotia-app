@@ -1,7 +1,7 @@
 "use client";
 
 // V1.1.B Phase 3C — Projects Command Center.
-// Carte projet réutilisable (Pipeline + listes projets).
+// Carte affaire réutilisable (Pipeline + listes affaires). Code = "project".
 // Affiche : nom, client (link), priorité (badge), prochaine action,
 // échéance, liens rapides GitHub/Vercel/prod/staging, indicateur tâches.
 

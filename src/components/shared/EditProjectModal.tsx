@@ -1,6 +1,6 @@
 "use client";
 
-// V1.1.B Phase 2 A4 — Modal d'édition projet.
+// V1.1.B Phase 2 A4 — Modal d'édition affaire (UI). Code = "project".
 // PATCH /api/projects/[id] (Platform → crm-router → mybotia-business).
 // Champs business V1 : name (titre), description, status, dueDate.
 
@@ -103,7 +103,7 @@ export function EditProjectModal({
   }
 
   return (
-    <FormModal open={open} onClose={onClose} title="Modifier le projet">
+    <FormModal open={open} onClose={onClose} title="Modifier l'affaire">
       <form onSubmit={handleSubmit}>
         <FormField label="Titre *">
           <input
@@ -149,7 +149,7 @@ export function EditProjectModal({
 
         {/* V1.1.B agence digitale */}
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Type projet">
+          <FormField label="Type d'affaire">
             <select name="projectType" defaultValue={project.projectType ?? ""} className={selectClass}>
               <option value="">—</option>
               <option value="site_web">Site web</option>

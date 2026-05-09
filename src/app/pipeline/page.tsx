@@ -1,18 +1,19 @@
 "use client";
 
 // V1.1.B Phase 3C — Projects Command Center.
+// V1.1.C — lexique FR aligné : UI parle d'"affaires" (le code reste "project").
 //
-// /pipeline = vue projets pilotables pour une agence digitale.
+// /pipeline = vue affaires pilotables pour une agence digitale.
 // Source : /api/projects (provider business pour tenant mybotia).
 // Pas d'agrégation Dolibarr, pas de mock — si la liste est vide, empty state
-// avec CTA "Créer un projet".
+// avec CTA "Créer une affaire".
 //
 // Mapping colonnes :
 // - DB business expose seulement active|paused|done|cancelled.
 // - On enrichit la colonne via une heuristique basée sur `nextAction`
 //   (mots-clés FR : devis, cadrage, recette, livr*, bloqu*, attente client,
 //   maintenance) pour offrir un Pipeline business-first dès aujourd'hui.
-// - Si `nextAction` ne matche aucun bucket : projet placé dans "En cours".
+// - Si `nextAction` ne matche aucun bucket : affaire placée dans "En cours".
 // - Status DB "paused" → "En attente client".
 // - Status DB "done" → "Livré".
 // - Status DB "cancelled" → "Bloqué" (NB: business ne renvoie pas cancelled
@@ -146,7 +147,7 @@ export default function PipelinePage() {
     [projects],
   );
 
-  // Liste affichée : on exclut les projets terminés depuis > 90j pour ne pas
+  // Liste affichée : on exclut les affaires terminées depuis > 90j pour ne pas
   // saturer la colonne Livré (mais ils restent visibles via la fiche client).
   const visibleProjects = useMemo(() => {
     const ninetyDaysAgo = Date.now() - 90 * 86400000;
@@ -194,19 +195,19 @@ export default function PipelinePage() {
   }
 
   const totalActive = visibleProjects.filter((p) => p.status === "active").length;
-  const subtitle = `${totalActive} projet${totalActive > 1 ? "s" : ""} actif${totalActive > 1 ? "s" : ""} · ${visibleProjects.length} affiché${visibleProjects.length > 1 ? "s" : ""}`;
+  const subtitle = `${totalActive} affaire${totalActive > 1 ? "s" : ""} active${totalActive > 1 ? "s" : ""} · ${visibleProjects.length} affichée${visibleProjects.length > 1 ? "s" : ""}`;
 
   return (
     <div className="p-8 flex flex-col h-full">
       <div className="shrink-0 mb-5">
         <ModuleHeader
           icon={TrendingUp}
-          title="Pipeline projets"
+          title="Pipeline affaires"
           subtitle={subtitle}
           actions={
             <button onClick={() => setShowCreate(true)} className={btnPrimary}>
               <Plus className="w-3.5 h-3.5" />
-              Nouveau projet
+              Nouvelle affaire
             </button>
           }
         />
@@ -226,11 +227,11 @@ export default function PipelinePage() {
               <FolderPlus className="w-5 h-5 text-accent-glow" />
             </div>
             <h3 className="text-sm font-bold text-text-primary mb-2">
-              Aucun projet pour l&apos;instant
+              Aucune affaire pour l&apos;instant
             </h3>
             <p className="text-[12px] text-text-muted mb-5 leading-relaxed">
-              Crée ton premier projet pour commencer à piloter ton activité d&apos;agence
-              digitale. Chaque projet peut être lié à un client, contenir des tâches,
+              Crée ta première affaire pour commencer à piloter ton activité d&apos;agence
+              digitale. Chaque affaire peut être liée à un client, contenir des tâches,
               des liens GitHub/Vercel et une prochaine action.
             </p>
             <button
@@ -238,7 +239,7 @@ export default function PipelinePage() {
               className={btnPrimary}
             >
               <Plus className="w-3.5 h-3.5" />
-              Créer un projet
+              Créer une affaire
             </button>
           </div>
         </div>
@@ -287,7 +288,7 @@ export default function PipelinePage() {
         </div>
       )}
 
-      {/* Panel détail projet */}
+      {/* Panel détail affaire */}
       <ProjectDetailPanel
         project={selected}
         onClose={() => setSelected(null)}

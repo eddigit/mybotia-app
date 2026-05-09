@@ -131,7 +131,7 @@ export function ClientContextCard({
               <div className="flex items-center gap-3 mt-2 text-[10px]">
                 <span className="inline-flex items-center gap-1 text-text-secondary">
                   <FolderOpen className="w-3 h-3 text-accent-glow" />
-                  <span className="font-bold">{nbProjects}</span> projet{nbProjects > 1 ? "s" : ""}
+                  <span className="font-bold">{nbProjects}</span> affaire{nbProjects > 1 ? "s" : ""}
                 </span>
                 <span className="inline-flex items-center gap-1 text-text-secondary">
                   <FileText className="w-3 h-3 text-accent-glow" />

@@ -19,7 +19,7 @@ export default function AgendaPage() {
     <StubPage
       title="Agenda"
       subtitle="Rendez-vous & échéances"
-      objective="Vue calendrier des rendez-vous, appels, échéances projet et tâches datées. Vue jour, semaine et mois, avec liaison au CRM et aux conversations."
+      objective="Vue calendrier des rendez-vous, appels, échéances d'affaires et tâches datées. Vue jour, semaine et mois, avec liaison au CRM et aux conversations."
       cards={[
         {
           title: "Rendez-vous",

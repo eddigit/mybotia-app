@@ -11,7 +11,7 @@ import {
 const actions = [
   { id: 'conv', label: 'Conversations', icon: MessagesSquare, href: '/conversations' },
   { id: 'crm', label: 'CRM / Clients', icon: BarChart3, href: '/crm' },
-  { id: 'tasks', label: 'Taches & Projets', icon: CheckSquare, href: '/tasks' },
+  { id: 'tasks', label: 'Tâches & Affaires', icon: CheckSquare, href: '/tasks' },
   { id: 'agents', label: 'Agents IA', icon: Bot, href: '/agents' },
   { id: 'docs', label: 'Documents', icon: FileText, href: '/documents' },
 ];

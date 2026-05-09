@@ -335,12 +335,12 @@ function ProtocolForm({
           value={operationalScope}
           onChange={(e) => setOperationalScope(e.target.value)}
           rows={4}
-          placeholder="Décrire ici ce que Léa peut faire dans ce groupe : support site, rédaction, CRM, relance projet, cahier des charges, GitHub, Vercel, documents, etc."
+          placeholder="Décrire ici ce que Léa peut faire dans ce groupe : support site, rédaction, CRM, relance affaire, cahier des charges, GitHub, Vercel, documents, etc."
           className="w-full bg-surface-2 border border-border-subtle px-2 py-2 text-xs resize-vertical"
         />
         <p className="text-[10px] text-text-muted mt-1 italic">
           Décrire ici ce que Léa peut faire dans ce groupe : support site, rédaction, CRM, relance
-          projet, cahier des charges, GitHub, Vercel, documents, etc. Léa lit ce champ avant
+          affaire, cahier des charges, GitHub, Vercel, documents, etc. Léa lit ce champ avant
           d&apos;agir.
         </p>
       </Field>

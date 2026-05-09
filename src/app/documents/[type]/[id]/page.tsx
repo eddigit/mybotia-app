@@ -251,7 +251,7 @@ export default function DocumentDetailPage({
           )}
           {data.project && (
             <div>
-              <div className="text-text-muted">Projet</div>
+              <div className="text-text-muted">Affaire</div>
               <div className="text-text-primary font-medium mt-1">{data.project.ref} — {data.project.title}</div>
             </div>
           )}

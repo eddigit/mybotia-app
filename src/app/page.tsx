@@ -125,7 +125,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex justify-between micro-label">
                   <span className="text-text-muted">
-                    {projectsAll.filter((p) => p.status === "active").length} projets actifs
+                    {projectsAll.filter((p) => p.status === "active").length} affaires actives
                   </span>
                   <span className="text-accent-glow">
                     {projectsAll.filter((p) => p.status === "completed").length} termines
@@ -144,7 +144,7 @@ export default function HomePage() {
                     className="bg-surface-3 hover:bg-surface-4 transition-colors text-text-primary px-5 py-3 font-bold text-xs uppercase tracking-widest flex items-center gap-2 w-fit"
                   >
                     <FolderPlus className="w-3.5 h-3.5" />
-                    Nouveau projet
+                    Nouvelle affaire
                   </button>
                 </div>
               </div>

@@ -194,7 +194,7 @@ function AiTab() {
           "Mode assistant : disabled / draft_only / supervised_write",
           "Écriture CRM autorisée (oui / non)",
           "Envoi externe autorisé (toujours non par défaut)",
-          "Périmètre mémoire : tenant / client / projet",
+          "Périmètre mémoire : tenant / client / affaire",
           "Ton par défaut, règles d'escalade, GO humain requis",
         ]}
       />

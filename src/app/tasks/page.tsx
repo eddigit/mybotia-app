@@ -138,7 +138,7 @@ export default function TasksPage() {
         <ModuleHeader
           icon={CheckSquare}
           title="Tâches MyBotIA"
-          subtitle={`${activeTasks} tâche${activeTasks > 1 ? "s" : ""} active${activeTasks > 1 ? "s" : ""}${overdueTasks > 0 ? ` · ${overdueTasks} en retard` : ""} · ${activeProjects.length} projet${activeProjects.length > 1 ? "s" : ""}`}
+          subtitle={`${activeTasks} tâche${activeTasks > 1 ? "s" : ""} active${activeTasks > 1 ? "s" : ""}${overdueTasks > 0 ? ` · ${overdueTasks} en retard` : ""} · ${activeProjects.length} affaire${activeProjects.length > 1 ? "s" : ""}`}
           actions={
             <div className="flex items-center gap-2">
               <button
@@ -146,7 +146,7 @@ export default function TasksPage() {
                 className={btnSecondary}
               >
                 <FolderPlus className="w-3.5 h-3.5" />
-                Nouveau projet
+                Nouvelle affaire
               </button>
               <button onClick={() => setShowCreate(true)} className={btnPrimary}>
                 <Plus className="w-3.5 h-3.5" />
@@ -156,15 +156,15 @@ export default function TasksPage() {
           }
         />
 
-        {/* V1.1.B Phase 3C — filtre projet en select (remplace onglets) */}
+        {/* V1.1.B Phase 3C — filtre affaire en select (remplace onglets) */}
         <div className="flex items-center gap-3 mt-5">
-          <span className="micro-label text-text-muted">Projet</span>
+          <span className="micro-label text-text-muted">Affaire</span>
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
             className="bg-surface-2 border border-border-subtle px-2 py-1.5 text-[11px] text-text-primary min-w-[200px] focus:outline-none focus:border-accent-primary/40"
           >
-            <option value="all">Tous les projets</option>
+            <option value="all">Toutes les affaires</option>
             {sortedProjects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
