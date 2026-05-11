@@ -706,6 +706,7 @@ function MessageRow({
           <UserAvatarV4
             email={user?.email}
             name={user?.first_name ? `${user.first_name} ${user.last_name ?? ""}`.trim() : undefined}
+            avatarUrl={user?.avatar_url ?? null}
             size={32}
           />
         ) : (

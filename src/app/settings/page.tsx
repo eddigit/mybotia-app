@@ -181,6 +181,7 @@ function ProfileTab({
 }: {
   user: ReturnType<typeof useAuth>["user"];
 }) {
+  const { refreshProfile } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -257,6 +258,8 @@ function ProfileTab({
         setProfile(updated);
         setValues(profileToForm(updated));
         clearDraft();
+        // V1.2.D-hotfix : propage avatar_url dans sidebar/chat sans relog
+        refreshProfile().catch(() => {});
         toast.success("Profil mis à jour.");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Erreur lors de la sauvegarde";
@@ -266,7 +269,7 @@ function ProfileTab({
         setSubmitting(false);
       }
     },
-    [values, clearDraft]
+    [values, clearDraft, refreshProfile]
   );
 
   if (!user) {

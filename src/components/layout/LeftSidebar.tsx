@@ -26,6 +26,7 @@ import {
   Coins,
   Stethoscope,
   MessageSquare,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
@@ -147,6 +148,13 @@ const BOTTOM_ADMIN_ITEMS: NavItem[] = [
   { id: "admin-billing", label: "Billing IA", href: "/admin/billing", icon: Wallet },
   { id: "admin-usage", label: "Usage tokens", href: "/admin/usage/tokens", icon: Coins },
   { id: "admin-wa", label: "Protocoles WhatsApp", href: "/admin/whatsapp-protocols", icon: MessageSquare },
+];
+
+// Onglet "Vault" visible UNIQUEMENT pour gilleskorzec@gmail.com (owner du vault).
+// Le serveur double-vérifie (requireVaultOwner) — ce gate UI est cosmétique.
+const VAULT_OWNER_EMAIL = "gilleskorzec@gmail.com";
+const BOTTOM_VAULT_ITEMS: NavItem[] = [
+  { id: "admin-vault", label: "Vault", href: "/admin/vault", icon: Lock },
 ];
 
 // ============================================================================
@@ -330,6 +338,7 @@ export function LeftSidebar({
         <div className="space-y-0.5 pb-2">
           {BOTTOM_USER_ITEMS.map(renderItem)}
           {isSuperadmin && adminToolsEnabled && BOTTOM_ADMIN_ITEMS.map(renderItem)}
+          {user?.email === VAULT_OWNER_EMAIL && BOTTOM_VAULT_ITEMS.map(renderItem)}
         </div>
       </div>
 
@@ -344,6 +353,7 @@ export function LeftSidebar({
           <UserAvatarV4
             email={user?.email}
             name={userDisplayName}
+            avatarUrl={user?.avatar_url ?? null}
             size={effectiveCollapsed ? 30 : 34}
             className="ring-1 ring-accent-primary/20 shrink-0"
           />
