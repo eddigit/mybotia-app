@@ -51,23 +51,26 @@ function LoginContent() {
     setError("");
     setSubmitting(true);
 
-    const result = await login(email, password);
-
-    if (result.ok) {
-      const dest = safeNextUrl(nextParam);
-      // Redirection externe (autre sous-domaine .mybotia.com) → window.location pour
-      // forcer le browser à recharger avec le cookie .mybotia.com tout neuf.
-      // Path interne → router.push pour navigation client-side classique.
-      if (dest.startsWith("http")) {
-        window.location.assign(dest);
+    try {
+      const result = await login(email, password);
+      if (result.ok) {
+        const dest = safeNextUrl(nextParam);
+        // Redirection externe (autre sous-domaine .mybotia.com) → window.location
+        // pour forcer le browser à recharger avec le cookie .mybotia.com tout
+        // neuf. Path interne → router.push pour navigation client-side classique.
+        if (dest.startsWith("http")) {
+          window.location.assign(dest);
+          return;
+        }
+        router.push(dest);
         return;
       }
-      router.push(dest);
-    } else {
       setError(result.error || "Identifiants incorrects");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur réseau, réessaye");
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   }
 
   return (
