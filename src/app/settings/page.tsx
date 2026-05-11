@@ -7,8 +7,9 @@
 //
 // Doctrine : feedback_jamais_de_mock — tous les champs profil lus depuis /api/me/profile.
 
-import { useState, useEffect, useCallback } from "react";
-import { User, Building2, FileText, Bot, Plug, Package, Sparkles, Pencil, Trash2, Plus, Loader2, CheckCircle2, Save, RotateCcw } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
+import { User, Building2, FileText, Bot, Plug, Package, Sparkles, Pencil, Trash2, Plus, Loader2, CheckCircle2, Save, RotateCcw, Shield, Lock, Layers, Wallet, Coins, MessageSquare } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { useAuth } from "@/contexts/auth-context";
 import { UserAvatarV4 } from "@/components/conversations/UserAvatarV4";
@@ -29,9 +30,18 @@ import {
   type CatalogItemUnit,
 } from "@/lib/catalog-types";
 
-type TabKey = "profile" | "company" | "documents" | "ai" | "integrations" | "catalogue";
+type TabKey = "profile" | "company" | "documents" | "ai" | "integrations" | "catalogue" | "administration" | "vault";
 
-const TABS: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+// V1.2.E.1 — Doctrine `feedback_sidebar_un_seul_param` : la sidebar n'a QU'UN
+// seul item bas (Paramètres → /settings). Toutes les consoles d'administration
+// vivent ici en onglets conditionnels — Administration (super-admin) regroupe
+// Modules / Tenants / Billing / Usage / Protocoles WhatsApp ; Vault est
+// réservé à l'owner gilleskorzec@gmail.com.
+const VAULT_OWNER_EMAIL = "gilleskorzec@gmail.com";
+
+type Tab = { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> };
+
+const BASE_TABS: Tab[] = [
   { key: "profile", label: "Mon profil", icon: User },
   { key: "company", label: "Société", icon: Building2 },
   { key: "documents", label: "Documents", icon: FileText },
@@ -42,6 +52,22 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ clas
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { data: cockpitFeatures } = useCockpitFeatures();
+  const isSuperadmin = cockpitFeatures?.isSuperadmin ?? false;
+  const adminToolsEnabled = cockpitFeatures?.features?.adminTools === true;
+  const isVaultOwner = user?.email === VAULT_OWNER_EMAIL;
+
+  const tabs = useMemo<Tab[]>(() => {
+    const t: Tab[] = [...BASE_TABS];
+    if (isSuperadmin && adminToolsEnabled) {
+      t.push({ key: "administration", label: "Administration", icon: Shield });
+    }
+    if (isVaultOwner) {
+      t.push({ key: "vault", label: "Vault", icon: Lock });
+    }
+    return t;
+  }, [isSuperadmin, adminToolsEnabled, isVaultOwner]);
+
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
   return (
@@ -54,7 +80,7 @@ export default function SettingsPage() {
       <div className="flex gap-6">
         {/* Onglets verticaux */}
         <nav className="w-56 shrink-0 space-y-0.5">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.key;
             return (
@@ -83,6 +109,8 @@ export default function SettingsPage() {
           {activeTab === "ai" && <AiTab />}
           {activeTab === "integrations" && <IntegrationsTab />}
           {activeTab === "catalogue" && <CatalogueTab />}
+          {activeTab === "administration" && <AdministrationTab />}
+          {activeTab === "vault" && <VaultTab />}
         </div>
       </div>
     </div>
@@ -1663,6 +1691,86 @@ function PreparingCard({ title, items }: { title: string; items: string[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// V1.2.E.1 — Administration (super-admin) : regroupe les 5 consoles admin
+// précédemment dans BOTTOM_ADMIN_ITEMS de la sidebar. Liens vers /admin/*
+// pour préserver les routes existantes et les bookmarks.
+// ---------------------------------------------------------------------------
+
+const ADMIN_CARDS: Array<{
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  desc: string;
+}> = [
+  { label: "Modules", href: "/admin/modules", icon: Layers, desc: "Activer / désactiver les features par tenant" },
+  { label: "Tenants", href: "/admin/tenants", icon: Shield, desc: "Configuration des tenants, branding, scopes" },
+  { label: "Billing IA", href: "/admin/billing", icon: Wallet, desc: "Politiques tarifaires, markup, offres" },
+  { label: "Usage tokens", href: "/admin/usage/tokens", icon: Coins, desc: "Consommation tokens par agent / tenant" },
+  { label: "Protocoles WhatsApp", href: "/admin/whatsapp-protocols", icon: MessageSquare, desc: "Skip-list JIDs, fast-paths, A3 routing" },
+];
+
+function AdministrationTab() {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-text-muted">
+        Consoles d&apos;administration de la plateforme. Réservé aux super-admins.
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {ADMIN_CARDS.map((c) => {
+          const Icon = c.icon;
+          return (
+            <Link
+              key={c.href}
+              href={c.href}
+              className="group rounded-lg border border-border bg-surface-2 hover:bg-surface-3 hover:border-accent-primary/40 p-4 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <Icon className="h-5 w-5 text-accent-primary shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <div className="font-medium text-sm text-text-primary">{c.label}</div>
+                  <div className="text-xs text-text-muted mt-0.5 leading-relaxed">
+                    {c.desc}
+                  </div>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// V1.2.E.1 — Vault (owner gilleskorzec@gmail.com) : pointe vers /admin/vault
+// (page dédiée avec PIN 6 chiffres + cookie session 10 min).
+// ---------------------------------------------------------------------------
+
+function VaultTab() {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-text-muted">
+        Coffre-fort des secrets infrastructure. Lecture seule, déverrouillage par PIN.
+      </p>
+      <Link
+        href="/admin/vault"
+        className="block rounded-lg border border-border bg-surface-2 hover:bg-surface-3 hover:border-accent-primary/40 p-4 transition-colors"
+      >
+        <div className="flex items-start gap-3">
+          <Lock className="h-5 w-5 text-accent-primary shrink-0 mt-0.5" />
+          <div>
+            <div className="font-medium text-sm text-text-primary">Ouvrir le coffre</div>
+            <div className="text-xs text-text-muted mt-0.5 leading-relaxed">
+              PIN 6 chiffres requis. Session 10 min, auto-lock. Audit log dédié.
+            </div>
+          </div>
+        </div>
+      </Link>
     </div>
   );
 }

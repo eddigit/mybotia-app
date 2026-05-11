@@ -18,15 +18,10 @@ import {
   LogOut,
   Briefcase,
   Hammer,
-  Layers,
   Users,
   Receipt,
   FileSignature,
-  Shield,
-  Coins,
   Stethoscope,
-  MessageSquare,
-  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
@@ -142,20 +137,11 @@ const BOTTOM_USER_ITEMS: NavItem[] = [
   { id: "settings", label: "Préférences", href: "/settings", icon: Settings },
 ];
 
-const BOTTOM_ADMIN_ITEMS: NavItem[] = [
-  { id: "admin-modules", label: "Modules", href: "/admin/modules", icon: Layers },
-  { id: "admin-tenants", label: "Tenants", href: "/admin/tenants", icon: Shield },
-  { id: "admin-billing", label: "Billing IA", href: "/admin/billing", icon: Wallet },
-  { id: "admin-usage", label: "Usage tokens", href: "/admin/usage/tokens", icon: Coins },
-  { id: "admin-wa", label: "Protocoles WhatsApp", href: "/admin/whatsapp-protocols", icon: MessageSquare },
-];
-
-// Onglet "Vault" visible UNIQUEMENT pour gilleskorzec@gmail.com (owner du vault).
-// Le serveur double-vérifie (requireVaultOwner) — ce gate UI est cosmétique.
-const VAULT_OWNER_EMAIL = "gilleskorzec@gmail.com";
-const BOTTOM_VAULT_ITEMS: NavItem[] = [
-  { id: "admin-vault", label: "Vault", href: "/admin/vault", icon: Lock },
-];
+// V1.2.E.1 — Doctrine `feedback_sidebar_un_seul_param` (11/05).
+// La sidebar n'expose QU'UN SEUL item bas : "Paramètres" → /settings.
+// Tout le reste (Modules, Tenants, Billing, Usage tokens, Protocoles WA,
+// Vault) est exposé via des onglets conditionnels dans /settings selon
+// isSuperadmin / user.email. NE PAS ré-introduire d'items admin ici.
 
 // ============================================================================
 // Composant
@@ -337,8 +323,6 @@ export function LeftSidebar({
         )}
         <div className="space-y-0.5 pb-2">
           {BOTTOM_USER_ITEMS.map(renderItem)}
-          {isSuperadmin && adminToolsEnabled && BOTTOM_ADMIN_ITEMS.map(renderItem)}
-          {user?.email === VAULT_OWNER_EMAIL && BOTTOM_VAULT_ITEMS.map(renderItem)}
         </div>
       </div>
 
