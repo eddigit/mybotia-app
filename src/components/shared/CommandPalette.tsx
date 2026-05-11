@@ -59,9 +59,13 @@ const NAV_COMMANDS: SearchResult[] = [
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function matchScore(query: string, text: string): number {
+function matchScore(query: string, text: string | null | undefined): number {
+  // Robustesse : un mapper qui retourne `name: null` ou `ref: undefined`
+  // (data Dolibarr/business legacy incomplète) faisait crasher la palette
+  // dès le 1er caractère tapé — TypeError sur `null.toLowerCase()`.
+  if (text == null) return 0;
   const q = query.toLowerCase();
-  const t = text.toLowerCase();
+  const t = String(text).toLowerCase();
   if (t === q) return 100;
   if (t.startsWith(q)) return 80;
   if (t.includes(q)) return 60;
