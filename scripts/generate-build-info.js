@@ -7,10 +7,19 @@ const fs = require("fs");
 const path = require("path");
 
 let commit = "dev";
-try {
-  commit = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
-} catch {
-  // pas de git, fallback "dev"
+const buildCommit = process.env.BUILD_COMMIT?.trim();
+const vercelCommit = process.env.VERCEL_GIT_COMMIT_SHA?.trim();
+
+if (buildCommit) {
+  commit = buildCommit;
+} else if (vercelCommit) {
+  commit = vercelCommit.slice(0, 9);
+} else {
+  try {
+    commit = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    // pas de git, fallback "dev"
+  }
 }
 
 const formatter = new Intl.DateTimeFormat("fr-FR", {
