@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
-import { User, Settings2, Loader2, Brain } from "lucide-react";
+import { Settings2, Loader2, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConversationItem, ChatMessage } from "@/hooks/use-api";
-import { getAgentAvatar, MYBOTIA_LOGO } from "@/lib/agent-avatars";
+import { getAgentAvatar, getHumanAvatar, MYBOTIA_LOGO } from "@/lib/agent-avatars";
 import { MessageComposer } from "./MessageComposer";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ClientContextCard } from "./ClientContextCard";
@@ -15,6 +15,7 @@ import {
 } from "@/components/shared/DocumentCard";
 import { SourcesCard } from "./SourcesCard";
 import { ChatActionBar } from "./ChatActionBar";
+import { HumanAvatar } from "@/components/shared/HumanAvatar";
 
 // Cle localStorage pour le contexte client d'une conversation.
 // Ecrite par /conversations/page.tsx lors d'un seed depuis /crm/[id]
@@ -85,6 +86,13 @@ function MessageBubble({
   const isAssistant = message.role === "assistant";
   const isSystem = message.role === "system";
   const isUser = message.role === "user";
+  const humanAuthor = isUser
+    ? getHumanAvatar({
+        email: message.senderEmail,
+        name: message.sender,
+        fallbackLabel: "Vous",
+      })
+    : null;
 
   if (isSystem) {
     return (
@@ -110,9 +118,12 @@ function MessageBubble({
       {isAssistant ? (
         <AgentAvatar agentId={agentId} agentName={agentName} />
       ) : (
-        <div className="flex items-center justify-center w-8 h-8 shrink-0 rounded-full bg-surface-3 border border-border-subtle">
-          <User className="w-4 h-4 text-text-muted" />
-        </div>
+        <HumanAvatar
+          email={message.senderEmail}
+          name={message.sender}
+          fallbackLabel="Vous"
+          size={32}
+        />
       )}
 
       {/* Bubble */}
@@ -131,7 +142,9 @@ function MessageBubble({
               isAssistant ? "text-accent-glow" : "text-text-primary"
             )}
           >
-            {isAssistant ? agentName || "Collaborateur IA" : message.sender || "Vous"}
+            {isAssistant
+              ? agentName || "Collaborateur IA"
+              : humanAuthor?.label || "Vous"}
           </span>
           {message.timestamp && (
             <span className="text-[10px] text-text-muted font-mono">
@@ -202,8 +215,9 @@ export function ConversationThread({
   onSend: (text: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [clientCtx, setClientCtx] = useState<{ id: string; name: string } | null>(
-    null
+  const clientCtx = useMemo(
+    () => readClientContext(conversation.id),
+    [conversation.id]
   );
 
   useEffect(() => {
@@ -211,12 +225,6 @@ export function ConversationThread({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  // Charger le contexte client (si conv issue d'un seed depuis /crm/[id]).
-  // Re-evalue a chaque changement de conv : le contexte est specifique au sessionId.
-  useEffect(() => {
-    setClientCtx(readClientContext(conversation.id));
-  }, [conversation.id]);
 
   const agentId = conversation.agentId;
   const agentName = conversation.agentName;

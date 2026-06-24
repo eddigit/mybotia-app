@@ -1,5 +1,5 @@
 import { resolveChatCockpit } from "@/lib/v4/session";
-import { projectSessionId } from "@/lib/claude-bridge";
+import { buildIntegrationContext, projectSessionId } from "@/lib/claude-bridge";
 
 const BRIDGE_URL = process.env.CLAUDE_BRIDGE_URL || "http://127.0.0.1:9400";
 // Sprint clôture hotfix 2026-04-25 : token strictement via env, zéro fallback.
@@ -12,8 +12,6 @@ function requireBridgeToken(): string {
   }
   return t;
 }
-const BRIDGE_TOKEN = requireBridgeToken();
-
 const TENANT_AGENT_MAP: Record<string, string> = {
   mybotia: "lea",
   vlmedical: "max",
@@ -23,6 +21,7 @@ const TENANT_AGENT_MAP: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
+  const bridgeToken = requireBridgeToken();
   // V1.1.G — Stream cockpit-aware (tenant + agent du cockpit, pas du JWT).
   const cockpit = await resolveChatCockpit(request);
   if (!cockpit.ok) {
@@ -76,7 +75,7 @@ export async function POST(request: Request) {
   const bridgeRes = await fetch(`${BRIDGE_URL}/chat/stream`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${BRIDGE_TOKEN}`,
+      Authorization: `Bearer ${bridgeToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -85,6 +84,7 @@ export async function POST(request: Request) {
       agent_id: agentId,
       project_context: projectContext,
       user_context: userContext,
+      integration_context: buildIntegrationContext(),
       model_tier: modelTier,
     }),
   });

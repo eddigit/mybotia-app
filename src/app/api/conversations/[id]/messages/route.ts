@@ -15,13 +15,8 @@ export async function GET(
   }
   try {
     const { id } = await params;
-    const { session, tenantSlug } = cockpit;
-    const messages = await getSessionMessages(
-      id,
-      100,
-      session.email,
-      tenantSlug,
-    );
+    const { tenantSlug } = cockpit;
+    const messages = await getSessionMessages(id, 100, tenantSlug);
     return Response.json(messages);
   } catch (e) {
     return Response.json(

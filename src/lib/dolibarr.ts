@@ -631,6 +631,8 @@ export interface DolibarrTaskContact {
   libelle?: string;
   email?: string | null;
   login?: string | null;
+  firstname?: string | null;
+  lastname?: string | null;
 }
 
 export async function getTaskContacts(

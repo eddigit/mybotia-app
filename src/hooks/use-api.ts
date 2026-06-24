@@ -150,6 +150,9 @@ export interface TaskItem {
   projectId: string;
   projectName: string;
   projectRef: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeEmail?: string;
   /** Bloc 5D — clientId (socid) résolu via le projet pour jointure tenant-safe. */
   clientId?: string;
   /** Bloc 5B-security — tenant Dolibarr d'origine (propagé pour DELETE multi-tenant safe). */
@@ -841,6 +844,9 @@ export interface ConversationItem {
   projectRef?: string;
   projectName?: string;
   folderId?: string | null;
+  ownerEmail?: string | null;
+  ownerName?: string | null;
+  tenantSlug?: string | null;
 }
 
 export interface ConversationFolderItem {
@@ -864,6 +870,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   sender?: string;
+  senderEmail?: string;
   toolsCalled?: ToolCall[];
 }
 

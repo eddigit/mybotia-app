@@ -13,16 +13,13 @@ import {
   FileText,
   FolderOpen,
   FolderPlus,
-  Clock,
-  MessageSquare,
-  Calendar,
-  Settings2,
   Truck,
   Sparkles,
   Download,
   Loader2,
   FilePlus,
   AlertCircle,
+  Activity as ActivityIcon,
 } from "lucide-react";
 
 // FSM pour chaque devis/facture : suit le cycle download / generate.
@@ -46,11 +43,157 @@ import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Activity } from "@/types";
 
-const typeIcons: Record<string, typeof MessageSquare> = {
-  message: MessageSquare,
-  meeting: Calendar,
-  system: Settings2,
+type AccountActivityRow = {
+  id: string;
+  title: string;
+  description?: string;
+  typeLabel: string;
+  dateLabel: string;
+  statusLabel: string;
+  statusTone: "done" | "active" | "pending";
+  elementLabel: string;
+  href?: string;
 };
+
+function activityTypeLabel(type: Activity["type"]): string {
+  if (type === "meeting") return "Réunion";
+  if (type === "message") return "Message";
+  if (type === "task") return "Tâche";
+  if (type === "deal") return "Affaire";
+  if (type === "alert") return "Alerte";
+  if (type === "agent") return "Agent";
+  return "Activité";
+}
+
+function activityElementLabel(type: Activity["type"]): string {
+  if (type === "task") return "Tâche";
+  if (type === "deal") return "Affaire";
+  if (type === "meeting") return "Compte rendu";
+  if (type === "message") return "Conversation";
+  if (type === "alert") return "Compte";
+  if (type === "agent") return "IA";
+  return "Compte";
+}
+
+function activityStatus(activity: Activity): {
+  label: string;
+  tone: AccountActivityRow["statusTone"];
+} {
+  if (activity.type === "alert" || activity.priority === "high") {
+    return { label: "À reprendre", tone: "pending" };
+  }
+  if (activity.type === "deal" || activity.type === "task") {
+    return { label: "En cours", tone: "active" };
+  }
+  return { label: "Fait", tone: "done" };
+}
+
+function buildAccountActivityRows(activities: Activity[]): AccountActivityRow[] {
+  return activities.map((activity) => {
+    const status = activityStatus(activity);
+    return {
+      id: activity.id,
+      title: activity.title,
+      description: activity.description,
+      typeLabel: activityTypeLabel(activity.type),
+      dateLabel: new Date(activity.timestamp).toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+      statusLabel: status.label,
+      statusTone: status.tone,
+      elementLabel: activityElementLabel(activity.type),
+      href: activity.actionUrl,
+    };
+  });
+}
+
+function AccountActivitiesTable({ rows }: { rows: AccountActivityRow[] }) {
+  const statusClass: Record<AccountActivityRow["statusTone"], string> = {
+    done: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
+    active: "bg-accent-primary/15 text-accent-glow border-accent-primary/30",
+    pending: "bg-amber-400/15 text-amber-300 border-amber-400/30",
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="border border-border-subtle bg-surface-1/50 px-4 py-6 text-sm text-text-muted">
+        Aucune activité enregistrée pour ce compte.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto border border-border-subtle">
+      <table className="min-w-[820px] w-full border-collapse text-sm">
+        <thead className="bg-surface-2 text-text-muted">
+          <tr className="text-[10px] font-bold uppercase tracking-widest">
+            <th className="w-[34%] border-b border-r border-border-subtle px-3 py-2 text-left">
+              Activité
+            </th>
+            <th className="w-[16%] border-b border-r border-border-subtle px-3 py-2 text-left">
+              Type
+            </th>
+            <th className="w-[14%] border-b border-r border-border-subtle px-3 py-2 text-left">
+              Date
+            </th>
+            <th className="w-[14%] border-b border-r border-border-subtle px-3 py-2 text-left">
+              Statut
+            </th>
+            <th className="w-[22%] border-b border-border-subtle px-3 py-2 text-left">
+              Élément lié
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="bg-surface-1/40 hover:bg-surface-2/70">
+              <td className="border-r border-t border-border-subtle px-3 py-3 align-top">
+                {row.href ? (
+                  <Link
+                    href={row.href}
+                    className="font-bold text-text-primary hover:text-accent-glow transition-colors"
+                  >
+                    {row.title}
+                  </Link>
+                ) : (
+                  <span className="font-bold text-text-primary">{row.title}</span>
+                )}
+                {row.description && (
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-muted">
+                    {row.description}
+                  </p>
+                )}
+              </td>
+              <td className="border-r border-t border-border-subtle px-3 py-3 align-top text-text-secondary">
+                {row.typeLabel}
+              </td>
+              <td className="border-r border-t border-border-subtle px-3 py-3 align-top font-mono text-xs text-text-muted">
+                {row.dateLabel}
+              </td>
+              <td className="border-r border-t border-border-subtle px-3 py-3 align-top">
+                <span
+                  className={cn(
+                    "inline-flex min-w-20 justify-center border px-2 py-1 text-[10px] font-bold uppercase tracking-wide",
+                    statusClass[row.statusTone],
+                  )}
+                >
+                  {row.statusLabel}
+                </span>
+              </td>
+              <td className="border-t border-border-subtle px-3 py-3 align-top">
+                <span className="inline-flex bg-surface-3 px-2 py-1 text-xs font-semibold text-text-secondary">
+                  {row.elementLabel}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function ClientDetailPage({
   params,
@@ -319,6 +462,7 @@ export default function ClientDetailPage({
   }
 
   const { client, contacts, activities, invoices, proposals, projects } = data;
+  const accountActivityRows = buildAccountActivityRows(activities);
 
   return (
     <div className="p-8 space-y-6">
@@ -711,54 +855,20 @@ export default function ClientDetailPage({
         </div>
       </div>
 
-      {/* Activity timeline */}
-      {activities.length > 0 && (
-        <div className="card-sharp p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <Clock className="w-4 h-4 text-accent-glow" />
+      <div className="card-sharp p-6">
+        <div className="flex flex-col gap-2 mb-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2">
+            <ActivityIcon className="w-4 h-4 text-accent-glow" />
             <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
-              Historique ({activities.length})
+              Activités du compte ({activities.length})
             </h2>
           </div>
-          <div className="space-y-4">
-            {activities.map((activity: Activity, i: number) => {
-              const Icon = typeIcons[activity.type] || Settings2;
-              return (
-                <div
-                  key={activity.id}
-                  className={cn(
-                    "relative pl-8 flex gap-3",
-                    i < activities.length - 1 &&
-                      "pb-4 border-l border-border-subtle ml-[7px]"
-                  )}
-                >
-                  <div className="absolute left-0 top-0 w-4 h-4 rounded-full bg-surface-3 border border-border-default flex items-center justify-center">
-                    <Icon className="w-2.5 h-2.5 text-text-muted" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm text-text-primary">
-                        {activity.title}
-                      </span>
-                      <span className="text-[10px] text-text-muted font-mono shrink-0">
-                        {new Date(activity.timestamp).toLocaleDateString(
-                          "fr-FR",
-                          { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }
-                        )}
-                      </span>
-                    </div>
-                    {activity.description && (
-                      <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
-                        {activity.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <p className="text-xs text-text-muted">
+            Journal unique : tâches, projets, échanges et alertes du compte.
+          </p>
         </div>
-      )}
+        <AccountActivitiesTable rows={accountActivityRows} />
+      </div>
 
       <CreateProjectModal
         open={showCreateProject}

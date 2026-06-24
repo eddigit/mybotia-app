@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "monday:preview": "node scripts/monday-import.mjs",
+    "monday:import": "node scripts/monday-import.mjs --apply",
     "predev": "node scripts/generate-build-info.js",
     "prebuild": "node scripts/generate-build-info.js"
   },

@@ -6,6 +6,7 @@ import { Check, ChevronRight, Plus, X, AlertTriangle, Loader2 } from "lucide-rea
 import { useTodayTasks, useScopedProjects, type TaskItem } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
+import { HumanAvatar } from "@/components/shared/HumanAvatar";
 
 function todayAt2359(): string {
   const d = new Date();
@@ -240,6 +241,14 @@ export function TodayTasksCard() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-text-muted">
+                    {(t.assigneeName || t.assigneeEmail) && (
+                      <HumanAvatar
+                        email={t.assigneeEmail}
+                        name={t.assigneeName}
+                        fallbackLabel="Responsable"
+                        size={20}
+                      />
+                    )}
                     {t.projectRef && <span className="font-mono">{t.projectRef}</span>}
                     {t.dueDate && (
                       <span className="font-mono">

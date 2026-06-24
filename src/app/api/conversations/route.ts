@@ -42,24 +42,19 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const scope = url.searchParams.get("scope");
     const showAll = session.isSuperadmin && scope === "all";
-    const all = await listConversations(showAll ? undefined : session.email);
+    const all = await listConversations(tenantSlug);
 
-    // Filtre strict côté serveur : agent cockpit (le bridge expose agentId,
-    // pas tenant_slug, mais la map tenant→agent est 1:1 donc filtrer par agent
-    // équivaut à filtrer par tenant). Garde-fou : fail-closed sur cockpit
-    // tenant non mappé. `tenantSlug` est volontairement utilisé ci-dessus
-    // pour la log et pour valider que le cockpit est cohérent ; on filtre
-    // ensuite par agentId du registry.
-    void tenantSlug;
+    // Les conversations sont partagées au niveau tenant/projet : Gilles,
+    // Sajjad et les futurs collaborateurs voient le même espace cockpit.
+    // Le filtre agent reste un garde-fou si le bridge renvoie plus large.
     type Row = { agentId?: string | null } & Record<string, unknown>;
     const rows = all as unknown as Row[];
-    const filtered = rows.filter((r) => {
-      const aId = (r as Row & { agentId?: string }).agentId ?? null;
-      // agent_id : doit matcher l'agent du cockpit. Pas de tolérance NULL :
-      // les rows sans agent_id sont écartées du cockpit (legacy = pas de
-      // tenant connu, donc pas affichées).
-      return aId === agentId;
-    });
+    const filtered = showAll
+      ? rows
+      : rows.filter((r) => {
+          const aId = (r as Row & { agentId?: string }).agentId ?? null;
+          return aId === agentId;
+        });
 
     return Response.json(filtered);
   } catch (e) {

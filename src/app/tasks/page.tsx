@@ -31,11 +31,11 @@ export default function TasksPage() {
 
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useScopedTasks();
   const { data: projects, loading: projectsLoading, refetch: refetchProjects } = useScopedProjects();
-
   // V1.1.B Phase 3C — pré-sélection projet via URL (?projectId=xxx)
   const searchParams = useSearchParams();
   const initialProjectId = searchParams.get("projectId");
   const [projectFilter, setProjectFilter] = useState<string>(initialProjectId || "all");
+  const [projectSearch, setProjectSearch] = useState("");
 
   // Sync param URL → state si l'URL change (navigation interne)
   useEffect(() => {
@@ -80,6 +80,23 @@ export default function TasksPage() {
       return a.name.localeCompare(b.name);
     });
   }, [mybotiaProjects]);
+  const visibleProjectOptions = useMemo(() => {
+    const q = projectSearch.trim().toLowerCase();
+    const filtered = q
+      ? sortedProjects.filter((p) =>
+          [p.name, p.clientName, p.ref]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        )
+      : sortedProjects;
+    if (projectFilter === "all" || filtered.some((p) => p.id === projectFilter)) {
+      return filtered;
+    }
+    const selected = sortedProjects.find((p) => p.id === projectFilter);
+    return selected ? [selected, ...filtered] : filtered;
+  }, [projectFilter, projectSearch, sortedProjects]);
 
   // V1.1.B agence digitale — filtres composés.
   // Cast pour accéder aux champs étendus (TaskItem ne les déclare pas encore).
@@ -158,27 +175,42 @@ export default function TasksPage() {
           }
         />
 
-        {/* V1.1.B Phase 3C — filtre affaire en select (remplace onglets) */}
-        <div className="flex items-center gap-3 mt-5">
-          <span className="micro-label text-text-muted">Affaire</span>
-          <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="bg-surface-2 border border-border-subtle px-2 py-1.5 text-[11px] text-text-primary min-w-[200px] focus:outline-none focus:border-accent-primary/40"
-          >
-            <option value="all">Toutes les affaires</option>
-            {sortedProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.clientName ? ` — ${p.clientName}` : ""}
-              </option>
-            ))}
-          </select>
-          {projectFilter !== "all" && (
+        {/* Filtre affaire : recherche + select pour les longues listes. */}
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex flex-col gap-1">
+            <span className="micro-label text-text-muted">Recherche</span>
+            <input
+              type="search"
+              value={projectSearch}
+              onChange={(e) => setProjectSearch(e.target.value)}
+              placeholder="Rechercher une affaire"
+              className="min-w-[220px] bg-surface-2 border border-border-subtle px-2 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent-primary/40"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="micro-label text-text-muted">Affaire</span>
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="min-w-[320px] bg-surface-2 border border-border-subtle px-2 py-1.5 text-[11px] text-text-primary outline-none focus:border-accent-primary/40"
+            >
+              <option value="all">Toutes les affaires</option>
+              {visibleProjectOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.clientName ? ` — ${p.clientName}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(projectFilter !== "all" || projectSearch) && (
             <button
               type="button"
-              onClick={() => setProjectFilter("all")}
-              className="text-[10px] text-text-muted hover:text-text-primary underline"
+              onClick={() => {
+                setProjectFilter("all");
+                setProjectSearch("");
+              }}
+              className="pb-1.5 text-[10px] text-text-muted hover:text-text-primary underline"
             >
               Effacer
             </button>

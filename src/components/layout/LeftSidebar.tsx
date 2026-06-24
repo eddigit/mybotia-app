@@ -113,6 +113,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Opérations",
     items: [
       { id: "tasks", label: "Tâches", href: "/tasks", icon: CheckSquare, requiresModule: "tasks" },
+      { id: "monday", label: "Monday test", href: "/monday", icon: Calendar },
       { id: "documents", label: "Documents", href: "/documents", icon: FileText, requiresModule: "documents" },
       { id: "agenda", label: "Calendrier", href: "/agenda", icon: Calendar, requiresModule: "agenda" },
     ],

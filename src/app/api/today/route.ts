@@ -9,6 +9,7 @@ import {
   getProposals,
   getEvents,
   getTasks,
+  getTaskContacts,
 } from "@/lib/dolibarr";
 import {
   mapProjectToDeal,
@@ -29,6 +30,7 @@ import {
   type BusinessProject,
   type BusinessTask,
 } from "@/lib/business-mappers";
+import { taskAssigneeFromContacts } from "@/lib/task-assignees";
 
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" } as const;
 
@@ -206,8 +208,18 @@ export async function GET(request: Request) {
     const projectByIdFull: Record<string, { ref: string; title: string }> = {};
     for (const p of projects) projectByIdFull[p.id] = { ref: p.ref, title: p.title };
 
+    const contactsByTaskId = new Map(
+      await Promise.all(
+        tasks.map(async (task) => [
+          task.id,
+          await getTaskContacts(task.id, tenant).catch(() => []),
+        ] as const)
+      )
+    );
+
     const mappedTasks = tasks.map((t) => {
       const proj = projectByIdFull[t.fk_project];
+      const assignee = taskAssigneeFromContacts(contactsByTaskId.get(t.id) || []);
       const progress = parseFloat(t.progress || "0");
       const dueRaw = t.date_end;
       const dueDate = dueRaw
@@ -227,6 +239,9 @@ export async function GET(request: Request) {
         projectId: t.fk_project,
         projectName: proj?.title || "",
         projectRef: proj?.ref || "",
+        assigneeId: assignee.assigneeId,
+        assigneeName: assignee.assigneeName,
+        assigneeEmail: assignee.assigneeEmail,
         tenantSlug,
         dueDate,
         overdue: dueDate ? dueDate < today && progress < 100 : false,

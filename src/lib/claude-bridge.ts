@@ -13,7 +13,36 @@ function requireBridgeToken(): string {
   }
   return t;
 }
-const BRIDGE_TOKEN = requireBridgeToken();
+export function buildIntegrationContext() {
+  return {
+    agent_name: "Léa",
+    authority:
+      "Léa est l'agent MyBotIA agence. Elle doit utiliser la connaissance globale MyBotIA avant de conclure qu'une information manque.",
+    users:
+      "Gilles et Sajjad ont le même périmètre de lecture métier dans le cockpit MyBotIA, hors secrets bruts et hors actions engageantes.",
+    source_priority: [
+      "Contexte conversation/dossier courant",
+      "Postgres mybotia_core: clients, projets, pipeline, taches, protocoles et cockpit",
+      "Postgres mybotia_memory avec vectoriel/RAG",
+      "RAG Obsidian et dossiers clients",
+      "Mémoire longue Léa, conversations, historiques persistants Gilles/MyBotIA",
+      "documents/GED accessibles au runtime",
+      "CRM MyBotIA/Dolibarr pour tiers, affaires, productions et finance",
+      "Trello comme source historique production/taches",
+      "Monday comme pilote test production/taches/offres",
+    ],
+    crm: "CRM MyBotIA/Dolibarr reste source clients, affaires, productions et finance.",
+    memory:
+      "Avant toute réponse d'absence, Léa doit chercher dans Postgres, mybotia_memory, RAG Obsidian, dossiers clients, documents/GED et mémoire persistante Gilles/MyBotIA.",
+    trello: "Trello reste disponible comme source historique production/taches tant que le test Monday n'est pas valide.",
+    monday:
+      "Monday est connectable via MONDAY_MYBOTIA_API_TOKEN comme pilote production/taches. Lea doit lire Monday avec CRM/Trello/memoires, preparer les actions en brouillon et demander GO avant ecriture engageante.",
+    channels:
+      "Le webchat cockpit, WhatsApp, voix et canaux admin doivent recevoir le même socle de contexte Léa; chaque canal ajoute seulement son protocole local.",
+    guardrails:
+      "Ne jamais exposer secrets, tokens, mots de passe ou chemins sensibles. Toute écriture engageante, envoi externe, devis, facture, suppression, production ou modification sensible exige un GO explicite.",
+  };
+}
 
 async function bridgeFetch(path: string, options?: RequestInit) {
   const controller = new AbortController();
@@ -22,7 +51,7 @@ async function bridgeFetch(path: string, options?: RequestInit) {
     signal: controller.signal,
     ...options,
     headers: {
-      Authorization: `Bearer ${BRIDGE_TOKEN}`,
+      Authorization: `Bearer ${requireBridgeToken()}`,
       "Content-Type": "application/json",
       ...options?.headers,
     },
@@ -56,6 +85,9 @@ export interface ConversationSummary {
   projectRef?: string;
   projectName?: string;
   folderId?: string | null;
+  ownerEmail?: string | null;
+  ownerName?: string | null;
+  tenantSlug?: string | null;
 }
 
 export interface ConversationFolder {
@@ -72,6 +104,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   sender?: string;
+  senderEmail?: string;
 }
 
 export interface AgentResponse {
@@ -88,8 +121,8 @@ export type ModelTier = "fast" | "deep";
 
 // ---- Session listing ----
 
-export async function listConversations(userEmail?: string): Promise<ConversationSummary[]> {
-  const qs = userEmail ? `?user_email=${encodeURIComponent(userEmail)}` : "";
+export async function listConversations(tenantSlug: string): Promise<ConversationSummary[]> {
+  const qs = `?tenant_slug=${encodeURIComponent(tenantSlug)}`;
   const res = await bridgeFetch(`/conversations${qs}`);
   if (!res.ok) {
     throw new Error(`Bridge error: ${res.status}`);
@@ -102,11 +135,9 @@ export async function listConversations(userEmail?: string): Promise<Conversatio
 export async function getSessionMessages(
   sessionId: string,
   limit = 50,
-  userEmail?: string,
-  tenantSlug?: string
+  tenantSlug: string
 ): Promise<ChatMessage[]> {
   const params = new URLSearchParams({ limit: String(limit) });
-  if (userEmail) params.set("user_email", userEmail);
   if (tenantSlug) params.set("tenant_slug", tenantSlug);
   const res = await bridgeFetch(
     `/conversations/${encodeURIComponent(sessionId)}/messages?${params.toString()}`
@@ -114,7 +145,14 @@ export async function getSessionMessages(
   if (!res.ok) {
     throw new Error(`Bridge error: ${res.status}`);
   }
-  return res.json();
+  const messages = (await res.json()) as ChatMessage[];
+  return messages.map((message) => {
+    const sender = message.sender?.trim();
+    return {
+      ...message,
+      senderEmail: sender && sender.includes("@") ? sender : message.senderEmail,
+    };
+  });
 }
 
 // ---- Delete / move / rename conversations ----
@@ -253,7 +291,7 @@ export async function sendAgentMessage(
       method: "POST",
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${BRIDGE_TOKEN}`,
+        Authorization: `Bearer ${requireBridgeToken()}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -262,6 +300,7 @@ export async function sendAgentMessage(
         agent_id: agentId,
         project_context: projectContext,
         user_context: userContext,
+        integration_context: buildIntegrationContext(),
         model_tier: modelTier,
       }),
     });
@@ -276,6 +315,7 @@ export async function sendAgentMessage(
           agent_id: agentId,
           project_context: projectContext,
           user_context: userContext,
+          integration_context: buildIntegrationContext(),
           model_tier: modelTier,
         }),
       });
@@ -340,6 +380,7 @@ export async function sendAgentMessage(
         agent_id: agentId,
         project_context: projectContext,
         user_context: userContext,
+        integration_context: buildIntegrationContext(),
         model_tier: modelTier,
       }),
     });

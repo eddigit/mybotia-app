@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { Calendar, CircleDot } from "lucide-react";
 import type { TaskItem } from "@/hooks/use-api";
+import { HumanAvatar } from "@/components/shared/HumanAvatar";
 
 export function TaskPanel({
   tasks,
@@ -145,9 +146,19 @@ function TaskCard({
       )}
 
       <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
-        <span className="text-[10px] text-text-muted truncate max-w-[120px]">
-          {task.projectName}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          {(task.assigneeName || task.assigneeEmail) && (
+            <HumanAvatar
+              email={task.assigneeEmail}
+              name={task.assigneeName}
+              fallbackLabel="Responsable"
+              size={22}
+            />
+          )}
+          <span className="text-[10px] text-text-muted truncate max-w-[120px]">
+            {task.projectName}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           {task.dueDate && (
             <div className="flex items-center gap-1 text-[10px] text-text-muted font-mono">
