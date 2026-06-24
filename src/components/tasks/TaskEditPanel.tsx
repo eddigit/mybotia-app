@@ -337,6 +337,7 @@ export function TaskEditPanel({
             <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="w-full bg-surface-2 border border-border-subtle text-sm py-2.5 px-3 text-text-primary focus:outline-none focus:border-accent-glow">
               <option value="">—</option>
               <option value="gilles">Gilles</option>
+              <option value="saddjaad">Saddjaad</option>
               <option value="lea">Léa</option>
               <option value="damien">Damien</option>
               <option value="client">Client</option>

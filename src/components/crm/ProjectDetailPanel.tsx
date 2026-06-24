@@ -639,6 +639,9 @@ export function ProjectDetailPanel({
           setTasksReloadKey((k) => k + 1);
         }}
         tenantSlug={project.tenantSlug || "mybotia"}
+        defaultProjectId={project.id}
+        defaultProjectLabel={project.name}
+        lockProject
       />
     </>
   );

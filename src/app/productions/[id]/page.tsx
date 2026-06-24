@@ -29,13 +29,16 @@ import {
   ExternalLink,
   PackageOpen,
   Download,
+  CheckSquare,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { FeatureDisabled } from "@/components/shared/FeatureDisabled";
 import { useCockpitFeatures, useScopedClients } from "@/hooks/use-api";
+import type { TaskItem } from "@/hooks/use-api";
 import { EditProductionModal } from "@/components/productions/EditProductionModal";
 import { AddSubscriptionModal } from "@/components/productions/AddSubscriptionModal";
 import { CreateInvoiceFromProductionModal } from "@/components/productions/CreateInvoiceFromProductionModal";
+import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { cn } from "@/lib/utils";
 
 const STAGE_LABEL: Record<string, string> = {
@@ -85,6 +88,22 @@ const INVOICE_STATUS_LABEL: Record<string, string> = {
   paid: "Payée",
   overdue: "En retard",
   cancelled: "Annulée",
+};
+
+const TASK_STATUS_LABEL: Record<string, string> = {
+  todo: "À faire",
+  in_progress: "En cours",
+  done: "Terminée",
+  blocked: "Bloquée",
+  cancelled: "Annulée",
+};
+
+const TASK_STATUS_COLOR: Record<string, string> = {
+  todo: "bg-surface-3/60 text-text-muted border-border-subtle",
+  in_progress: "bg-accent-primary/15 text-accent-glow border-accent-primary/30",
+  done: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  blocked: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  cancelled: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
 };
 
 type ProductionRow = {
@@ -184,12 +203,14 @@ export default function ProductionDetailPage({
   const [production, setProduction] = useState<ProductionRow | null>(null);
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [showEdit, setShowEdit] = useState(false);
   const [showAddSub, setShowAddSub] = useState(false);
   const [showCreateInvoice, setShowCreateInvoice] = useState(false);
+  const [showCreateTask, setShowCreateTask] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
   const { data: clients } = useScopedClients();
@@ -223,12 +244,17 @@ export default function ProductionDetailPage({
           return (await r.json()) as InvoiceRow[];
         },
       ),
+      fetch(`/api/tasks?projectId=${encodeURIComponent(id)}`).then(async (r) => {
+        if (!r.ok) return [] as TaskItem[];
+        return (await r.json()) as TaskItem[];
+      }),
     ])
-      .then(([prod, subRows, invRows]) => {
+      .then(([prod, subRows, invRows, taskRows]) => {
         if (cancelled) return;
         setProduction(prod);
         setSubs(Array.isArray(subRows) ? subRows : []);
         setInvoices(Array.isArray(invRows) ? invRows : []);
+        setTasks(Array.isArray(taskRows) ? taskRows : []);
       })
       .catch((e) => {
         if (!cancelled) setError(e.message);
@@ -463,6 +489,77 @@ export default function ProductionDetailPage({
         </MetaCard>
       </section>
 
+      {/* Tâches liées */}
+      <section className="card-sharp p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-4 h-4 text-accent-glow" />
+            <h2 className="text-sm font-bold uppercase tracking-tight text-text-primary font-headline">
+              Tâches de production
+            </h2>
+            <span className="text-[10px] text-text-muted font-mono tabular-nums">
+              {tasks.length}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowCreateTask(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-tight border border-accent-primary/30 bg-accent-primary/10 text-accent-glow hover:bg-accent-primary/20"
+          >
+            <Plus className="w-3 h-3" />
+            Nouvelle tâche
+          </button>
+        </div>
+
+        {tasks.length === 0 ? (
+          <div className="py-4 text-[12px] text-text-muted leading-relaxed">
+            Aucune tâche rattachée à cette production.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-tight text-text-muted">
+                  <th className="px-2 py-2 font-semibold">Tâche</th>
+                  <th className="px-2 py-2 font-semibold">Statut</th>
+                  <th className="px-2 py-2 font-semibold">Échéance</th>
+                  <th className="px-2 py-2 font-semibold">Priorité</th>
+                  <th className="px-2 py-2 font-semibold">Assigné</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {tasks.map((task) => (
+                  <tr key={task.id}>
+                    <td className="px-2 py-2 text-text-primary font-medium max-w-[360px]">
+                      <span className="line-clamp-2">{task.title}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight border whitespace-nowrap",
+                          TASK_STATUS_COLOR[task.status] ??
+                            TASK_STATUS_COLOR.todo,
+                        )}
+                      >
+                        {TASK_STATUS_LABEL[task.status] ?? task.status}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-text-muted tabular-nums">
+                      {fmtDate(task.dueDate)}
+                    </td>
+                    <td className="px-2 py-2 text-text-muted capitalize">
+                      {task.priority || "—"}
+                    </td>
+                    <td className="px-2 py-2 text-text-muted">
+                      {task.assigneeName || task.assignedTo || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {/* Bloc revenus mixtes — DEUX colonnes obligatoires */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* One-shot HT */}
@@ -684,6 +781,18 @@ export default function ProductionDetailPage({
         clientName={clientName}
         oneshotHt={oneshotHt}
         subscriptions={subs}
+      />
+      <CreateTaskModal
+        open={showCreateTask}
+        onClose={() => setShowCreateTask(false)}
+        onCreated={() => {
+          setShowCreateTask(false);
+          refetch();
+        }}
+        tenantSlug={cockpitFeatures?.tenant ?? "mybotia"}
+        defaultProjectId={production.id}
+        defaultProjectLabel={productionTitle(production)}
+        lockProject
       />
     </div>
   );

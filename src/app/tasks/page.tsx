@@ -120,6 +120,10 @@ export default function TasksPage() {
       return a.dueDate.localeCompare(b.dueDate);
     });
 
+  const selectedFilterProject =
+    projectFilter !== "all"
+      ? sortedProjects.find((p) => p.id === projectFilter)
+      : undefined;
   const activeTasks = filteredTasks.filter((t) => t.status !== "done").length;
   const today = new Date().toISOString().slice(0, 10);
   const overdueTasks = filteredTasks.filter(
@@ -134,6 +138,34 @@ export default function TasksPage() {
       body: JSON.stringify({ progress: String(progress) }),
     });
     refetchTasks();
+  }
+
+  async function handleDeleteTasks(tasksToDelete: TaskItem[]) {
+    if (tasksToDelete.length === 0) return;
+    const results = await Promise.allSettled(
+      tasksToDelete.map(async (task) => {
+        const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            body.error || `Suppression impossible pour "${task.title}"`,
+          );
+        }
+        return task.id;
+      }),
+    );
+    const deletedCount = results.filter((result) => result.status === "fulfilled").length;
+    if (deletedCount > 0) {
+      refetchTasks();
+    }
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") {
+      throw failed.reason instanceof Error
+        ? failed.reason
+        : new Error("Certaines tâches n'ont pas pu être supprimées");
+    }
   }
 
   if (!featuresLoading && cockpitFeatures && !tasksEnabled) {
@@ -309,6 +341,7 @@ export default function TasksPage() {
             if (t) handleUpdateStatus(t, progress);
           }}
           onOpenTask={(t) => setSelectedTask(t)}
+          onDeleteTasks={handleDeleteTasks}
         />
       </div>
 
@@ -317,6 +350,8 @@ export default function TasksPage() {
         onClose={() => setShowCreate(false)}
         onCreated={() => refetchTasks()}
         tenantSlug={currentTenant}
+        defaultProjectId={projectFilter !== "all" ? projectFilter : undefined}
+        defaultProjectLabel={selectedFilterProject?.name}
       />
 
       <CreateProjectModal

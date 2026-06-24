@@ -99,7 +99,11 @@ export async function GET(request: Request) {
           projectName: proj?.name ?? "",
           projectRef: "",
           tenantSlug,
+          category: t.category ?? undefined,
+          workflowStep: t.workflowStep ?? undefined,
+          assignedTo: t.assignedTo ?? undefined,
           dueDate: t.dueDate ?? undefined,
+          doneAt: t.doneAt ?? undefined,
           overdue: !!(t.dueDate && t.dueDate < today && t.status !== "done"),
           createdAt: t.createdAt,
         };

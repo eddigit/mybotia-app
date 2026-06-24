@@ -6,20 +6,15 @@
 // V1.1.H P0-4 : CreateTaskModal suit cockpitFeatures.tenant, plus de hardcode mybotia.
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import Link from "next/link";
 import {
   Sun,
   CheckCircle2,
-  Circle,
   AlertTriangle,
-  Briefcase,
-  Receipt,
-  FileText,
-  Activity as ActivityIcon,
-  ShieldAlert,
-  Clock,
   Loader2,
   Plus,
+  Users,
+  CalendarDays,
+  ListChecks,
 } from "lucide-react";
 import { ModuleHeader } from "@/components/shared/ModuleHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -28,31 +23,41 @@ import { btnPrimary } from "@/components/shared/FormModal";
 import { TaskEditPanel } from "@/components/tasks/TaskEditPanel";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { useCockpitFeatures } from "@/hooks/use-api";
-import type {
-  TaskItem,
-  DashboardProposal,
-  DashboardInvoice,
-} from "@/hooks/use-api";
-import type { Deal, Activity } from "@/types";
+import type { TaskItem } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
-import { formatDateFR, formatMoneyFR } from "@/lib/format";
-import {
-  DEAL_STAGE_LABEL,
-  DEAL_STAGE_COLOR,
-  PROPOSAL_STATUS_LABEL,
-  PROPOSAL_STATUS_COLOR,
-} from "@/lib/labels/affaires";
+import { formatDateFR } from "@/lib/format";
 
 interface TodayPayload {
   tenant: string;
   tasks: TaskItem[];
-  deals: Deal[];
-  proposals: DashboardProposal[];
-  invoices: DashboardInvoice[];
-  activities: Activity[];
 }
 
 const PRIO_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+const COMMERCE_TASK_KEYS = new Set([
+  "acompte",
+  "brief",
+  "client",
+  "commercial",
+  "devis",
+  "facture",
+  "prospection",
+  "relance",
+  "vente",
+]);
+const PRODUCTION_TASK_KEYS = new Set([
+  "architecture",
+  "bug",
+  "contenu",
+  "deployement",
+  "deploiement",
+  "design",
+  "dev",
+  "ia",
+  "livraison",
+  "maintenance",
+  "maquette",
+  "recette",
+]);
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -62,6 +67,127 @@ function daysSince(dateISO?: string): number {
   if (!dateISO) return 0;
   const ms = new Date(todayISO()).getTime() - new Date(dateISO).getTime();
   return Math.max(0, Math.floor(ms / 86400000));
+}
+
+function normalizeTaskSignal(value?: string): string {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function taskWorkstream(task: TaskItem): {
+  label: "Commerce" | "Production" | "Interne";
+  className: string;
+} {
+  const category = normalizeTaskSignal(task.category);
+  const workflowStep = normalizeTaskSignal(task.workflowStep);
+  const signal = normalizeTaskSignal(
+    [task.category, task.workflowStep, task.projectName, task.projectRef, task.title]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const hasCommerceSignal =
+    COMMERCE_TASK_KEYS.has(category) ||
+    COMMERCE_TASK_KEYS.has(workflowStep) ||
+    /\b(devis|facture|relance|prospect|pipeline|commercial|vente|acompte)\b/.test(signal);
+  const hasProductionSignal =
+    PRODUCTION_TASK_KEYS.has(category) ||
+    PRODUCTION_TASK_KEYS.has(workflowStep) ||
+    /\b(prod|production|livraison|deploy|deploi|recette|bug|maquette|contenu|design|dev|developpement|integration|agent|site)\b/.test(signal);
+
+  if (hasCommerceSignal && !hasProductionSignal) {
+    return {
+      label: "Commerce",
+      className: "border-sky-400/30 bg-sky-500/10 text-sky-300",
+    };
+  }
+  if (hasProductionSignal) {
+    return {
+      label: "Production",
+      className: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
+    };
+  }
+  return {
+    label: "Interne",
+    className: "border-border-subtle bg-surface-3/60 text-text-muted",
+  };
+}
+
+const ASSIGNED_TO_LABELS: Record<string, string> = {
+  gilles: "Gilles",
+  saddjaad: "Saddjaad",
+  sajjad: "Saddjaad",
+  lea: "Léa",
+  damien: "Damien",
+  client: "Client",
+  autre: "Autre",
+};
+
+const COLLABORATOR_ORDER: Record<string, number> = {
+  gilles: 0,
+  saddjaad: 1,
+  sajjad: 1,
+  lea: 2,
+  damien: 3,
+  client: 4,
+  autre: 5,
+  non_assigne: 99,
+};
+
+type TaskCollaboratorGroup = {
+  key: string;
+  label: string;
+  tasks: TaskItem[];
+};
+
+function isTodayDate(dateISO?: string): boolean {
+  return !!dateISO && dateISO.slice(0, 10) === todayISO();
+}
+
+function taskOwner(task: TaskItem): { key: string; label: string; missing: boolean } {
+  const assigneeName = task.assigneeName?.trim();
+  if (assigneeName) {
+    return {
+      key: normalizeTaskSignal(assigneeName).replace(/\s+/g, "_") || "non_assigne",
+      label: assigneeName,
+      missing: false,
+    };
+  }
+  const assignedTo = normalizeTaskSignal(task.assignedTo);
+  if (assignedTo) {
+    return {
+      key: assignedTo,
+      label: ASSIGNED_TO_LABELS[assignedTo] ?? task.assignedTo ?? assignedTo,
+      missing: false,
+    };
+  }
+  return { key: "non_assigne", label: "Non assigné", missing: true };
+}
+
+function groupTasksByCollaborator(tasks: TaskItem[]): TaskCollaboratorGroup[] {
+  const groups = new Map<string, TaskCollaboratorGroup>();
+  for (const task of tasks) {
+    const owner = taskOwner(task);
+    const group = groups.get(owner.key) ?? {
+      key: owner.key,
+      label: owner.label,
+      tasks: [],
+    };
+    group.tasks.push(task);
+    groups.set(owner.key, group);
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      tasks: group.tasks.sort((a, b) => (PRIO_RANK[b.priority] || 0) - (PRIO_RANK[a.priority] || 0)),
+    }))
+    .sort((a, b) => {
+      const rankA = COLLABORATOR_ORDER[a.key] ?? 50;
+      const rankB = COLLABORATOR_ORDER[b.key] ?? 50;
+      if (rankA !== rankB) return rankA - rankB;
+      return a.label.localeCompare(b.label);
+    });
 }
 
 export default function TodayPage() {
@@ -105,110 +231,58 @@ export default function TodayPage() {
       .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   }, [payload, today]);
 
-  const activeDeals = useMemo(() => {
+  const doneTodayTasks = useMemo(() => {
     if (!payload) return [];
-    return payload.deals
-      .filter((d) => ["discovery", "proposal", "negotiation", "closing"].includes(d.stage))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
-  }, [payload]);
-
-  const proposalsToFollow = useMemo(() => {
-    if (!payload) return [];
-    return payload.proposals
-      .filter((p) => p.status === "draft" || p.status === "validated")
-      .sort((a, b) => b.total - a.total);
-  }, [payload]);
-
-  const invoicesToFollow = useMemo(() => {
-    if (!payload) return [];
-    return payload.invoices
-      .filter((inv) => inv.status === "late" || inv.status === "sent")
-      .sort((a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0));
-  }, [payload]);
-
-  const activities = useMemo(
-    () => (payload?.activities ?? []).slice(0, 10),
-    [payload]
-  );
-
-  const alerts = useMemo(() => {
-    if (!payload) return [];
-    const out: Array<{ id: string; type: string; label: string; severity: "high" | "medium" }> = [];
-    for (const t of payload.tasks) {
-      if (t.status !== "done" && t.dueDate && t.dueDate < today && t.priority === "critical") {
-        out.push({
-          id: `t-${t.id}`,
-          type: "Tâche critique en retard",
-          label: `${t.title} · ${daysSince(t.dueDate)}j retard`,
-          severity: "high",
-        });
-      }
-    }
-    for (const d of payload.deals) {
-      if (!d.clientName || d.clientName === "(client inconnu)" || d.clientName === "") {
-        out.push({
-          id: `d-${d.id}`,
-          type: "Affaire sans client",
-          label: `${d.title} · ${formatMoneyFR(d.value)}`,
-          severity: "medium",
-        });
-      }
-    }
-    for (const inv of payload.invoices) {
-      if (!inv.clientName) {
-        out.push({
-          id: `i-${inv.id}`,
-          type: "Facture sans client",
-          label: `${inv.ref} · ${formatMoneyFR(inv.total)}`,
-          severity: "high",
-        });
-      }
-    }
-    for (const p of payload.proposals) {
-      if (!p.clientName) {
-        out.push({
-          id: `p-${p.id}`,
-          type: "Devis sans client",
-          label: `${p.ref} · ${formatMoneyFR(p.total)}`,
-          severity: "medium",
-        });
-      }
-    }
-    return out.slice(0, 8);
+    return payload.tasks
+      .filter((t) => t.status === "done" && isTodayDate(t.doneAt))
+      .sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
   }, [payload, today]);
+
+  const planningTasks = useMemo(() => {
+    if (!payload) return [];
+    return payload.tasks
+      .filter((t) => t.status !== "done")
+      .filter((t) => !t.dueDate || (taskOwner(t).missing && t.dueDate !== today))
+      .sort((a, b) => {
+        if (!a.dueDate && b.dueDate) return -1;
+        if (a.dueDate && !b.dueDate) return 1;
+        return (a.createdAt || "").localeCompare(b.createdAt || "");
+      })
+      .slice(0, 12);
+  }, [payload, today]);
+
+  const tasksByCollaborator = useMemo(
+    () => groupTasksByCollaborator(todayTasks),
+    [todayTasks],
+  );
 
   // Phase 3B — empty states honnêtes : 0 → "—" + libellé adapté
   // ("Aucun à suivre" plutôt que "0 à suivre").
   const fmtCount = (n: number): string => (n === 0 ? "—" : n.toString());
-  const paymentsCount = invoicesToFollow.length + proposalsToFollow.length;
   const kpis = [
+    {
+      label: "À reprendre",
+      value: fmtCount(lateTasks.length),
+      hint: lateTasks.length === 0 ? "Aucun retard" : "en retard",
+      href: "#reprendre",
+    },
     {
       label: "Aujourd'hui",
       value: fmtCount(todayTasks.length),
-      hint: todayTasks.length === 0 ? "Aucune tâche du jour" : "tâches du jour",
-      href: "#priorites",
+      hint: todayTasks.length === 0 ? "Aucune tâche datée" : "à exécuter",
+      href: "#collaborateurs",
     },
     {
-      label: "En retard",
-      value: fmtCount(lateTasks.length),
-      hint: lateTasks.length === 0 ? "Aucun retard" : "à reprendre",
-      href: "#retards",
+      label: "Terminées",
+      value: fmtCount(doneTodayTasks.length),
+      hint: doneTodayTasks.length === 0 ? "Rien clôturé" : "aujourd'hui",
+      href: "#termine",
     },
     {
-      label: "Affaires",
-      value: fmtCount(activeDeals.length),
-      hint:
-        activeDeals.length === 0
-          ? "Aucune en cours"
-          : `${formatMoneyFR(activeDeals.reduce((s, d) => s + d.value, 0))} pipeline`,
-      href: "/pipeline",
-    },
-    {
-      label: "Paiements",
-      value: fmtCount(paymentsCount),
-      hint: paymentsCount === 0 ? "Aucun à suivre" : "à suivre",
-      href: "#paiements",
+      label: "À planifier",
+      value: fmtCount(planningTasks.length),
+      hint: planningTasks.length === 0 ? "Tout est cadré" : "sans date/responsable",
+      href: "#planifier",
     },
   ];
 
@@ -248,7 +322,7 @@ export default function TodayPage() {
       <ModuleHeader
         icon={Sun}
         title="Aujourd'hui — Cockpit quotidien MyBotIA"
-        subtitle="Tâches, affaires, paiements et flux du jour"
+        subtitle="Exécution du jour, retards et clôtures par collaborateur"
         actions={
           <button onClick={() => setShowCreate(true)} className={btnPrimary}>
             <Plus className="w-3.5 h-3.5" />
@@ -260,7 +334,7 @@ export default function TodayPage() {
       {/* KPI strip cliquable */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {kpis.map((k) => (
-          <Link
+          <a
             key={k.label}
             href={k.href}
             className="card-sharp-high p-5 hover:bg-surface-2/50 transition-colors block"
@@ -268,35 +342,15 @@ export default function TodayPage() {
             <span className="micro-label text-text-muted">{k.label}</span>
             <p className="text-2xl font-headline font-extrabold text-text-primary mt-2">{k.value}</p>
             <p className="text-[10px] text-text-muted mt-1">{k.hint}</p>
-          </Link>
+          </a>
         ))}
       </div>
 
-      {/* === A. Priorités du jour === */}
-      <section id="priorites" className="card-sharp p-6">
-        <SectionHeader icon={Circle} title="Priorités du jour" count={todayTasks.length} />
-        {todayTasks.length === 0 ? (
-          <EmptyHint text="Aucune tâche d'échéance aujourd'hui." />
-        ) : (
-          <div className="divide-y divide-border-subtle">
-            {todayTasks.map((t) => (
-              <TaskRow
-                key={t.id}
-                task={t}
-                onMarkDone={() => markDone(t)}
-                onOpen={() => setSelectedTask(t)}
-                completing={completing === t.id}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* === B. En retard === */}
-      <section id="retards" className="card-sharp p-6">
-        <SectionHeader icon={AlertTriangle} title="En retard" count={lateTasks.length} accent="text-status-danger" />
+      {/* === A. À reprendre === */}
+      <section id="reprendre" className="card-sharp p-6">
+        <SectionHeader icon={AlertTriangle} title="À reprendre en priorité" count={lateTasks.length} accent="text-status-danger" />
         {lateTasks.length === 0 ? (
-          <EmptyHint text="Aucune tâche en retard. Beau travail." />
+          <EmptyHint text="Aucune tâche en retard." />
         ) : (
           <div className="divide-y divide-border-subtle">
             {lateTasks.map((t) => (
@@ -313,150 +367,62 @@ export default function TodayPage() {
         )}
       </section>
 
-      {/* === C. Affaires en cours === */}
-      <section id="affaires" className="card-sharp p-6">
-        <SectionHeader icon={Briefcase} title="Affaires en cours" count={activeDeals.length} />
-        {activeDeals.length === 0 ? (
-          <EmptyHint text="Aucune opportunité ouverte." />
+      {/* === B. Aujourd'hui par collaborateur === */}
+      <section id="collaborateurs" className="card-sharp p-6">
+        <SectionHeader icon={Users} title="Aujourd'hui par collaborateur" count={todayTasks.length} />
+        {tasksByCollaborator.length === 0 ? (
+          <EmptyHint text="Aucune tâche datée pour aujourd'hui." />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeDeals.map((d) => (
-              <Link
-                key={d.id}
-                href={d.clientId ? `/crm/${encodeURIComponent(d.clientId)}` : "/pipeline"}
-                className="p-3 bg-surface-2/50 hover:bg-surface-2 border border-border-subtle transition-colors block"
-              >
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="text-xs font-bold text-text-primary truncate flex-1">{d.title}</p>
-                  <span
-                    className={cn(
-                      "text-[10px] font-mono uppercase shrink-0 tracking-tight",
-                      DEAL_STAGE_COLOR[d.stage] ?? "text-accent-glow",
-                    )}
-                  >
-                    {DEAL_STAGE_LABEL[d.stage] ?? d.stage}
-                  </span>
-                </div>
-                <p className="text-[10px] text-text-muted truncate">{d.clientName || "(sans client)"}</p>
-                <p className="text-sm font-headline font-extrabold text-text-primary mt-1">{formatMoneyFR(d.value)}</p>
-              </Link>
+          <div className="space-y-4">
+            {tasksByCollaborator.map((group) => (
+              <TaskCollaboratorSection
+                key={group.key}
+                group={group}
+                completing={completing}
+                onMarkDone={markDone}
+                onOpenTask={setSelectedTask}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* === D. Paiements à suivre === */}
-      <section id="paiements" className="card-sharp p-6 space-y-4">
-        <SectionHeader
-          icon={Receipt}
-          title="Paiements à suivre"
-          count={proposalsToFollow.length + invoicesToFollow.length}
-        />
-        {invoicesToFollow.length > 0 && (
-          <div>
-            <h4 className="micro-label text-text-muted mb-2">Factures ({invoicesToFollow.length})</h4>
-            <div className="space-y-1.5">
-              {invoicesToFollow.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="flex items-center justify-between gap-3 p-2 bg-surface-2/50 border border-border-subtle text-xs"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <Receipt className="w-3 h-3 text-text-muted shrink-0" />
-                    <span className="font-mono font-bold text-text-primary truncate">{inv.ref}</span>
-                    <span className="text-text-muted truncate">{inv.clientName || "(sans client)"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {inv.status === "late" && (
-                      <span className="text-[10px] text-status-danger font-bold uppercase">{inv.daysOverdue}j retard</span>
-                    )}
-                    <span className="text-text-secondary font-semibold">{formatMoneyFR(inv.total)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {proposalsToFollow.length > 0 && (
-          <div>
-            <h4 className="micro-label text-text-muted mb-2">
-              Devis envoyés ou en cours ({proposalsToFollow.length})
-            </h4>
-            <div className="space-y-1.5">
-              {proposalsToFollow.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between gap-3 p-2 bg-surface-2/50 border border-border-subtle text-xs"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <FileText className="w-3 h-3 text-text-muted shrink-0" />
-                    <span className="font-mono font-bold text-text-primary truncate">{p.ref}</span>
-                    <span className="text-text-muted truncate">{p.clientName || "(sans client)"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span
-                      className={cn(
-                        "text-[10px] uppercase tracking-tight",
-                        PROPOSAL_STATUS_COLOR[p.status] ?? "text-text-muted",
-                      )}
-                    >
-                      {PROPOSAL_STATUS_LABEL[p.status] ?? p.status}
-                    </span>
-                    <span className="text-text-secondary font-semibold">{formatMoneyFR(p.total)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {proposalsToFollow.length === 0 && invoicesToFollow.length === 0 && (
-          <EmptyHint text="Aucun paiement ou devis à suivre." />
-        )}
-      </section>
-
-      {/* === E. Flux intelligence === */}
-      <section id="flux" className="card-sharp p-6">
-        <SectionHeader icon={ActivityIcon} title="Flux récent" count={activities.length} />
-        {activities.length === 0 ? (
-          <EmptyHint text="Aucun événement récent." />
+      {/* === C. À planifier === */}
+      <section id="planifier" className="card-sharp p-6">
+        <SectionHeader icon={CalendarDays} title="À planifier" count={planningTasks.length} />
+        {planningTasks.length === 0 ? (
+          <EmptyHint text="Aucune tâche orpheline à requalifier." />
         ) : (
           <div className="divide-y divide-border-subtle">
-            {activities.map((a) => (
-              <div key={a.id} className="py-2.5 flex items-start gap-3">
-                <Clock className="w-3 h-3 text-text-muted mt-1 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-text-primary truncate">{a.title}</p>
-                  {a.clientName && <p className="text-[10px] text-text-muted">{a.clientName}</p>}
-                </div>
-                <span className="text-[10px] text-text-muted font-mono shrink-0">
-                  {formatDateFR(a.timestamp)}
-                </span>
-              </div>
+            {planningTasks.map((t) => (
+              <TaskRow
+                key={`planning-${t.id}`}
+                task={t}
+                onMarkDone={() => markDone(t)}
+                onOpen={() => setSelectedTask(t)}
+                completing={completing === t.id}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* === F. Alertes === */}
-      <section id="alertes" className="card-sharp p-6">
-        <SectionHeader icon={ShieldAlert} title="Alertes" count={alerts.length} accent="text-amber-300" />
-        {alerts.length === 0 ? (
-          <EmptyHint text="Aucune anomalie détectée. Tout est cohérent." />
+      {/* === D. Terminé aujourd'hui === */}
+      <section id="termine" className="card-sharp p-6">
+        <SectionHeader icon={ListChecks} title="Terminé aujourd'hui" count={doneTodayTasks.length} accent="text-emerald-300" />
+        {doneTodayTasks.length === 0 ? (
+          <EmptyHint text="Aucune tâche clôturée aujourd'hui pour l'instant." />
         ) : (
           <div className="divide-y divide-border-subtle">
-            {alerts.map((al) => (
-              <div key={al.id} className="py-2.5 flex items-center gap-3">
-                <span
-                  className={cn(
-                    "w-1.5 h-1.5 rounded-full shrink-0",
-                    al.severity === "high" ? "bg-status-danger" : "bg-amber-400"
-                  )}
-                />
-                <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold w-44 shrink-0">
-                  {al.type}
-                </span>
-                <span className="text-xs text-text-secondary truncate flex-1">{al.label}</span>
-              </div>
+            {doneTodayTasks.map((t) => (
+              <TaskRow
+                key={`done-${t.id}`}
+                task={t}
+                onMarkDone={() => undefined}
+                onOpen={() => setSelectedTask(t)}
+                completing={false}
+                readonly
+              />
             ))}
           </div>
         )}
@@ -475,6 +441,7 @@ export default function TodayPage() {
         onClose={() => setShowCreate(false)}
         onCreated={() => fetchToday()}
         tenantSlug={currentTenant}
+        defaultDueDate={today}
       />
     </div>
   );
@@ -506,6 +473,45 @@ function SectionHeader({
   );
 }
 
+function TaskCollaboratorSection({
+  group,
+  completing,
+  onMarkDone,
+  onOpenTask,
+}: {
+  group: TaskCollaboratorGroup;
+  completing: string | null;
+  onMarkDone: (task: TaskItem) => void;
+  onOpenTask: (task: TaskItem) => void;
+}) {
+  return (
+    <div className="border border-border-subtle bg-surface-2/30">
+      <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-text-primary truncate">{group.label}</p>
+          <p className="text-[10px] text-text-muted">
+            {group.tasks.length} tâche{group.tasks.length > 1 ? "s" : ""} à traiter
+          </p>
+        </div>
+        <span className="micro-label text-text-muted font-mono shrink-0">
+          {group.tasks.length}
+        </span>
+      </div>
+      <div className="divide-y divide-border-subtle px-3">
+        {group.tasks.map((task) => (
+          <TaskRow
+            key={task.id}
+            task={task}
+            onMarkDone={() => onMarkDone(task)}
+            onOpen={() => onOpenTask(task)}
+            completing={completing === task.id}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Quick win 5 — wrapper minimaliste qui délègue à EmptyState (variant="inline")
 // pour la cohérence visuelle avec les autres pages cockpit.
 function EmptyHint({ text }: { text: string }) {
@@ -518,12 +524,14 @@ function TaskRow({
   onOpen,
   completing,
   lateInfo,
+  readonly = false,
 }: {
   task: TaskItem;
   onMarkDone: () => void;
   onOpen: () => void;
   completing: boolean;
   lateInfo?: string;
+  readonly?: boolean;
 }) {
   const prioColor =
     task.priority === "critical"
@@ -533,21 +541,26 @@ function TaskRow({
       : task.priority === "medium"
       ? "text-blue-300 bg-blue-500/10 border-blue-500/30"
       : "text-text-muted bg-surface-3/50 border-border-subtle";
+  const workstream = taskWorkstream(task);
 
   return (
     <div className="py-2.5 flex items-center gap-3">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onMarkDone();
-        }}
-        disabled={completing}
-        title="Marquer terminée"
-        className="text-text-muted hover:text-emerald-400 transition-colors disabled:opacity-50 shrink-0"
-      >
-        {completing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-      </button>
+      {readonly ? (
+        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+      ) : (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkDone();
+          }}
+          disabled={completing}
+          title="Marquer terminée"
+          className="text-text-muted hover:text-emerald-400 transition-colors disabled:opacity-50 shrink-0"
+        >
+          {completing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+        </button>
+      )}
       <button
         type="button"
         onClick={onOpen}
@@ -555,10 +568,20 @@ function TaskRow({
         title="Ouvrir le détail"
       >
         <p className="text-sm text-text-primary truncate">{task.title}</p>
-        <p className="text-[10px] text-text-muted truncate">
-          {task.projectName || "(sans affaire)"}
-          {task.dueDate && ` · ${formatDateFR(task.dueDate)}`}
-        </p>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5">
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight",
+              workstream.className,
+            )}
+          >
+            {workstream.label}
+          </span>
+          <span className="truncate text-[10px] text-text-muted">
+            {task.projectName || "(sans affaire)"}
+            {task.dueDate && ` · ${formatDateFR(task.dueDate)}`}
+          </span>
+        </div>
       </button>
       {lateInfo && (
         <span className="text-[10px] text-status-danger font-bold uppercase shrink-0">{lateInfo}</span>

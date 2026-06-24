@@ -49,17 +49,36 @@ const emptyDraft: TaskDraft = {
   whatsappThreadRef: "",
 };
 
+type ProjectOption = {
+  id: string;
+  name: string;
+  ref?: string;
+  clientName?: string;
+  tenantSlug?: string;
+  status?: string;
+};
+
+type CreateTaskModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+  tenantSlug?: string;
+  defaultProjectId?: string;
+  defaultProjectLabel?: string;
+  defaultDueDate?: string;
+  lockProject?: boolean;
+};
+
 export function CreateTaskModal({
   open,
   onClose,
   onCreated,
   tenantSlug = "mybotia",
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: () => void;
-  tenantSlug?: string;
-}) {
+  defaultProjectId,
+  defaultProjectLabel,
+  defaultDueDate,
+  lockProject = false,
+}: CreateTaskModalProps) {
   // Bloc 5G-bis : scope serveur via hostname. Le param tenantSlug ne sert
   // plus qu'à un filtre défensif côté frontend (ceinture+bretelles).
   const { data: projects } = useScopedProjects();
@@ -79,11 +98,23 @@ export function CreateTaskModal({
     if (!open) setDraftBannerDismissed(false);
   }, [open]);
 
-  const tenantProjects = useMemo(
+  useEffect(() => {
+    if (!open) return;
+    setDraft((d) => ({
+      ...d,
+      fkProject:
+        defaultProjectId && (lockProject || !d.fkProject)
+          ? defaultProjectId
+          : d.fkProject,
+      date_end: defaultDueDate && !d.date_end ? defaultDueDate : d.date_end,
+    }));
+  }, [defaultDueDate, defaultProjectId, lockProject, open]);
+
+  const tenantProjects = useMemo<ProjectOption[]>(
     () =>
       [...projects]
-        .filter((p) => p.status === "active")
-        .filter((p) => p.tenantSlug === tenantSlug)
+        .filter((p) => p.status !== "completed")
+        .filter((p) => !tenantSlug || !p.tenantSlug || p.tenantSlug === tenantSlug)
         .sort((a, b) => {
           if (a.ref === "PERSO") return -1;
           if (b.ref === "PERSO") return 1;
@@ -92,7 +123,21 @@ export function CreateTaskModal({
     [projects, tenantSlug]
   );
 
-  const selectedProject = tenantProjects.find((p) => p.id === fkProject);
+  const projectOptions = useMemo<ProjectOption[]>(() => {
+    if (!defaultProjectId || tenantProjects.some((p) => p.id === defaultProjectId)) {
+      return tenantProjects;
+    }
+    return [
+      {
+        id: defaultProjectId,
+        name: defaultProjectLabel || "Affaire sélectionnée",
+        status: "active",
+      },
+      ...tenantProjects,
+    ];
+  }, [defaultProjectId, defaultProjectLabel, tenantProjects]);
+
+  const selectedProject = projectOptions.find((p) => p.id === fkProject);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -176,10 +221,11 @@ export function CreateTaskModal({
             required
             className={selectClass}
             value={fkProject}
+            disabled={lockProject && !!defaultProjectId}
             onChange={(e) => setFkProject(e.target.value)}
           >
             <option value="">— Choisir une affaire —</option>
-            {tenantProjects.map((p) => (
+            {projectOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.ref ? `${p.ref} — ` : ""}
                 {p.name}
@@ -280,6 +326,7 @@ export function CreateTaskModal({
           >
             <option value="">—</option>
             <option value="gilles">Gilles</option>
+            <option value="saddjaad">Saddjaad</option>
             <option value="lea">Léa</option>
             <option value="damien">Damien</option>
             <option value="client">Client</option>

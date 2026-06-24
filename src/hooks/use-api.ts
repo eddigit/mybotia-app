@@ -153,11 +153,15 @@ export interface TaskItem {
   assigneeId?: string;
   assigneeName?: string;
   assigneeEmail?: string;
+  category?: string;
+  workflowStep?: string;
+  assignedTo?: string;
   /** Bloc 5D — clientId (socid) résolu via le projet pour jointure tenant-safe. */
   clientId?: string;
   /** Bloc 5B-security — tenant Dolibarr d'origine (propagé pour DELETE multi-tenant safe). */
   tenantSlug?: string;
   dueDate?: string;
+  doneAt?: string;
   overdue?: boolean;
   createdAt: string;
 }
@@ -947,4 +951,3 @@ export async function deleteFolderApi(id: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
-
